@@ -223,8 +223,7 @@ class DevelopmentDataLoader:
                 'vehicle_equity': 45000,
                 'outstanding_balance': 150000,
                 'current_car_price': 200000,
-                'risk_profile_name': 'Low',
-                'risk_profile_index': 0,
+                'risk_profile_name': 'A1',
                 'current_car_model': 'Tesla Model 3'
             },
             {
@@ -235,8 +234,7 @@ class DevelopmentDataLoader:
                 'vehicle_equity': 60000,
                 'outstanding_balance': 200000,
                 'current_car_price': 260000,
-                'risk_profile_name': 'Medium',
-                'risk_profile_index': 1,
+                'risk_profile_name': 'B',
                 'current_car_model': 'BMW X3'
             },
             {
@@ -247,8 +245,7 @@ class DevelopmentDataLoader:
                 'vehicle_equity': 75000,
                 'outstanding_balance': 250000,
                 'current_car_price': 325000,
-                'risk_profile_name': 'High',
-                'risk_profile_index': 2,
+                'risk_profile_name': 'C1',
                 'current_car_model': 'Audi A4'
             },
             {
@@ -259,8 +256,7 @@ class DevelopmentDataLoader:
                 'vehicle_equity': 48000,
                 'outstanding_balance': 160000,
                 'current_car_price': 208000,
-                'risk_profile_name': 'Low',
-                'risk_profile_index': 0,
+                'risk_profile_name': 'A2',
                 'current_car_model': 'Toyota Camry'
             },
             {
@@ -271,13 +267,15 @@ class DevelopmentDataLoader:
                 'vehicle_equity': 54000,
                 'outstanding_balance': 180000,
                 'current_car_price': 234000,
-                'risk_profile_name': 'Medium',
-                'risk_profile_index': 1,
+                'risk_profile_name': 'D1',
                 'current_car_model': 'Honda Accord'
             }
         ]
-        
+
         customers_df = pd.DataFrame(sample_customers)
+        # Map profile names to indices used by financial tables
+        customers_df['risk_profile_index'] = customers_df['risk_profile_name'].map(self.risk_profile_mapping).astype(int)
+        
         logger.info(f"✅ Created {len(customers_df)} sample customers")
         return customers_df
 
