@@ -22,7 +22,8 @@ Trade-Up-Engine/
 │   └── static/            # Static assets
 │       ├── css/style.css  # Styling
 │       └── js/main.js     # JavaScript functionality
-├── data/                   # Data files
+├── customer_data.csv       # Real customer dataset
+├── data/                   # Sample data for local testing
 │   ├── sample_customer_data.csv
 │   └── sample_inventory_data.csv
 ├── docs/                   # Documentation
@@ -180,7 +181,8 @@ The dashboard prioritizes:
 4. JavaScript in `app/static/js/`
 
 ### Data Updates
-- Replace CSV files in `data/` directory
+- Replace `customer_data.csv` in the project root when using real data
+- Update files in `data/` for sample-based testing
 - Ensure column names match expected schema
 - Restart the application to reload data
 
