@@ -11,6 +11,22 @@ let allCustomers = [];
 document.addEventListener('DOMContentLoaded', function() {
     console.log("🚗 Kavak Dashboard JS Loaded");
     loadCustomersList();
+
+    // Create amortization modal if it doesn't exist
+    if (!document.getElementById('amortization-modal')) {
+        const modal = document.createElement('div');
+        modal.id = 'amortization-modal';
+        modal.className = 'modal';
+        modal.style.display = 'none';
+        modal.innerHTML = `
+            <div class="modal-content">
+                <span class="modal-close" id="amortization-close">&times;</span>
+                <div id="amortization-table"></div>
+            </div>`;
+        document.body.appendChild(modal);
+        document.getElementById('amortization-close').addEventListener('click', closeAmortizationModal);
+        window.addEventListener('click', function(evt) { if (evt.target === modal) closeAmortizationModal(); });
+    }
 });
 
 // Initialize customer view page
@@ -311,8 +327,51 @@ function createOfferCard(offer) {
             </div>
         </div>
     `;
-    
+
+    const amortBtn = document.createElement('button');
+    amortBtn.className = 'btn-secondary';
+    amortBtn.textContent = 'View Amortization';
+    amortBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        viewAmortizationTable(offer);
+    });
+    card.appendChild(amortBtn);
+
     return card;
+}
+
+// Fetch amortization table and display in modal
+async function viewAmortizationTable(offer) {
+    try {
+        const response = await fetch('/api/amortization-table', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(offer)
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || 'Failed to get table');
+        showAmortizationModal(data.table);
+    } catch (err) {
+        console.error('Amortization error', err);
+    }
+}
+
+function showAmortizationModal(table) {
+    const modal = document.getElementById('amortization-modal');
+    const container = document.getElementById('amortization-table');
+    if (!modal || !container) return;
+    let html = '<table class="amort-table"><tr><th>Month</th><th>Beginning Balance</th><th>Payment</th><th>Principal</th><th>Interest</th><th>Ending Balance</th></tr>';
+    table.forEach(row => {
+        html += `<tr><td>${row.month}</td><td>$${Math.round(row.beginning_balance).toLocaleString()}</td><td>$${Math.round(row.payment).toLocaleString()}</td><td>$${Math.round(row.principal).toLocaleString()}</td><td>$${Math.round(row.interest).toLocaleString()}</td><td>$${Math.round(row.ending_balance).toLocaleString()}</td></tr>`;
+    });
+    html += '</table>';
+    container.innerHTML = html;
+    modal.style.display = 'block';
+}
+
+function closeAmortizationModal() {
+    const modal = document.getElementById('amortization-modal');
+    if (modal) modal.style.display = 'none';
 }
 
 // Show loading state
