@@ -44,21 +44,33 @@ def run_engine_for_customer(customer: dict, inventory: pd.DataFrame, engine_conf
         print(f"Error: Missing key in customer data or invalid risk profile - {e}")
         return pd.DataFrame()
 
+    # Determine payment delta tiers to use
+    if 'payment_delta_tiers' in engine_config:
+        custom_tiers = engine_config['payment_delta_tiers']
+        payment_delta_tiers = {
+            'Refresh': tuple(custom_tiers.get('refresh', PAYMENT_DELTA_TIERS['Refresh'])),
+            'Upgrade': tuple(custom_tiers.get('upgrade', PAYMENT_DELTA_TIERS['Upgrade'])),
+            'Max Upgrade': tuple(custom_tiers.get('max_upgrade', PAYMENT_DELTA_TIERS['Max Upgrade']))
+        }
+        print(f"🎯 Using custom payment tiers: {payment_delta_tiers}")
+    else:
+        payment_delta_tiers = PAYMENT_DELTA_TIERS
+
     # Check engine mode
     use_custom_params = engine_config.get('use_custom_params', False)
     use_range_optimization = engine_config.get('use_range_optimization', False)
     
     if use_range_optimization:
         print("🎯 RANGE OPTIMIZATION MODE: Using parameter ranges with NPV filtering...")
-        return _run_range_optimization_search(customer, inventory, interest_rate, engine_config, current_monthly_payment)
+        return _run_range_optimization_search(customer, inventory, interest_rate, engine_config, current_monthly_payment, payment_delta_tiers)
     elif use_custom_params:
         print("🔧 CUSTOM PARAMETER MODE: Using user-defined configuration...")
-        return _run_custom_parameter_search(customer, inventory, interest_rate, engine_config, current_monthly_payment)
+        return _run_custom_parameter_search(customer, inventory, interest_rate, engine_config, current_monthly_payment, payment_delta_tiers)
     else:
         print("⚙️ DEFAULT MODE: Using hierarchical subsidy search...")
-        return _run_default_hierarchical_search(customer, inventory, interest_rate, engine_config, current_monthly_payment)
+        return _run_default_hierarchical_search(customer, inventory, interest_rate, engine_config, current_monthly_payment, payment_delta_tiers)
 
-def _run_default_hierarchical_search(customer, inventory, interest_rate, engine_config, current_monthly_payment):
+def _run_default_hierarchical_search(customer, inventory, interest_rate, engine_config, current_monthly_payment, payment_delta_tiers):
     """Original hierarchical search with hardcoded subsidy levers and NPV filtering."""
     all_offers = []
     
@@ -75,13 +87,13 @@ def _run_default_hierarchical_search(customer, inventory, interest_rate, engine_
     print(f"   Using fees: Service={phase_1_fees['service_fee_pct']*100}%, CXA={phase_1_fees['cxa_pct']*100}%, CAC={phase_1_fees['cac_bonus']}")
     
     # Run the ENTIRE Phase 1 search across all terms and cars with NPV filtering
-    phase_1_offers = _run_search_phase_with_npv_filter(customer, inventory, interest_rate, phase_1_fees, min_npv_threshold)
+    phase_1_offers = _run_search_phase_with_npv_filter(customer, inventory, interest_rate, phase_1_fees, min_npv_threshold, payment_delta_tiers)
     all_offers.extend(phase_1_offers)
 
     # If Phase 1 found any offers, STOP and return results
     if phase_1_offers:
         print(f"PHASE 1 COMPLETE: Found {len(phase_1_offers)} offers. Stopping search.")
-        return _finalize_offers_dataframe(all_offers, current_monthly_payment)
+        return _finalize_offers_dataframe(all_offers, current_monthly_payment, payment_delta_tiers)
 
     # --- PHASE 2: Search WITH Subsidy (Concession) - EXHAUSTIVE ---
     print("PHASE 2: No offers found in Phase 1. Running EXHAUSTIVE subsidy search...")
@@ -93,21 +105,21 @@ def _run_default_hierarchical_search(customer, inventory, interest_rate, engine_
     fees_level_1['cac_bonus'] = 0  # No CAC bonus yet
     if not engine_config.get('include_kavak_total', True):
         fees_level_1['kavak_total_amount'] = 0
-    level_1_offers = _run_search_phase_with_npv_filter(customer, inventory, interest_rate, fees_level_1, min_npv_threshold)
+    level_1_offers = _run_search_phase_with_npv_filter(customer, inventory, interest_rate, fees_level_1, min_npv_threshold, payment_delta_tiers)
     all_offers.extend(level_1_offers)
     
     # Level 2: Service Fee = 0 AND CAC Bonus applied
     print("Phase 2 - Level 2: Adding CAC Bonus...")
     fees_level_2 = fees_level_1.copy()
     fees_level_2['cac_bonus'] = MAX_CAC_BONUS
-    level_2_offers = _run_search_phase_with_npv_filter(customer, inventory, interest_rate, fees_level_2, min_npv_threshold)
+    level_2_offers = _run_search_phase_with_npv_filter(customer, inventory, interest_rate, fees_level_2, min_npv_threshold, payment_delta_tiers)
     all_offers.extend(level_2_offers)
     
     # Level 3: All previous subsidies AND CXA = 0
     print("Phase 2 - Level 3: Reducing CXA to 0...")
     fees_level_3 = fees_level_2.copy()
     fees_level_3['cxa_pct'] = 0
-    level_3_offers = _run_search_phase_with_npv_filter(customer, inventory, interest_rate, fees_level_3, min_npv_threshold)
+    level_3_offers = _run_search_phase_with_npv_filter(customer, inventory, interest_rate, fees_level_3, min_npv_threshold, payment_delta_tiers)
     all_offers.extend(level_3_offers)
     
     print(f"PHASE 2 COMPLETE: Found {len(all_offers)} total offers across all subsidy levels.")
@@ -117,11 +129,11 @@ def _run_default_hierarchical_search(customer, inventory, interest_rate, engine_
     if all_offers:
         offers_df = pd.DataFrame(all_offers)
         offers_df.drop_duplicates(subset=['car_id', 'term'], inplace=True)
-        return _finalize_offers_dataframe(offers_df.to_dict(orient='records'), current_monthly_payment)
+        return _finalize_offers_dataframe(offers_df.to_dict(orient='records'), current_monthly_payment, payment_delta_tiers)
         
     return pd.DataFrame()
 
-def _run_range_optimization_search(customer, inventory, interest_rate, engine_config, current_monthly_payment):
+def _run_range_optimization_search(customer, inventory, interest_rate, engine_config, current_monthly_payment, payment_delta_tiers):
     """
     Range-based optimization search with extreme granularity and NPV filtering.
     Generates all parameter combinations within specified ranges for maximum flexibility.
@@ -162,18 +174,8 @@ def _run_range_optimization_search(customer, inventory, interest_rate, engine_co
     print(f"   Total parameter combinations: {total_combinations:,}")
     print(f"   ⚡ EARLY STOPPING: Will test max {max_combinations_to_test} combinations or until {early_stop_on_offers} offers found")
     
-    # Override payment delta tiers if provided
-    global PAYMENT_DELTA_TIERS
-    original_tiers = PAYMENT_DELTA_TIERS.copy()
-    
-    if 'payment_delta_tiers' in engine_config:
-        custom_tiers = engine_config['payment_delta_tiers']
-        PAYMENT_DELTA_TIERS = {
-            'Refresh': tuple(custom_tiers.get('refresh', original_tiers['Refresh'])),
-            'Upgrade': tuple(custom_tiers.get('upgrade', original_tiers['Upgrade'])),
-            'Max Upgrade': tuple(custom_tiers.get('max_upgrade', original_tiers['Max Upgrade']))
-        }
-        print(f"🎯 Using custom payment tiers: {PAYMENT_DELTA_TIERS}")
+    # Use provided payment delta tiers
+    tiers = payment_delta_tiers
     
     # Search through all parameter combinations
     valid_offers_count = 0
@@ -198,7 +200,7 @@ def _run_range_optimization_search(customer, inventory, interest_rate, engine_co
         
         # Run search phase with this parameter combination
         combo_offers = _run_search_phase_with_npv_filter(
-            customer, inventory, interest_rate, fees_config, min_npv_threshold
+            customer, inventory, interest_rate, fees_config, min_npv_threshold, tiers
         )
         
         for offer in combo_offers:
@@ -221,9 +223,6 @@ def _run_range_optimization_search(customer, inventory, interest_rate, engine_co
             print(f"   ⚡ Early stopping: Found enough offers ({valid_offers_count} >= {early_stop_on_offers})")
             break
     
-    # Restore original tiers
-    PAYMENT_DELTA_TIERS = original_tiers
-    
     print(f"🎯 RANGE OPTIMIZATION COMPLETE:")
     print(f"   Combinations tested: {combinations_tested}/{total_combinations}")
     print(f"   Valid offers found: {valid_offers_count:,}")
@@ -231,11 +230,11 @@ def _run_range_optimization_search(customer, inventory, interest_rate, engine_co
     
     if all_offers:
         # Remove duplicates and rank by NPV within tiers
-        return _finalize_optimized_offers_dataframe(all_offers, current_monthly_payment, engine_config)
+        return _finalize_optimized_offers_dataframe(all_offers, current_monthly_payment, engine_config, tiers)
     
     return pd.DataFrame()
 
-def _run_custom_parameter_search(customer, inventory, interest_rate, engine_config, current_monthly_payment):
+def _run_custom_parameter_search(customer, inventory, interest_rate, engine_config, current_monthly_payment, payment_delta_tiers):
     """Custom parameter mode using user-defined fee structure."""
     all_offers = []
     
@@ -251,49 +250,35 @@ def _run_custom_parameter_search(customer, inventory, interest_rate, engine_conf
     
     print(f"🔧 Using custom fees: {custom_fees}")
     
-    # Override payment delta tiers if provided
-    global PAYMENT_DELTA_TIERS
-    original_tiers = PAYMENT_DELTA_TIERS.copy()
-    
-    if 'payment_delta_tiers' in engine_config:
-        custom_tiers = engine_config['payment_delta_tiers']
-        PAYMENT_DELTA_TIERS = {
-            'Refresh': tuple(custom_tiers.get('refresh', original_tiers['Refresh'])),
-            'Upgrade': tuple(custom_tiers.get('upgrade', original_tiers['Upgrade'])),
-            'Max Upgrade': tuple(custom_tiers.get('max_upgrade', original_tiers['Max Upgrade']))
-        }
-        print(f"🎯 Using custom payment tiers: {PAYMENT_DELTA_TIERS}")
+    tiers = payment_delta_tiers
     
     # Extract NPV threshold for filtering
     min_npv_threshold = engine_config.get('min_npv_threshold', 5000.0)
     
     # Run single search phase with custom parameters and NPV filtering
-    custom_offers = _run_search_phase_with_npv_filter(customer, inventory, interest_rate, custom_fees, min_npv_threshold)
+    custom_offers = _run_search_phase_with_npv_filter(customer, inventory, interest_rate, custom_fees, min_npv_threshold, tiers)
     all_offers.extend(custom_offers)
-    
-    # Restore original tiers
-    PAYMENT_DELTA_TIERS = original_tiers
     
     print(f"🔧 CUSTOM SEARCH COMPLETE: Found {len(all_offers)} offers with custom parameters.")
     
     if all_offers:
-        return _finalize_offers_dataframe(all_offers, current_monthly_payment)
+        return _finalize_offers_dataframe(all_offers, current_monthly_payment, tiers)
     
     return pd.DataFrame()
 
 
-def _run_search_phase(customer, inventory, interest_rate, fees_config):
+def _run_search_phase(customer, inventory, interest_rate, fees_config, payment_delta_tiers):
     """Helper function to run the search for a given fee configuration."""
     found_offers = []
     for car_index, car in inventory.iterrows():
         for term in TERM_SEARCH_ORDER:
-            offer = _generate_single_offer(customer, car, term, interest_rate, fees_config)
+            offer = _generate_single_offer(customer, car, term, interest_rate, fees_config, payment_delta_tiers)
             if offer:
                 found_offers.append(offer)
     return found_offers
 
 
-def _generate_single_offer(customer, car, term, interest_rate, fees_config):
+def _generate_single_offer(customer, car, term, interest_rate, fees_config, payment_delta_tiers):
     """
     Rigorous calculation for a single car/term/fee combination using bottom-up validation.
     FIXED: CXA calculated correctly as percentage of loan amount using algebraic solution.
@@ -341,7 +326,7 @@ def _generate_single_offer(customer, car, term, interest_rate, fees_config):
     # 7. Validate if this payment falls within any valid Payment Delta tier - DIRECT VALIDATION
     payment_delta = (actual_monthly_payment / customer['current_monthly_payment']) - 1
     valid_tier = False
-    for tier, (min_d, max_d) in PAYMENT_DELTA_TIERS.items():
+    for tier, (min_d, max_d) in payment_delta_tiers.items():
         if min_d <= payment_delta <= max_d:
             valid_tier = True
             break
@@ -403,17 +388,17 @@ def _generate_range(start, end, step):
     import numpy as np
     return np.arange(start, end + step, step)
 
-def _run_search_phase_with_npv_filter(customer, inventory, interest_rate, fees_config, min_npv_threshold):
+def _run_search_phase_with_npv_filter(customer, inventory, interest_rate, fees_config, min_npv_threshold, payment_delta_tiers):
     """Helper function to run search with NPV filtering applied."""
     found_offers = []
     for car_index, car in inventory.iterrows():
         for term in TERM_SEARCH_ORDER:
-            offer = _generate_single_offer(customer, car, term, interest_rate, fees_config)
+            offer = _generate_single_offer(customer, car, term, interest_rate, fees_config, payment_delta_tiers)
             if offer and offer['npv'] >= min_npv_threshold:  # Apply NPV filter
                 found_offers.append(offer)
     return found_offers
 
-def _finalize_optimized_offers_dataframe(offers_list, current_monthly_payment, engine_config):
+def _finalize_optimized_offers_dataframe(offers_list, current_monthly_payment, engine_config, payment_delta_tiers):
     """
     Advanced finalization for range optimization with NPV-based ranking within tiers.
     """
@@ -424,7 +409,7 @@ def _finalize_optimized_offers_dataframe(offers_list, current_monthly_payment, e
     df['payment_delta'] = (df['monthly_payment'] / current_monthly_payment) - 1
 
     def assign_tier(delta):
-        for tier, (min_d, max_d) in PAYMENT_DELTA_TIERS.items():
+        for tier, (min_d, max_d) in payment_delta_tiers.items():
             if min_d <= delta <= max_d:
                 return tier
         return 'N/A'
@@ -450,7 +435,7 @@ def _finalize_optimized_offers_dataframe(offers_list, current_monthly_payment, e
     
     return df
 
-def _finalize_offers_dataframe(offers_list, current_monthly_payment):
+def _finalize_offers_dataframe(offers_list, current_monthly_payment, payment_delta_tiers):
     """Helper to convert list of offer dicts to a final DataFrame with tiers."""
     if not offers_list:
         return pd.DataFrame()
@@ -459,7 +444,7 @@ def _finalize_offers_dataframe(offers_list, current_monthly_payment):
     df['payment_delta'] = (df['monthly_payment'] / current_monthly_payment) - 1
 
     def assign_tier(delta):
-        for tier, (min_d, max_d) in PAYMENT_DELTA_TIERS.items():
+        for tier, (min_d, max_d) in payment_delta_tiers.items():
             if min_d <= delta <= max_d:
                 return tier
         return 'N/A'
