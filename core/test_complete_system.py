@@ -65,8 +65,8 @@ def test_scenario_analysis():
     response = requests.post(f"{BASE_URL}/api/scenario-analysis", json=config_data)
     assert response.status_code == 200
     result = response.json()
-    assert "estimated_metrics" in result
-    assert "comparison" in result
+    assert "actual_metrics" in result
+    assert "execution_details" in result
     print("✅ Scenario Analysis: PASSED")
 
 def test_offer_generation():
