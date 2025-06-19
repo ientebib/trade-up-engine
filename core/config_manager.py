@@ -5,7 +5,7 @@ Handles storage and retrieval of engine configuration settings
 import json
 import os
 from datetime import datetime
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 class ConfigManager:
     def __init__(self, config_file="engine_config.json"):
@@ -71,4 +71,45 @@ class ConfigManager:
     @property
     def default_config(self) -> Dict[str, Any]:
         """Get a copy of the default configuration"""
-        return self._default_config.copy() 
+        return self._default_config.copy()
+
+
+# ------------------------------------------------------------------
+# Convenience module-level helpers using a shared ConfigManager
+# ------------------------------------------------------------------
+
+_manager = ConfigManager()
+SCENARIO_RESULTS_FILE = "scenario_results.json"
+
+
+def load_engine_config() -> Dict[str, Any]:
+    """Load the engine configuration using the shared manager."""
+    return _manager.load_config()
+
+
+def save_engine_config(config: Dict[str, Any]) -> bool:
+    """Save the engine configuration via the shared manager."""
+    return _manager.save_config(config)
+
+
+def save_scenario_results(results: Dict[str, Any]) -> bool:
+    """Persist scenario analysis results to disk."""
+    try:
+        with open(SCENARIO_RESULTS_FILE, "w") as f:
+            json.dump(results, f, indent=2)
+        print(f"✅ Scenario results saved to {SCENARIO_RESULTS_FILE}")
+        return True
+    except Exception as e:
+        print(f"❌ Error saving scenario results: {e}")
+        return False
+
+
+def load_latest_scenario_results() -> Optional[Dict[str, Any]]:
+    """Load the most recently saved scenario results if available."""
+    try:
+        if os.path.exists(SCENARIO_RESULTS_FILE):
+            with open(SCENARIO_RESULTS_FILE, "r") as f:
+                return json.load(f)
+    except Exception as e:
+        print(f"⚠️ Could not load scenario results: {e}")
+    return None
