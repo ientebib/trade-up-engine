@@ -127,7 +127,7 @@ class DataLoader:
         
         try:
             logger.info(f"📊 Loading customer data from {csv_path}...")
-            df = pd.read_csv(csv_path)
+            df = pd.read_csv(csv_path, encoding="utf-8-sig")
             
             # Transform data to match expected structure
             customers_df = self.transform_customer_data(df)

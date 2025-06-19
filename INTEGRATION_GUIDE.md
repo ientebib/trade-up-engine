@@ -35,7 +35,9 @@ REDSHIFT_PASSWORD=your_password
 
 ### 2. Customer CSV Data
 
-**File Location:** Place your `customer_data.csv` in the root directory
+**File Location:** Place your `customer_data.csv` in the root directory.
+The loader expects this file to be encoded as **UTF-8 with BOM** so the
+header is parsed correctly.
 
 **Expected Columns:**
 - `CONTRATO` → Contract identifier
