@@ -152,11 +152,14 @@ class DevelopmentDataLoader:
             # Default unmapped profiles to medium risk
             raw_df.loc[raw_df['risk_profile_index'].isna(), 'risk_profile_index'] = 1
         
+        # Generate stock IDs based on customer_id prefix
+        raw_df['current_stock_id'] = 'STOCK_' + raw_df['customer_id'].str[:8]
+
         # Create the final customers DataFrame
         customers_df = pd.DataFrame({
             'customer_id': raw_df['customer_id'],
             'contract_id': raw_df['customer_id'],  # Use customer_id as contract_id
-            'current_stock_id': f"STOCK_{raw_df['customer_id'][:8]}",  # Generate stock ID
+            'current_stock_id': raw_df['current_stock_id'],
             'current_monthly_payment': pd.to_numeric(raw_df['monthly_payment'], errors='coerce'),
             'vehicle_equity': pd.to_numeric(raw_df['current_balance'], errors='coerce') * 0.3,  # Estimate equity
             'outstanding_balance': pd.to_numeric(raw_df['current_balance'], errors='coerce'),
