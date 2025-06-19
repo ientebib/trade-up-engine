@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kavak Trade-Up - Explicación de Cálculos</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <style>
+        .calculation-section {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        .formula-box {
+            background: #f8f9fa;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 15px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            overflow-x: auto;
+        }
+        .example-box {
+            background: #eff6ff;
+            border: 1px solid #dbeafe;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 15px 0;
+        }
+        .example-title {
+            font-weight: 600;
+            color: #1e40af;
+            margin-bottom: 10px;
+        }
+        .logic-step {
+            padding: 15px 0;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .logic-step:last-child {
+            border-bottom: none;
+        }
+        .step-number {
+            display: inline-block;
+            width: 30px;
+            height: 30px;
+            background: #4f46e5;
+            color: white;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 30px;
+            font-weight: 600;
+            margin-right: 10px;
+        }
+        .parameter-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+        }
+        .parameter-table th,
+        .parameter-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .parameter-table th {
+            background: #f9fafb;
+            font-weight: 600;
+        }
+        .tier-explanation {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin: 15px 0;
+        }
+        .tier-card {
+            padding: 15px;
+            border-radius: 8px;
+            border: 2px solid;
+        }
+        .tier-refresh { border-color: #3b82f6; background: #eff6ff; }
+        .tier-upgrade { border-color: #10b981; background: #ecfdf5; }
+        .tier-max { border-color: #ec4899; background: #fdf2f8; }
+        .warning-box {
+            background: #fef3c7;
+            border: 1px solid #fbbf24;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 15px 0;
+            color: #92400e;
+        }
+        h2 { color: #111827; margin-top: 30px; margin-bottom: 20px; }
+        h3 { color: #374151; margin-top: 20px; margin-bottom: 15px; }
+        h4 { color: #4b5563; margin-top: 15px; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+    <div class="main-container">
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h1>🚗 Trade-Up Engine</h1>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="/" class="nav-link">
+                    <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M4 13h6v6H4v-6zm0-10h6v6H4V3zm10 16h6v-6h-6v6zm0-10h6V3h-6v10z"></path></svg>
+                    <span>Main Dashboard</span>
+                </a>
+                <a href="/customers" class="nav-link">
+                    <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"></path></svg>
+                    <span>Customer List</span>
+                </a>
+                <a href="/customer/TMCJ33A32GJ053451" class="nav-link">
+                    <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"></path></svg>
+                    <span>Customer Deep Dive</span>
+                </a>
+                <a href="/calculations" class="nav-link active">
+                    <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"></path></svg>
+                    <span>Cálculos</span>
+                </a>
+                <a href="/config" class="nav-link">
+                    <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M19.43 12.98c.04-.32.07-.64.07-.98s-.03-.66-.07-.98l2.11-1.65c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.3-.61-.22l-2.49 1c-.52-.4-1.08-.73-1.69-.98l-.38-2.65C14.46 2.18 14.25 2 14 2h-4c-.25 0-.46.18-.49.42l-.38 2.65c-.61.25-1.17.59-1.69.98l-2.49-1c-.23-.09-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64l2.11 1.65c-.04.32-.07.65-.07.98s.03.66.07.98l-2.11 1.65c-.19.15-.24.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1c.52.4 1.08.73 1.69.98l.38 2.65c.03.24.24.42.49.42h4c.25 0 .46-.18.49-.42l.38-2.65c.61-.25 1.17-.59 1.69-.98l2.49 1c.23.09.49 0 .61-.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.65zM12 15.5c-1.93 0-3.5-1.57-3.5-3.5s1.57-3.5 3.5-3.5 3.5 1.57 3.5 3.5-1.57 3.5-3.5 3.5z"></path></svg>
+                    <span>Global Config</span>
+                </a>
+            </nav>
+        </aside>
+
+        <main class="content">
+            <header class="main-header">
+                <h1>📊 Explicación Detallada de Cálculos</h1>
+                <p>Motor de Trade-Up Kavak - Lógica y Matemáticas</p>
+            </header>
+
+            <div class="calculation-section">
+                <h2>🎯 1. Búsqueda Jerárquica de Subsidios</h2>
+                <p>El motor utiliza una búsqueda jerárquica para encontrar ofertas válidas maximizando la rentabilidad:</p>
+                
+                <div class="logic-step">
+                    <span class="step-number">1</span>
+                    <strong>Fase 1 - Máxima Rentabilidad</strong>
+                    <p>Se buscan ofertas con todas las comisiones al máximo, sin subsidios al cliente.</p>
+                    <div class="formula-box">
+                        Service Fee = 5.0%
+                        CXA (Comisión por Apertura) = 4.0%
+                        CAC Bonus = $0
+                        Kavak Total = $25,000 (si está habilitado)
+                    </div>
+                    <div class="warning-box">
+                        ⚠️ Si se encuentran ofertas en esta fase, LA BÚSQUEDA SE DETIENE. Esto garantiza máxima rentabilidad.
+                    </div>
+                </div>
+
+                <div class="logic-step">
+                    <span class="step-number">2</span>
+                    <strong>Fase 2 - Subsidios Progresivos</strong>
+                    <p>Solo si no hay ofertas en Fase 1, se aplican subsidios de forma incremental:</p>
+                    
+                    <table class="parameter-table">
+                        <thead>
+                            <tr>
+                                <th>Nivel</th>
+                                <th>Service Fee</th>
+                                <th>CXA</th>
+                                <th>CAC Bonus</th>
+                                <th>Impacto en Rentabilidad</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Nivel 1</td>
+                                <td>0%</td>
+                                <td>4%</td>
+                                <td>$0</td>
+                                <td>-5% del precio del auto</td>
+                            </tr>
+                            <tr>
+                                <td>Nivel 2</td>
+                                <td>0%</td>
+                                <td>4%</td>
+                                <td>$5,000</td>
+                                <td>-5% - $5,000</td>
+                            </tr>
+                            <tr>
+                                <td>Nivel 3</td>
+                                <td>0%</td>
+                                <td>0%</td>
+                                <td>$5,000</td>
+                                <td>-5% - 4% del crédito - $5,000</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="calculation-section">
+                <h2>💰 2. Cálculo del Monto del Crédito</h2>
+                <p>El cálculo del crédito tiene una dependencia circular que se resuelve algebraicamente:</p>
+                
+                <div class="formula-box">
+                    Problema:
+                    - monto_credito = precio_auto - equidad_efectiva
+                    - equidad_efectiva = equidad_vehiculo + bono_cac - cxa_monto
+                    - cxa_monto = monto_credito × cxa_porcentaje
+                    
+                    Solución Algebraica:
+                    monto_credito = (precio_auto - equidad_vehiculo - bono_cac) / (1 - cxa_porcentaje)
+                </div>
+
+                <div class="example-box">
+                    <div class="example-title">Ejemplo Práctico:</div>
+                    <p>Auto nuevo: $300,000</p>
+                    <p>Equidad del vehículo: $100,000</p>
+                    <p>Bono CAC: $5,000</p>
+                    <p>CXA: 4%</p>
+                    <div class="formula-box">
+                        monto_credito = (300,000 - 100,000 - 5,000) / (1 - 0.04)
+                        monto_credito = 195,000 / 0.96
+                        monto_credito = $203,125
+                        
+                        CXA monto = $203,125 × 0.04 = $8,125
+                        Equidad efectiva = $100,000 + $5,000 - $8,125 = $96,875
+                    </div>
+                </div>
+            </div>
+
+            <div class="calculation-section">
+                <h2>📈 3. Cálculo del Pago Mensual</h2>
+                <p>El pago mensual se compone de varios elementos financiados a diferentes plazos:</p>
+                
+                <div class="formula-box">
+                    Pago Total = PMT(principal) + PMT(service_fee) + PMT(kavak_total) + PMT(seguro) + cuota_gps
+                    
+                    Donde:
+                    - PMT = Función de pago (Payment)
+                    - Tasa mensual con IVA = (tasa_anual / 12) × 1.16
+                    - Principal, Service Fee, Kavak Total: financiados al plazo completo
+                    - Seguro: financiado a 12 meses
+                    - GPS: cuota fija mensual = ($350 × 1.16) / plazo
+                </div>
+
+                <div class="example-box">
+                    <div class="example-title">Desglose de Pagos (60 meses, 19.49% APR):</div>
+                    <table class="parameter-table">
+                        <tr>
+                            <th>Componente</th>
+                            <th>Monto</th>
+                            <th>Plazo</th>
+                            <th>Pago Mensual</th>
+                        </tr>
+                        <tr>
+                            <td>Principal</td>
+                            <td>$200,000</td>
+                            <td>60 meses</td>
+                            <td>$5,183</td>
+                        </tr>
+                        <tr>
+                            <td>Service Fee (5%)</td>
+                            <td>$15,000</td>
+                            <td>60 meses</td>
+                            <td>$389</td>
+                        </tr>
+                        <tr>
+                            <td>Kavak Total</td>
+                            <td>$25,000</td>
+                            <td>60 meses</td>
+                            <td>$648</td>
+                        </tr>
+                        <tr>
+                            <td>Seguro</td>
+                            <td>$10,999</td>
+                            <td>12 meses</td>
+                            <td>$970</td>
+                        </tr>
+                        <tr>
+                            <td>GPS</td>
+                            <td>$350</td>
+                            <td>60 meses</td>
+                            <td>$7</td>
+                        </tr>
+                        <tr style="font-weight: bold;">
+                            <td>TOTAL</td>
+                            <td colspan="2"></td>
+                            <td>$7,197</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+
+            <div class="calculation-section">
+                <h2>🎯 4. Clasificación por Tiers (Niveles de Pago)</h2>
+                <p>Las ofertas se clasifican según el cambio porcentual en el pago mensual:</p>
+                
+                <div class="tier-explanation">
+                    <div class="tier-card tier-refresh">
+                        <h4>Refresh</h4>
+                        <p><strong>Rango:</strong> -5% a +5%</p>
+                        <p><strong>Descripción:</strong> Pago similar al actual</p>
+                        <p><strong>Ejemplo:</strong> Si pagas $10,000, el nuevo pago será entre $9,500 y $10,500</p>
+                    </div>
+                    <div class="tier-card tier-upgrade">
+                        <h4>Upgrade</h4>
+                        <p><strong>Rango:</strong> +5.01% a +25%</p>
+                        <p><strong>Descripción:</strong> Incremento moderado</p>
+                        <p><strong>Ejemplo:</strong> Si pagas $10,000, el nuevo pago será entre $10,501 y $12,500</p>
+                    </div>
+                    <div class="tier-card tier-max">
+                        <h4>Max Upgrade</h4>
+                        <p><strong>Rango:</strong> +25.01% a +100%</p>
+                        <p><strong>Descripción:</strong> Incremento significativo</p>
+                        <p><strong>Ejemplo:</strong> Si pagas $10,000, el nuevo pago será entre $12,501 y $20,000</p>
+                    </div>
+                </div>
+
+                <div class="formula-box">
+                    Delta de Pago = (Pago Nuevo / Pago Actual) - 1
+                    
+                    Ejemplo: 
+                    Pago actual = $8,000
+                    Pago nuevo = $9,200
+                    Delta = ($9,200 / $8,000) - 1 = 0.15 = +15% → Tier "Upgrade"
+                </div>
+            </div>
+
+            <div class="calculation-section">
+                <h2>💎 5. Cálculo del NPV (Valor Presente Neto)</h2>
+                <p>El NPV representa la rentabilidad de cada operación para Kavak:</p>
+                
+                <div class="formula-box">
+                    NPV = VF × [1 - (1 + i)^(-n)] / i
+                    
+                    Donde:
+                    - VF = Valor Futuro del Crédito (monto_credito × factor_interes)
+                    - i = Tasa de descuento mensual (12% anual / 12 = 1% mensual)
+                    - n = Número de pagos (plazo en meses)
+                    
+                    Factor de interés por plazo:
+                    - 12 meses: 1.07
+                    - 24 meses: 1.14
+                    - 36 meses: 1.21
+                    - 48 meses: 1.29
+                    - 60 meses: 1.36
+                    - 72 meses: 1.44
+                </div>
+
+                <div class="example-box">
+                    <div class="example-title">Ejemplo NPV:</div>
+                    <p>Crédito: $200,000 a 60 meses</p>
+                    <div class="formula-box">
+                        VF = $200,000 × 1.36 = $272,000
+                        NPV = $272,000 × [1 - (1.01)^(-60)] / 0.01
+                        NPV = $272,000 × 44.955 / 100
+                        NPV = $122,277
+                    </div>
+                </div>
+            </div>
+
+            <div class="calculation-section">
+                <h2>🔍 6. Tasas de Interés por Perfil de Riesgo</h2>
+                <p>Cada perfil de riesgo tiene una tasa de interés anual asignada:</p>
+                
+                <table class="parameter-table">
+                    <thead>
+                        <tr>
+                            <th>Perfil</th>
+                            <th>Tasa Anual</th>
+                            <th>Tasa Mensual</th>
+                            <th>Con IVA (16%)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>AAA, AA, A, A1</td>
+                            <td>19.49%</td>
+                            <td>1.624%</td>
+                            <td>1.884%</td>
+                        </tr>
+                        <tr>
+                            <td>A2</td>
+                            <td>20.99%</td>
+                            <td>1.749%</td>
+                            <td>2.029%</td>
+                        </tr>
+                        <tr>
+                            <td>B</td>
+                            <td>22.49%</td>
+                            <td>1.874%</td>
+                            <td>2.174%</td>
+                        </tr>
+                        <tr>
+                            <td>C1</td>
+                            <td>22.99%</td>
+                            <td>1.916%</td>
+                            <td>2.222%</td>
+                        </tr>
+                        <tr>
+                            <td>C2</td>
+                            <td>23.49%</td>
+                            <td>1.958%</td>
+                            <td>2.271%</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="calculation-section">
+                <h2>🛡️ 7. Reglas de Enganche Mínimo</h2>
+                <p>El enganche efectivo debe cumplir con porcentajes mínimos según el perfil de riesgo:</p>
+                
+                <table class="parameter-table">
+                    <thead>
+                        <tr>
+                            <th>Índice de Perfil</th>
+                            <th>Perfil</th>
+                            <th>Enganche Mínimo</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>0</td><td>AAA</td><td>30%</td></tr>
+                        <tr><td>1</td><td>AA</td><td>25%</td></tr>
+                        <tr><td>2</td><td>A</td><td>20%</td></tr>
+                        <tr><td>3</td><td>A1</td><td>15%</td></tr>
+                        <tr><td>4</td><td>A2</td><td>15%</td></tr>
+                        <tr><td>5</td><td>B</td><td>20%</td></tr>
+                        <tr><td>6</td><td>C1</td><td>20%</td></tr>
+                        <tr><td>7</td><td>C2</td><td>20%</td></tr>
+                    </tbody>
+                </table>
+
+                <div class="formula-box">
+                    Validación de Enganche:
+                    equidad_efectiva >= precio_auto × porcentaje_enganche_requerido
+                    
+                    Si no cumple → La oferta se descarta
+                </div>
+            </div>
+
+            <div class="calculation-section">
+                <h2>⚙️ 8. Orden de Búsqueda de Plazos</h2>
+                <p>El motor busca ofertas en el siguiente orden de plazos para optimizar rentabilidad:</p>
+                
+                <div class="formula-box">
+                    Orden: [60, 72, 48, 36, 24, 12] meses
+                    
+                    Razón: Los plazos más largos generalmente:
+                    - Generan mayor NPV
+                    - Tienen pagos mensuales más bajos
+                    - Aumentan la probabilidad de encontrar ofertas válidas
+                </div>
+            </div>
+
+            <div class="warning-box">
+                <h3>⚠️ Notas Importantes para Auditoría:</h3>
+                <ul>
+                    <li>Todos los montos están en pesos mexicanos (MXN)</li>
+                    <li>El IVA del 16% se aplica solo a los intereses, no al principal</li>
+                    <li>El seguro se financia máximo a 12 meses independientemente del plazo del crédito</li>
+                    <li>La búsqueda se detiene al encontrar ofertas válidas para maximizar rentabilidad</li>
+                    <li>El NPV mínimo por defecto es $5,000 pero es configurable</li>
+                </ul>
+            </div>
+        </main>
+    </div>
+</body>
+</html> 
