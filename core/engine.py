@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy_financial as npf
-from .calculator import calculate_final_npv, solve_for_max_loan
+from .calculator import calculate_final_npv
 from .config import (
     get_hardcoded_financial_parameters,
     TERM_SEARCH_ORDER,
@@ -180,7 +180,6 @@ def _run_range_optimization_search(customer, inventory, interest_rate, engine_co
     
     # Search through all parameter combinations
     valid_offers_count = 0
-    npv_filtered_count = 0
     combinations_tested = 0
     
     # EARLY STOPPING: Create parameter iterator for controlled iteration
