@@ -23,7 +23,7 @@ class DataLoader:
         self.redshift_config = {
             'host': os.getenv('REDSHIFT_HOST'),
             'port': os.getenv('REDSHIFT_PORT', 5439),
-            'database': os.getenv('REDSHIFT_DB'),
+            'database': os.getenv('REDSHIFT_DATABASE'),  # Fixed: was REDSHIFT_DB
             'user': os.getenv('REDSHIFT_USER'),
             'password': os.getenv('REDSHIFT_PASSWORD')
         }
@@ -45,7 +45,14 @@ class DataLoader:
         """Create a connection to Redshift"""
         try:
             connection_string = f"postgresql://{self.redshift_config['user']}:{self.redshift_config['password']}@{self.redshift_config['host']}:{self.redshift_config['port']}/{self.redshift_config['database']}"
-            engine = create_engine(connection_string)
+            # Fix Redshift connection parameters
+            engine = create_engine(
+                connection_string, 
+                connect_args={
+                    "sslmode": "require",
+                    "options": "-c standard_conforming_strings=on"
+                }
+            )
             logger.info("✅ Successfully connected to Redshift")
             return engine
         except Exception as e:
