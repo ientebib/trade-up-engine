@@ -36,6 +36,7 @@ REDSHIFT_PASSWORD=your_password
 ### 2. Customer CSV Data
 
 **File Location:** Place your `customer_data.csv` in the root directory
+The repository also includes sample CSVs in the `data/` folder for quick testing.
 
 **Expected Columns:**
 - `CONTRATO` → Contract identifier
@@ -68,10 +69,10 @@ REDSHIFT_PASSWORD=your_password
    ```
 
 3. **Prepare Customer Data:**
-   ```bash
-   # Place your customer_data.csv in the root directory
-   # The system will automatically detect and process it
-   ```
+```bash
+# Place your customer_data.csv in the root directory
+# Sample CSVs are in `data/` if you want to test without real data
+```
 
 ### 2. Start the Application
 
@@ -107,7 +108,8 @@ The integration has been fully tested and verified:
 
 ### Immediate Actions:
 1. **Set up your .env file** with Redshift credentials
-2. **Place your customer_data.csv** in the root directory  
+2. **Place your customer_data.csv** in the root directory
+   - Sample files are available under `data/` for quick testing
 3. **Test with real data** by starting the application
 
 ### Production Considerations:
