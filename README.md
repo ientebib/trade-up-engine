@@ -107,6 +107,7 @@ Navigate to `http://localhost:8000`
 - **NumPy Financial**: Financial calculations
 - **SciPy**: Optimization algorithms
 - **Jinja2**: Template rendering
+- **Cached Data Loaders**: Reuse loaded CSV/Redshift data across API calls
 
 ### Frontend
 - **Pure HTML/CSS/JavaScript**: No framework dependencies

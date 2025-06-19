@@ -37,6 +37,10 @@ class DataLoader:
             'B_SB': 21, 'C1_SB': 22, 'C2_SB': 23, 'E5_SB': 24, 'Z': 25
         }
 
+        # Caches for repeated access
+        self._customers_cache = None
+        self._inventory_cache = None
+
     def get_redshift_connection(self):
         """Create a connection to Redshift"""
         try:
@@ -138,6 +142,26 @@ class DataLoader:
         except Exception as e:
             logger.error(f"❌ Failed to load customer data: {str(e)}")
             return pd.DataFrame()
+
+    # ------------------------------------------------------------------
+    # Public helper methods
+    # ------------------------------------------------------------------
+
+    def load_inventory(self, csv_path='inventory_data.csv'):
+        """Return inventory data using cache if available"""
+        if self._inventory_cache is None:
+            # In production we load from Redshift; fallback to CSV
+            inv_df = self.load_inventory_from_redshift()
+            if inv_df.empty:
+                inv_df = pd.read_csv(csv_path) if os.path.exists(csv_path) else pd.DataFrame()
+            self._inventory_cache = inv_df
+        return self._inventory_cache
+
+    def load_customers(self, csv_path='customer_data.csv'):
+        """Return customer data using cache if available"""
+        if self._customers_cache is None:
+            self._customers_cache = self.load_customers_from_csv(csv_path)
+        return self._customers_cache
 
     def transform_customer_data(self, raw_df):
         """Transform raw customer CSV data to expected format"""
