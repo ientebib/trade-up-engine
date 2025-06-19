@@ -282,16 +282,6 @@ def _run_custom_parameter_search(customer, inventory, interest_rate, engine_conf
     return pd.DataFrame()
 
 
-def _run_search_phase(customer, inventory, interest_rate, fees_config):
-    """Helper function to run the search for a given fee configuration."""
-    found_offers = []
-    for car_index, car in inventory.iterrows():
-        for term in TERM_SEARCH_ORDER:
-            offer = _generate_single_offer(customer, car, term, interest_rate, fees_config)
-            if offer:
-                found_offers.append(offer)
-    return found_offers
-
 
 def _generate_single_offer(customer, car, term, interest_rate, fees_config):
     """
