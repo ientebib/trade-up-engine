@@ -15,7 +15,10 @@ logger = logging.getLogger(__name__)
 class DevelopmentDataLoader:
     def __init__(self):
         """Initialize development data loader with CSV-based data sources"""
-        
+        # Simple in-memory caches so repeated API calls do not constantly
+        # re-read the CSV files.  These are populated on first use.
+        self._customers_cache = None
+        self._inventory_cache = None
         # Risk profile mapping to indices
         self.risk_profile_mapping = {
             'Low': 0, 'Medium': 1, 'High': 2,
@@ -138,6 +141,22 @@ class DevelopmentDataLoader:
             logger.error(f"❌ Failed to load customer data: {str(e)}")
             logger.info("📊 Falling back to sample customer data...")
             return self.create_sample_customers()
+
+    # ------------------------------------------------------------------
+    # Public helper methods used by API routes
+    # ------------------------------------------------------------------
+
+    def load_inventory(self, csv_path='inventory_data.csv'):
+        """Return inventory DataFrame with basic caching."""
+        if self._inventory_cache is None:
+            self._inventory_cache = self.load_inventory_from_csv(csv_path)
+        return self._inventory_cache
+
+    def load_customers(self, csv_path='customer_data.csv'):
+        """Return customer DataFrame with basic caching."""
+        if self._customers_cache is None:
+            self._customers_cache = self.load_customers_from_csv(csv_path)
+        return self._customers_cache
 
     def transform_simple_customer_data(self, raw_df):
         """Transform simple customer CSV data (from setup script)"""
