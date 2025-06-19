@@ -321,5 +321,5 @@ class DevelopmentDataLoader:
         
         return customers_df, inventory_df
 
-# Create global development data loader instance
+# Create a singleton instance
 dev_data_loader = DevelopmentDataLoader() 

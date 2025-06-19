@@ -12,6 +12,23 @@ from .config import (
 # Load config tables on import
 INTEREST_RATE_TABLE, DOWN_PAYMENT_TABLE = get_hardcoded_financial_parameters()
 
+class TradeUpEngine:
+    def __init__(self, config=None):
+        self.config = config or {}
+        
+    def generate_offers(self, customer: dict, inventory: pd.DataFrame):
+        """Main entry point for offer generation."""
+        return run_engine_for_customer(customer, inventory, self.config)
+        
+    def update_config(self, new_config: dict):
+        """Update engine configuration."""
+        self.config.update(new_config)
+        
+    @property
+    def current_config(self):
+        """Get current engine configuration."""
+        return self.config.copy()
+
 def run_engine_for_customer(customer: dict, inventory: pd.DataFrame, engine_config: dict):
     """
     Main orchestrator function. Generates all possible offers for a single customer.

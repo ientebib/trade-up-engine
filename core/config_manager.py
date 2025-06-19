@@ -7,95 +7,68 @@ import os
 from datetime import datetime
 from typing import Dict, Any
 
-CONFIG_FILE = "engine_config.json"
-RESULTS_FILE = "scenario_results.json"
-
-def save_engine_config(config: Dict[str, Any]) -> bool:
-    """Save engine configuration to file"""
-    try:
-        # Add timestamp
-        config['last_updated'] = datetime.now().isoformat()
-        
-        with open(CONFIG_FILE, 'w') as f:
-            json.dump(config, f, indent=2)
-        
-        print(f"✅ Engine configuration saved to {CONFIG_FILE}")
-        return True
-    except Exception as e:
-        print(f"❌ Error saving config: {e}")
-        return False
-
-def load_engine_config() -> Dict[str, Any]:
-    """Load engine configuration from file"""
-    try:
-        if os.path.exists(CONFIG_FILE):
-            with open(CONFIG_FILE, 'r') as f:
-                config = json.load(f)
-                print(f"✅ Loaded engine configuration from {CONFIG_FILE}")
-                return config
-    except Exception as e:
-        print(f"⚠️ Could not load config: {e}")
+class ConfigManager:
+    def __init__(self, config_file="engine_config.json"):
+        self.config_file = config_file
+        self._default_config = {
+            'use_custom_params': False,
+            'use_range_optimization': True,
+            'include_kavak_total': True,
+            'service_fee_pct': 0.05,
+            'cxa_pct': 0.04,
+            'cac_bonus': 5000.0,
+            'insurance_amount': 10999.0,
+            'gps_fee': 350.0,
+            'service_fee_range': [0.0, 5.0],
+            'cxa_range': [0.0, 4.0],
+            'cac_bonus_range': [0.0, 10000.0],
+            'service_fee_step': 0.1,
+            'cxa_step': 0.1,
+            'cac_bonus_step': 100.0,
+            'max_offers_per_tier': 50,
+            'payment_delta_tiers': {
+                'refresh': [-0.05, 0.05],
+                'upgrade': [0.0501, 0.25],
+                'max_upgrade': [0.2501, 1.0]
+            },
+            'term_priority': 'standard',
+            'min_npv_threshold': 5000.0
+        }
     
-    # Return default configuration
-    return {
-        'use_custom_params': False,
-        'use_range_optimization': False,
-        'include_kavak_total': True,
-        'min_npv_threshold': 5000.0,
-        'max_combinations_to_test': 100,  # Limit combinations for range optimization
-        'early_stop_on_offers': 50  # Stop early if enough offers found
-    }
-
-def save_scenario_results(results: Dict[str, Any]) -> bool:
-    """Save scenario analysis results"""
-    try:
-        # Add timestamp
-        results['timestamp'] = datetime.now().isoformat()
+    def load_config(self) -> Dict[str, Any]:
+        """Load engine configuration from file"""
+        try:
+            if os.path.exists(self.config_file):
+                with open(self.config_file, 'r') as f:
+                    config = json.load(f)
+                    print(f"✅ Loaded engine configuration from {self.config_file}")
+                    return config
+        except Exception as e:
+            print(f"⚠️ Could not load config: {e}")
         
-        # Load existing results
-        all_results = []
-        if os.path.exists(RESULTS_FILE):
-            try:
-                with open(RESULTS_FILE, 'r') as f:
-                    all_results = json.load(f)
-            except:
-                all_results = []
-        
-        # Append new results
-        all_results.append(results)
-        
-        # Keep only last 10 results
-        if len(all_results) > 10:
-            all_results = all_results[-10:]
-        
-        with open(RESULTS_FILE, 'w') as f:
-            json.dump(all_results, f, indent=2)
-        
-        print(f"✅ Scenario results saved to {RESULTS_FILE}")
-        return True
-    except Exception as e:
-        print(f"❌ Error saving results: {e}")
-        return False
-
-def load_latest_scenario_results() -> Dict[str, Any]:
-    """Load the most recent scenario analysis results"""
-    try:
-        if os.path.exists(RESULTS_FILE):
-            with open(RESULTS_FILE, 'r') as f:
-                all_results = json.load(f)
-                if all_results:
-                    return all_results[-1]  # Return most recent
-    except Exception as e:
-        print(f"⚠️ Could not load results: {e}")
+        # Return default configuration
+        return self._default_config.copy()
     
-    return None
-
-def clear_scenario_results() -> bool:
-    """Clear all saved scenario results"""
-    try:
-        if os.path.exists(RESULTS_FILE):
-            os.remove(RESULTS_FILE)
-        return True
-    except Exception as e:
-        print(f"❌ Error clearing results: {e}")
-        return False 
+    def save_config(self, config: Dict[str, Any]) -> bool:
+        """Save engine configuration to file"""
+        try:
+            # Add timestamp
+            config['last_updated'] = datetime.now().isoformat()
+            
+            with open(self.config_file, 'w') as f:
+                json.dump(config, f, indent=2)
+            
+            print(f"✅ Engine configuration saved to {self.config_file}")
+            return True
+        except Exception as e:
+            print(f"❌ Error saving config: {e}")
+            return False
+    
+    def reset_config(self) -> bool:
+        """Reset configuration to defaults"""
+        return self.save_config(self._default_config.copy())
+    
+    @property
+    def default_config(self) -> Dict[str, Any]:
+        """Get a copy of the default configuration"""
+        return self._default_config.copy() 
