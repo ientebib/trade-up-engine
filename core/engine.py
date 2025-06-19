@@ -6,7 +6,8 @@ from .config import (
     TERM_SEARCH_ORDER,
     DEFAULT_FEES,
     MAX_CAC_BONUS,
-    PAYMENT_DELTA_TIERS
+    PAYMENT_DELTA_TIERS,
+    IVA_RATE
 )
 
 # Load config tables on import
@@ -371,7 +372,7 @@ def _calculate_forward_payment(loan_amount, interest_rate, term, fees_config, ca
     A precise forward payment calculator that matches the solver's logic.
     """
     tasa_mensual_sin_iva = interest_rate / 12
-    tasa_mensual_con_iva = tasa_mensual_sin_iva * 1.16
+    tasa_mensual_con_iva = tasa_mensual_sin_iva * IVA_RATE
     
     # Calculate financed amounts
     valor_kt = fees_config.get('kavak_total_amount', 0)
@@ -394,7 +395,7 @@ def _calculate_forward_payment(loan_amount, interest_rate, term, fees_config, ca
         total_payment += npf.pmt(tasa_mensual_con_iva, 12, -valor_seguro)
         
     # Fixed fee (GPS) with IVA, spread over term
-    total_payment += (fees_config.get('fixed_fee', 0) * 1.16) / term
+    total_payment += (fees_config.get('fixed_fee', 0) * IVA_RATE) / term
 
     return total_payment
 
