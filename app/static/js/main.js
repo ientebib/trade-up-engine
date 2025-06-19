@@ -116,15 +116,21 @@ async function loadInventory() {
         return inventory;
     } catch (error) {
         console.error('Error loading inventory from API:', error);
-        // Fallback to CSV approach
+        // If API fails, attempt to load from the local CSV sample
         return loadInventoryFromCSV();
     }
 }
 
 // Fallback CSV loading method
+// Attempts to read `sample_inventory_data.csv` from the project root
+// so the dashboard still works during local development.
 async function loadInventoryFromCSV() {
     try {
         const response = await fetch('/sample_inventory_data.csv');
+        if (!response.ok) {
+            console.warn('Sample inventory CSV not found');
+            return [];
+        }
         const csvText = await response.text();
         
         const lines = csvText.split('\n').slice(1);
