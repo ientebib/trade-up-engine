@@ -70,3 +70,17 @@ PAYMENT_DELTA_TIERS = {
 }
 
 IVA_RATE = 1.16 # 16% IVA tax
+
+# GPS installation fee applied upfront (subject to IVA)
+GPS_INSTALLATION_FEE = 750.0
+
+# Insurance amount lookup by risk profile. Placeholder values use the default
+# insurance amount for all profiles but allow future customization.
+INSURANCE_TABLE = {
+    profile: DEFAULT_FEES['insurance_amount']
+    for profile in [
+        'AAA', 'AA', 'A', 'A1', 'A2', 'B', 'C1', 'C2', 'C3', 'D1', 'D2',
+        'D3', 'E1', 'E2', 'E3', 'E4', 'E5', 'F1', 'F2', 'F3', 'F4',
+        'B_SB', 'C1_SB', 'C2_SB', 'E5_SB', 'Z'
+    ]
+}

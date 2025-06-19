@@ -7,7 +7,9 @@ from .config import (
     DEFAULT_FEES,
     MAX_CAC_BONUS,
     PAYMENT_DELTA_TIERS,
-    IVA_RATE
+    IVA_RATE,
+    GPS_INSTALLATION_FEE,
+    INSURANCE_TABLE
 )
 
 # Load config tables on import
@@ -279,51 +281,65 @@ def _run_search_phase(customer, inventory, interest_rate, fees_config, payment_d
 
 
 def _generate_single_offer(customer, car, term, interest_rate, fees_config, payment_delta_tiers):
-    """
-    Rigorous calculation for a single car/term/fee combination using bottom-up validation.
-    FIXED: CXA calculated correctly as percentage of loan amount using algebraic solution.
-    """
-    # 1. Hard Filter: Price must be higher
+    """Generate a single offer following the final MVP specification."""
+    # 1. Hard Filter: Price must exceed current car price
     if car['sales_price'] <= customer['current_car_price']:
         return None
 
-    # 2. Solve circular dependency algebraically
-    # The Problem: 
-    #   loan_amount = car_price - effective_equity
-    #   effective_equity = vehicle_equity + cac_bonus - cxa_amount  
-    #   cxa_amount = loan_amount * cxa_pct
-    #
-    # The Solution:
-    #   loan_amount = (car_price - vehicle_equity - cac_bonus) / (1 - cxa_pct)
-    
+    # 2. Resolve CXA circular dependency including GPS installation fee
     cxa_pct = fees_config.get('cxa_pct', 0)
     cac_bonus = fees_config.get('cac_bonus', 0)
-    
-    # Calculate loan amount using algebraic solution
+    gps_install_with_iva = GPS_INSTALLATION_FEE * IVA_RATE
+
     denominator = 1 - cxa_pct
     if denominator <= 0:
-        return None  # Invalid: CXA percentage >= 100%
-    
-    loan_amount_needed = (car['sales_price'] - customer['vehicle_equity'] - cac_bonus) / denominator
-    
+        return None
+
+    loan_amount_needed = (
+        car['sales_price'] - customer['vehicle_equity'] - cac_bonus + gps_install_with_iva
+    ) / denominator
+
     if loan_amount_needed <= 0:
         return None
 
-    # 3. Now calculate CXA amount correctly (percentage of loan amount)
+    # 3. Component amounts
     cxa_amount = loan_amount_needed * cxa_pct
-    
-    # 4. Calculate effective equity for validation
-    effective_equity = customer['vehicle_equity'] + cac_bonus - cxa_amount
+    service_fee_amt = car['sales_price'] * fees_config.get('service_fee_pct', 0)
+    kavak_total_amt = fees_config.get('kavak_total_amount', 0)
+    insurance_amt = INSURANCE_TABLE.get(
+        customer['risk_profile_name'], DEFAULT_FEES['insurance_amount']
+    )
 
-    # 5. Down Payment Check
+    # 4. Effective equity calculation
+    effective_equity = (
+        customer['vehicle_equity'] + cac_bonus - cxa_amount - gps_install_with_iva
+    )
+
+    # 5. Down payment check
     required_dp_pct = DOWN_PAYMENT_TABLE.loc[customer['risk_profile_index'], term]
     if effective_equity < car['sales_price'] * required_dp_pct:
         return None
 
-    # 6. Calculate the actual monthly payment for this specific loan amount - BOTTOM-UP
-    actual_monthly_payment = _calculate_forward_payment(loan_amount_needed, interest_rate, term, fees_config, car['sales_price'])
-    
-    # 7. Validate if this payment falls within any valid Payment Delta tier - DIRECT VALIDATION
+    # 6. Determine interest rate with term premium
+    final_rate = interest_rate
+    if term == 60:
+        final_rate += 0.01
+    elif term == 72:
+        final_rate += 0.015
+
+    # 7. Manual monthly payment calculation
+    gps_monthly_fee = fees_config.get('fixed_fee', 0) * IVA_RATE
+    actual_monthly_payment = _calculate_manual_payment(
+        loan_amount_needed,
+        final_rate,
+        term,
+        service_fee_amt,
+        kavak_total_amt,
+        insurance_amt,
+        gps_monthly_fee,
+    )
+
+    # 8. Validate payment delta
     payment_delta = (actual_monthly_payment / customer['current_monthly_payment']) - 1
     valid_tier = False
     for tier, (min_d, max_d) in payment_delta_tiers.items():
@@ -334,7 +350,7 @@ def _generate_single_offer(customer, car, term, interest_rate, fees_config, paym
     if not valid_tier:
         return None  # Payment delta is outside acceptable ranges
     
-    # 8. SUCCESS! Build the final offer dictionary
+    # SUCCESS! Build the final offer dictionary
     offer_data = {
         'car_id': car['car_id'],
         'car_model': car['model'],
@@ -345,9 +361,12 @@ def _generate_single_offer(customer, car, term, interest_rate, fees_config, paym
         'loan_amount': loan_amount_needed,
         'effective_equity': effective_equity,
         'cxa_amount': cxa_amount,
-        'npv': calculate_final_npv(loan_amount_needed, interest_rate, term),
+        'service_fee_amount': service_fee_amt,
+        'kavak_total_amount': kavak_total_amt,
+        'insurance_amount': insurance_amt,
+        'npv': calculate_final_npv(loan_amount_needed, final_rate, term),
         'fees_applied': fees_config,
-        'interest_rate': interest_rate
+        'interest_rate': final_rate
     }
     return offer_data
 
@@ -380,6 +399,46 @@ def _calculate_forward_payment(loan_amount, interest_rate, term, fees_config, ca
         
     # Fixed fee (GPS) with IVA, spread over term
     total_payment += (fees_config.get('fixed_fee', 0) * IVA_RATE) / term
+
+    return total_payment
+
+
+def _calculate_manual_payment(
+    loan_amount: float,
+    interest_rate: float,
+    term: int,
+    service_fee_amt: float,
+    kavak_total_amt: float,
+    insurance_amt: float,
+    gps_monthly_fee: float,
+):
+    """Manual monthly payment calculation following the MVP specification."""
+    monthly_rate_interest = interest_rate / 12
+    monthly_rate_principal = (interest_rate * IVA_RATE) / 12
+
+    financed_main = loan_amount + service_fee_amt + kavak_total_amt
+
+    principal_main = abs(
+        npf.ppmt(monthly_rate_principal, 1, term, -financed_main)
+    )
+    interest_main = abs(
+        npf.ipmt(monthly_rate_interest, 1, term, -financed_main)
+    ) * IVA_RATE
+
+    principal_ins = abs(
+        npf.ppmt(monthly_rate_principal, 1, 12, -insurance_amt)
+    )
+    interest_ins = abs(
+        npf.ipmt(monthly_rate_interest, 1, 12, -insurance_amt)
+    ) * IVA_RATE
+
+    total_payment = (
+        principal_main
+        + interest_main
+        + principal_ins
+        + interest_ins
+        + gps_monthly_fee
+    )
 
     return total_payment
 
