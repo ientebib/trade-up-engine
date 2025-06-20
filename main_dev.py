@@ -20,6 +20,9 @@ import uvicorn
 import logging
 from core.logging_config import setup_logging
 from core.cache_utils import redis_status
+from core.config_manager import load_latest_scenario_results
+import pandas as pd
+import random
 
 setup_logging(logging.INFO)
 logger = logging.getLogger(__name__)
@@ -59,6 +62,32 @@ config_manager = ConfigManager()
 data_loader = dev_data_loader  # Use development data loader
 engine = TradeUpEngine()
 
+def calculate_demo_metrics() -> dict:
+    """Return mocked portfolio metrics for the dashboard."""
+    customers_df = data_loader.load_customers()
+    inventory_df = data_loader.load_inventory()
+
+    total_customers = len(customers_df)
+    total_offers = total_customers * 3
+
+    metrics = {
+        "total_customers": total_customers,
+        "total_offers": total_offers,
+        "avg_npv": 12000,
+        "avg_offers_per_customer": 3.0,
+        "tier_distribution": {"Refresh": 40, "Upgrade": 45, "Max Upgrade": 15},
+        "top_cars": [],
+    }
+
+    if not inventory_df.empty:
+        sample = inventory_df.head(10)
+        metrics["top_cars"] = [
+            {"Model": row["model"], "Estimated_Matches": random.randint(5, 20)}
+            for _, row in sample.iterrows()
+        ]
+
+    return metrics
+
 # Development mode indicator
 @app.middleware("http")
 async def development_middleware(request: Request, call_next):
@@ -89,49 +118,22 @@ app.include_router(api_router, prefix="/api")
 async def main_dashboard(request: Request):
     """Main dashboard page"""
     try:
-        # Load data required for the dashboard
-        customers = data_loader.load_customers()
-        inventory = data_loader.load_inventory()
-        
-        # Calculate metrics, providing defaults if data is missing
-        metrics = {
-            "total_customers": len(customers) if customers is not None else 0,
-            "total_inventory": len(inventory) if inventory is not None else 0,
-            "total_offers": 12500,  # Mocked
-            "avg_npv": 15230, # Mocked
-            "avg_offers_per_customer": 4.5, # Mocked
-            "tier_distribution": { # Mocked data for chart
-                "Refresh": 450,
-                "Upgrade": 650,
-                "Max Upgrade": 150
-            },
-            "top_cars": [ # Mocked data for chart
-                {"Model": "Honda Civic", "Estimated_Matches": 120},
-                {"Model": "Toyota RAV4", "Estimated_Matches": 110},
-                {"Model": "Ford F-150", "Estimated_Matches": 95},
-                {"Model": "Nissan Sentra", "Estimated_Matches": 80},
-                {"Model": "Jeep Wrangler", "Estimated_Matches": 75}
-            ]
-        }
-        
+        metrics = calculate_demo_metrics()
         return templates.TemplateResponse(
             "main_dashboard.html",
-            {
-                "request": request,
-                "metrics": metrics,
-                "active_page": "dashboard"
-            }
+            {"request": request, "metrics": metrics, "active_page": "dashboard"},
         )
     except Exception as e:
         logging.error(f"Error rendering main dashboard: {e}")
-        # Render a safe error page if data loading fails
         return HTMLResponse(f"""
         <html>
-            <head><title>Trade-Up Engine - Error</title></head>
+            <head><title>Trade-Up Engine - Development</title></head>
             <body>
-                <h1>An Error Occurred</h1>
-                <p>Could not load the dashboard. Please check the logs.</p>
+                <h1>Trade-Up Engine - Development Mode</h1>
+                <p>External network calls are disabled.</p>
+                <p>Using CSV files and sample data instead of Redshift.</p>
                 <p>Error: {e}</p>
+                <p><a href="/health">Health Check</a></p>
             </body>
         </html>
         """)
@@ -155,28 +157,18 @@ async def customer_view(request: Request, customer_id: str):
     """Customer view page"""
     try:
         customers = data_loader.load_customers()
-        if customers is None or customers.empty:
-            raise HTTPException(status_code=500, detail="Customer data could not be loaded.")
+        customer_row = customers[customers["customer_id"] == customer_id]
+        if customer_row.empty:
+            raise HTTPException(status_code=404, detail="Customer not found")
 
-        # Find the specific customer
-        customer_data = customers[customers['customer_id'] == customer_id].to_dict('records')
-        
-        if not customer_data:
-            raise HTTPException(status_code=404, detail=f"Customer with ID {customer_id} not found.")
-            
-        customer = customer_data[0]
-
+        customer = customer_row.iloc[0].to_dict()
         return templates.TemplateResponse(
             "customer_view.html",
-            {
-                "request": request,
-                "customer": customer,
-                "active_page": "customer"
-            },
+            {"request": request, "customer": customer, "active_page": "customer"},
         )
     except Exception as e:
-        logging.error(f"Error rendering customer view for {customer_id}: {e}")
-        return HTMLResponse(f"<h1>Customer View - Error</h1><p>Could not render page for customer {customer_id}.</p><p>Error: {e}</p>")
+        logging.error(f"Error rendering customer view: {e}")
+        return HTMLResponse(f"<h1>Customer View</h1><p>Error: {e}</p>")
 
 # Calculations page
 @app.get("/calculations", response_class=HTMLResponse)
@@ -198,7 +190,7 @@ async def global_config_page(request: Request):
     try:
         return templates.TemplateResponse(
             "global_config.html",
-            {"request": request, "active_page": "config"},
+            {"request": request},
         )
     except Exception as e:
         logging.error(f"Error rendering global config: {e}")

@@ -42,4 +42,4 @@ fi
 
 # Fire up the dev server
 echo "🚀 Launching Trade-Up Engine (dev mode) at http://localhost:8000 …"
-uvicorn main_dev:app --host 0.0.0.0 --port 8000 --reload 
+uvicorn main_dev:app --host 0.0.0.0 --port 8000 --reload
