@@ -1,316 +1,144 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kavak Trade-Up - Customer {{ customer.customer_id }}</title>
-    <link rel="stylesheet" href="/static/css/style.css">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
-    <style>
-        .fee-breakdown-card {
-            background: #f8f9fa;
-            border-radius: 8px;
-            padding: 20px;
-            margin-top: 15px;
-            border: 1px solid #e5e7eb;
-        }
-        .fee-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-            gap: 12px;
-            margin-top: 12px;
-        }
-        .fee-item {
-            padding: 10px 12px;
-            background: white;
-            border-radius: 6px;
-            border: 1px solid #e5e7eb;
-        }
-        .fee-label {
-            font-size: 11px;
-            color: #6b7280;
-            margin-bottom: 2px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-        .fee-value {
-            font-size: 16px;
-            font-weight: 600;
-            color: #111827;
-        }
-        .fee-detail {
-            font-size: 12px;
-            color: #6b7280;
-            margin-top: 2px;
-        }
-        .subsidy-badge {
-            display: inline-block;
-            padding: 4px 10px;
-            border-radius: 4px;
-            font-size: 11px;
-            font-weight: 600;
-            margin-left: 8px;
-            text-transform: uppercase;
-        }
-        .subsidy-phase1 { background: #dcfce7; color: #166534; }
-        .subsidy-level1 { background: #fef3c7; color: #92400e; }
-        .subsidy-level2 { background: #fde68a; color: #78350f; }
-        .subsidy-level3 { background: #fbbf24; color: #7c2d12; }
-        .calculation-details {
-            background: #f3f4f6;
-            border-radius: 6px;
-            padding: 15px;
-            margin-top: 10px;
-            font-size: 13px;
-        }
-        .calc-row {
-            display: flex;
-            justify-content: space-between;
-            padding: 5px 0;
-            border-bottom: 1px solid #e5e7eb;
-        }
-        .calc-row:last-child {
-            border-bottom: none;
-            font-weight: 600;
-        }
-        .filters-section {
-            display: flex;
-            gap: 15px;
-            margin: 20px 0;
-            flex-wrap: wrap;
-            align-items: end;
-        }
-        .filter-group {
-            display: flex;
-            flex-direction: column;
-            gap: 5px;
-        }
-        .filter-label {
-            font-size: 12px;
-            font-weight: 600;
-            color: #6b7280;
-        }
-        .info-tooltip {
-            display: inline-block;
-            width: 16px;
-            height: 16px;
-            background: #3b82f6;
-            color: white;
-            border-radius: 50%;
-            text-align: center;
-            line-height: 16px;
-            font-size: 10px;
-            margin-left: 4px;
-            cursor: help;
-        }
-        .offer-card-enhanced {
-            background: white;
-            border: 1px solid #e5e7eb;
-            border-radius: 12px;
-            padding: 24px;
-            margin-bottom: 15px;
-            cursor: pointer;
-            transition: all 0.2s;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-        }
-        .offer-card-enhanced:hover {
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-            transform: translateY(-2px);
-        }
-        .offer-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 15px;
-        }
-        .expand-icon {
-            transition: transform 0.2s;
-        }
-        .expanded .expand-icon {
-            transform: rotate(180deg);
-        }
-        .tier-label {
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 600;
-        }
-        .tier-refresh { background: #dbeafe; color: #1e40af; }
-        .tier-upgrade { background: #d1fae5; color: #065f46; }
-        .tier-max-upgrade { background: #fce7f3; color: #9f1239; }
-    </style>
-</head>
-<body>
-    <div class="main-container">
-        <aside class="sidebar">
-            <div class="sidebar-header">
-                <h1>🚗 Trade-Up Engine</h1>
+{% extends "base.html" %}
+{% block title %}Kavak Trade-Up - Customer {{ customer.customer_id }}{% endblock %}
+{% block content %}
+    <header class="main-header">
+        <h2>👤 Customer {{ customer.customer_id }} - Enhanced Analysis</h2>
+        <p>Contract: {{ customer.contract_id if customer.contract_id else 'N/A' }} | Deep Dive Trade-Up Engine Analysis <span id="config-status-badge" class="status-badge" style="display:none;"></span></p>
+    </header>
+
+    <!-- Enhanced Customer Profile -->
+    <div class="section-card">
+        <h3>📋 Customer Profile & Financial Data</h3>
+        <div class="customer-profile-grid">
+            <div class="profile-item">
+                <div class="profile-label">Current Car</div>
+                <div class="profile-value">{{ customer.current_car_model or 'Unknown' }}</div>
             </div>
-            <nav class="sidebar-nav">
-                <a href="/" class="nav-link">
-                    <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M4 13h6v6H4v-6zm0-10h6v6H4V3zm10 16h6v-6h-6v6zm0-10h6V3h-6v10z"></path></svg>
-                    <span>Main Dashboard</span>
-                </a>
-                <a href="/customers" class="nav-link">
-                    <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"></path></svg>
-                    <span>Customer List</span>
-                </a>
-                <a href="/customer/{{ customer.customer_id }}" class="nav-link active">
-                    <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"></path></svg>
-                    <span>Customer Deep Dive</span>
-                </a>
-                <a href="/calculations" class="nav-link">
-                    <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"></path></svg>
-                    <span>Cálculos</span>
-                </a>
-                <a href="/config" class="nav-link">
-                    <svg class="nav-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M19.43 12.98c.04-.32.07-.64.07-.98s-.03-.66-.07-.98l2.11-1.65c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.3-.61-.22l-2.49 1c-.52-.4-1.08-.73-1.69-.98l-.38-2.65C14.46 2.18 14.25 2 14 2h-4c-.25 0-.46.18-.49.42l-.38 2.65c-.61.25-1.17.59-1.69.98l-2.49-1c-.23-.09-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64l2.11 1.65c-.04.32-.07.65-.07.98s.03.66.07.98l-2.11 1.65c-.19.15-.24.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1c.52.4 1.08.73 1.69.98l.38 2.65c.03.24.24.42.49.42h4c.25 0 .46-.18.49-.42l.38-2.65c.61-.25 1.17-.59 1.69-.98l2.49 1c.23.09.49 0 .61-.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.65zM12 15.5c-1.93 0-3.5-1.57-3.5-3.5s1.57-3.5 3.5-3.5 3.5 1.57 3.5 3.5-1.57 3.5-3.5 3.5z"></path></svg>
-                    <span>Global Config</span>
-                </a>
-            </nav>
-        </aside>
-
-        <main class="content">
-            <header class="main-header">
-                <h2>👤 Customer {{ customer.customer_id }} - Enhanced Analysis</h2>
-                <p>Contract: {{ customer.contract_id if customer.contract_id else 'N/A' }} | Deep Dive Trade-Up Engine Analysis <span id="config-status-badge" class="status-badge" style="display:none;"></span></p>
-            </header>
-
-            <!-- Enhanced Customer Profile -->
-            <div class="section-card">
-                <h3>📋 Customer Profile & Financial Data</h3>
-                <div class="customer-profile-grid">
-                    <div class="profile-item">
-                        <div class="profile-label">Current Car</div>
-                        <div class="profile-value">{{ customer.current_car_model or 'Unknown' }}</div>
-                    </div>
-                    <div class="profile-item">
-                        <div class="profile-label">Current Payment</div>
-                        <div class="profile-value">${{ "{:,.0f}".format(customer.current_monthly_payment) }}</div>
-                    </div>
-                    <div class="profile-item">
-                        <div class="profile-label">Current Car Value</div>
-                        <div class="profile-value">${{ "{:,.0f}".format(customer.current_car_price) }}</div>
-                    </div>
-                    <div class="profile-item">
-                        <div class="profile-label">Vehicle Equity</div>
-                        <div class="profile-value">${{ "{:,.0f}".format(customer.vehicle_equity) }}</div>
-                    </div>
-                    <div class="profile-item">
-                        <div class="profile-label">Risk Profile</div>
-                        <div class="profile-value">{{ customer.risk_profile_name }} <span class="info-tooltip" title="Interest Rate: Based on risk profile">?</span></div>
-                    </div>
-                    <div class="profile-item">
-                        <div class="profile-label">Outstanding Balance</div>
-                        <div class="profile-value">${{ "{:,.0f}".format(customer.outstanding_balance) if customer.outstanding_balance else '0' }}</div>
-                    </div>
-                </div>
+            <div class="profile-item">
+                <div class="profile-label">Current Payment</div>
+                <div class="profile-value">${{ "{:,.0f}".format(customer.current_monthly_payment) }}</div>
             </div>
-
-            <!-- Controls with Filters -->
-            <div class="controls-section">
-                <div class="customer-selector">
-                    <label for="customer-select">Select Customer:</label>
-                    <select id="customer-select" class="form-select">
-                        <option value="{{ customer.customer_id }}" selected>Customer {{ customer.customer_id }}</option>
-                    </select>
-                </div>
-                <select id="mode-select" style="margin-right:10px;">
-                    <option value="current">Current Mode</option>
-                    <option value="default">Default</option>
-                    <option value="custom">Custom</option>
-                    <option value="range">Range Optimization</option>
-                </select>
-                <button id="generate-offers-btn" class="btn-primary">Generate Offers</button>
+            <div class="profile-item">
+                <div class="profile-label">Current Car Value</div>
+                <div class="profile-value">${{ "{:,.0f}".format(customer.current_car_price) }}</div>
             </div>
-
-            <!-- Filters Section -->
-            <div class="filters-section" id="filters-section" style="display: none;">
-                <div class="filter-group">
-                    <label class="filter-label">Term (Months)</label>
-                    <select id="term-filter" class="form-select">
-                        <option value="all">All Terms</option>
-                        <option value="12">12 Months</option>
-                        <option value="24">24 Months</option>
-                        <option value="36">36 Months</option>
-                        <option value="48">48 Months</option>
-                        <option value="60">60 Months</option>
-                        <option value="72">72 Months</option>
-                    </select>
-                </div>
-                <div class="filter-group">
-                    <label class="filter-label">Tier</label>
-                    <select id="tier-filter" class="form-select">
-                        <option value="all">All Tiers</option>
-                        <option value="Refresh">Refresh (-5% to +5%)</option>
-                        <option value="Upgrade">Upgrade (+5% to +25%)</option>
-                        <option value="Max Upgrade">Max Upgrade (+25% to +100%)</option>
-                    </select>
-                </div>
-                <div class="filter-group">
-                    <label class="filter-label">Min NPV</label>
-                    <input type="number" id="npv-filter" class="form-input" placeholder="5000" value="0">
-                </div>
+            <div class="profile-item">
+                <div class="profile-label">Vehicle Equity</div>
+                <div class="profile-value">${{ "{:,.0f}".format(customer.vehicle_equity) }}</div>
             </div>
-
-            <!-- Loading State -->
-            <div id="loading-state" class="loading-card" style="display: none;">
-                <div class="loading-spinner"></div>
-                <p>Running hierarchical subsidy search to find optimal offers...</p>
+            <div class="profile-item">
+                <div class="profile-label">Risk Profile</div>
+                <div class="profile-value">{{ customer.risk_profile_name }} <span class="info-tooltip" title="Interest Rate: Based on risk profile">?</span></div>
             </div>
-
-            <!-- Results Section -->
-            <div id="results-container">
-                <div class="section-card">
-                    <h3>📊 Offers Summary</h3>
-                    <div id="offers-summary" class="kpi-grid">
-                        <!-- Will be populated by JavaScript -->
-                    </div>
-                </div>
-
-                <!-- Hierarchical Search Explanation -->
-                <div class="fee-breakdown-card" id="search-explanation" style="display: none;">
-                    <h4>🔍 Hierarchical Subsidy Search Process</h4>
-                    <p style="font-size: 14px; margin-top: 10px;">
-                        The engine searches for valid offers using a hierarchical approach to maximize profitability:
-                    </p>
-                    <ol style="font-size: 13px; margin-top: 10px;">
-                        <li><strong>Phase 1 (Max Profit):</strong> Service Fee 5%, CXA 4%, No CAC Bonus</li>
-                        <li><strong>Phase 2 Level 1:</strong> Service Fee 0%, CXA 4%, No CAC Bonus</li>
-                        <li><strong>Phase 2 Level 2:</strong> Service Fee 0%, CXA 4%, CAC Bonus $5,000</li>
-                        <li><strong>Phase 2 Level 3:</strong> Service Fee 0%, CXA 0%, CAC Bonus $5,000</li>
-                    </ol>
-                    <p style="font-size: 12px; margin-top: 10px; color: #6b7280;">
-                        The search stops as soon as valid offers are found, ensuring maximum profitability.
-                    </p>
-                </div>
-
-                <div style="display:flex; justify-content:flex-end; margin-bottom:10px;">
-                    <label for="tier-select" style="margin-right:8px;">Filter Tier:</label>
-                    <select id="tier-select">
-                        <option value="all">All</option>
-                        <option value="Refresh">Refresh</option>
-                        <option value="Upgrade">Upgrade</option>
-                        <option value="Max Upgrade">Max Upgrade</option>
-                    </select>
-                </div>
-                <div id="offers-by-tier"></div>
+            <div class="profile-item">
+                <div class="profile-label">Outstanding Balance</div>
+                <div class="profile-value">${{ "{:,.0f}".format(customer.outstanding_balance) if customer.outstanding_balance else '0' }}</div>
             </div>
+        </div>
+    </div>
 
-            <!-- No Results State -->
-            <div id="no-results" class="section-card" style="display: none;">
-                <div class="no-offers-state">
-                    <h3>No Valid Offers Found</h3>
-                    <p>This customer is currently not eligible for any trade-up offers based on the available inventory and current engine configuration.</p>
-                    <p style="margin-top: 10px; font-size: 14px;">Possible reasons:</p>
-                    <ul style="font-size: 13px; color: #6b7280;">
-                        <li>Insufficient equity for down payment requirements</li>
-                        <li>No cars in inventory meet the payment delta constraints</li>
-                        <li>NPV threshold not met for available offers</li>
-                    </ul>
-                </div>
+    <!-- Controls with Filters -->
+    <div class="controls-section">
+        <div class="customer-selector">
+            <label for="customer-select">Select Customer:</label>
+            <select id="customer-select" class="form-select">
+                <option value="{{ customer.customer_id }}" selected>Customer {{ customer.customer_id }}</option>
+            </select>
+        </div>
+        <select id="mode-select" style="margin-right:10px;">
+            <option value="current">Current Mode</option>
+            <option value="default">Default</option>
+            <option value="custom">Custom</option>
+            <option value="range">Range Optimization</option>
+        </select>
+        <button id="generate-offers-btn" class="btn-primary">Generate Offers</button>
+    </div>
+
+    <!-- Filters Section -->
+    <div class="filters-section" id="filters-section" style="display: none;">
+        <div class="filter-group">
+            <label class="filter-label">Term (Months)</label>
+            <select id="term-filter" class="form-select">
+                <option value="all">All Terms</option>
+                <option value="12">12 Months</option>
+                <option value="24">24 Months</option>
+                <option value="36">36 Months</option>
+                <option value="48">48 Months</option>
+                <option value="60">60 Months</option>
+                <option value="72">72 Months</option>
+            </select>
+        </div>
+        <div class="filter-group">
+            <label class="filter-label">Tier</label>
+            <select id="tier-filter" class="form-select">
+                <option value="all">All Tiers</option>
+                <option value="Refresh">Refresh (-5% to +5%)</option>
+                <option value="Upgrade">Upgrade (+5% to +25%)</option>
+                <option value="Max Upgrade">Max Upgrade (+25% to +100%)</option>
+            </select>
+        </div>
+        <div class="filter-group">
+            <label class="filter-label">Min NPV</label>
+            <input type="number" id="npv-filter" class="form-input" placeholder="5000" value="0">
+        </div>
+    </div>
+
+    <!-- Loading State -->
+    <div id="loading-state" class="loading-card" style="display: none;">
+        <div class="loading-spinner"></div>
+        <p>Running hierarchical subsidy search to find optimal offers...</p>
+    </div>
+
+    <!-- Results Section -->
+    <div id="results-container">
+        <div class="section-card">
+            <h3>📊 Offers Summary</h3>
+            <div id="offers-summary" class="kpi-grid">
+                <!-- Will be populated by JavaScript -->
             </div>
-        </main>
+        </div>
+
+        <!-- Hierarchical Search Explanation -->
+        <div class="fee-breakdown-card" id="search-explanation" style="display: none;">
+            <h4>🔍 Hierarchical Subsidy Search Process</h4>
+            <p style="font-size: 14px; margin-top: 10px;">
+                The engine searches for valid offers using a hierarchical approach to maximize profitability:
+            </p>
+            <ol style="font-size: 13px; margin-top: 10px;">
+                <li><strong>Phase 1 (Max Profit):</strong> Service Fee 5%, CXA 4%, No CAC Bonus</li>
+                <li><strong>Phase 2 Level 1:</strong> Service Fee 0%, CXA 4%, No CAC Bonus</li>
+                <li><strong>Phase 2 Level 2:</strong> Service Fee 0%, CXA 4%, CAC Bonus $5,000</li>
+                <li><strong>Phase 2 Level 3:</strong> Service Fee 0%, CXA 0%, CAC Bonus $5,000</li>
+            </ol>
+            <p style="font-size: 12px; margin-top: 10px; color: #6b7280;">
+                The search stops as soon as valid offers are found, ensuring maximum profitability.
+            </p>
+        </div>
+
+        <div style="display:flex; justify-content:flex-end; margin-bottom:10px;">
+            <label for="tier-select" style="margin-right:8px;">Filter Tier:</label>
+            <select id="tier-select">
+                <option value="all">All</option>
+                <option value="Refresh">Refresh</option>
+                <option value="Upgrade">Upgrade</option>
+                <option value="Max Upgrade">Max Upgrade</option>
+            </select>
+        </div>
+        <div id="offers-by-tier"></div>
+    </div>
+
+    <!-- No Results State -->
+    <div id="no-results" class="section-card" style="display: none;">
+        <div class="no-offers-state">
+            <h3>No Valid Offers Found</h3>
+            <p>This customer is currently not eligible for any trade-up offers based on the available inventory and current engine configuration.</p>
+            <p style="margin-top: 10px; font-size: 14px;">Possible reasons:</p>
+            <ul style="font-size: 13px; color: #6b7280;">
+                <li>Insufficient equity for down payment requirements</li>
+                <li>No cars in inventory meet the payment delta constraints</li>
+                <li>NPV threshold not met for available offers</li>
+            </ul>
+        </div>
     </div>
 
     <!-- Modal for Amortization Table -->
@@ -321,17 +149,15 @@
             <div id="amortization-table"></div>
         </div>
     </div>
-
-    <script src="/static/js/main.js"></script>
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            // Get customerId from the URL path
-            const pathParts = window.location.pathname.split('/');
-            const customerId = pathParts[pathParts.length - 1];
-            if (customerId) {
-                initializeCustomerView(customerId);
-            }
-        });
-    </script>
-</body>
-</html> 
+{% endblock %}
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const pathParts = window.location.pathname.split('/');
+        const customerId = pathParts[pathParts.length - 1];
+        if (customerId) {
+            initializeCustomerView(customerId);
+        }
+    });
+</script>
+{% endblock %}
