@@ -740,10 +740,13 @@ def _calculate_manual_payment(
     gps_monthly_fee: float,
 ):
     """Manual monthly payment calculation following the MVP specification."""
-    # Use the nominal (untaxed) monthly rate for principal amortization.
-    # IVA is only applied to the interest portion, not to the principal repayment itself.
+    # Per business rules ("Kavak Method") the capital portion is calculated
+    # using the interest rate with IVA baked in while the interest portion
+    # itself is computed using the base rate and then taxed.  This produces the
+    # same total payment as a PMT using ``interest_rate * IVA_RATE`` but keeps
+    # the IVA accounting explicit.
     monthly_rate_interest = interest_rate / 12
-    monthly_rate_principal = interest_rate / 12
+    monthly_rate_principal = (interest_rate * IVA_RATE) / 12
 
     # Component 1: Main loan amount
     principal_main = abs(npf.ppmt(monthly_rate_principal, 1, term, -loan_amount))

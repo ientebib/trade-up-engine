@@ -18,13 +18,13 @@ def calculate_final_npv(loan_amount, interest_rate, term_months):
     # borrower, cash inflow for the lender). Therefore **do not** invert the
     # sign here; we want positive cash-flows for the lender.
 
-    # IVA applies only to the interest portion. Principal amortization should use the
-    # nominal rate (without IVA) to mirror the repayment schedule used in
-    # _calculate_manual_payment.
+    # Apply the "Kavak Method" for IVA: interest is computed with the base rate
+    # and then taxed, while principal amortization uses the rate with IVA
+    # embedded. This mirrors ``_calculate_manual_payment``.
     monthly_rate_i = interest_rate / 12
-    monthly_rate_p = interest_rate / 12
+    monthly_rate_p = (interest_rate * IVA_RATE) / 12
     interest_payments = [
-        npf.ipmt(monthly_rate_p, period, term_months, -loan_amount)
+        npf.ipmt(monthly_rate_i, period, term_months, -loan_amount) * IVA_RATE
         for period in range(1, term_months + 1)
     ]
 
@@ -44,11 +44,9 @@ def generate_amortization_table(offer_details: dict) -> list[dict]:
     insurance_amt = offer_details.get("insurance_amount", 0.0)
     gps_monthly_fee = offer_details.get("gps_monthly_fee", 350.0 * IVA_RATE)
 
-    # IVA applies only to the interest portion. Principal amortization should use the
-    # nominal rate (without IVA) to mirror the repayment schedule used in
-    # _calculate_manual_payment.
+    # Apply the same "Kavak Method" as in the payment calculation
     monthly_rate_i = rate / 12
-    monthly_rate_p = rate / 12
+    monthly_rate_p = (rate * IVA_RATE) / 12
 
     financed_main = loan_amount
     financed_sf = service_fee
