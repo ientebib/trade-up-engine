@@ -7,7 +7,13 @@
 # 3) Exports flags so the app never touches Redshift / VPN
 # 4) Starts the FastAPI dev server on http://localhost:8000
 # ------------------------------------------------------------
+# Usage: ./run_local.sh [setup|serve]
+#   setup  -> just create venv + install deps, then exit (good for CI)
+#   serve  -> same as setup then start dev server (default)
+
 set -euo pipefail
+
+MODE=${1:-serve}
 
 # Create venv once
 if [ ! -d "venv" ]; then
@@ -27,6 +33,12 @@ python -m pip install -r requirements.txt
 export DISABLE_EXTERNAL_CALLS=true
 export USE_MOCK_DATA=true
 export ENVIRONMENT=development
+
+# Exit here for pure setup mode (used by CI)
+if [ "$MODE" = "setup" ]; then
+  echo "✅ Environment prepared – exiting as requested (setup mode)"
+  exit 0
+fi
 
 # Fire up the dev server
 echo "🚀 Launching Trade-Up Engine (dev mode) at http://localhost:8000 …"
