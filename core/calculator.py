@@ -18,18 +18,17 @@ def calculate_final_npv(loan_amount, interest_rate, term_months):
     # borrower, cash inflow for the lender). Therefore **do not** invert the
     # sign here; we want positive cash-flows for the lender.
 
-    # IVA applies only to the interest portion. Principal amortization should use the
-    # nominal rate (without IVA) to mirror the repayment schedule used in
+    # IVA applies only to the interest portion. Principal amortization uses the
+    # same nominal rate (without IVA) to mirror the repayment schedule used in
     # _calculate_manual_payment.
-    monthly_rate_i = interest_rate / 12
-    monthly_rate_p = interest_rate / 12
+    monthly_rate = interest_rate / 12
     interest_payments = [
-        npf.ipmt(monthly_rate_p, period, term_months, -loan_amount)
+        npf.ipmt(monthly_rate, period, term_months, -loan_amount)
         for period in range(1, term_months + 1)
     ]
 
     # Calculate NPV using the same monthly rate as the discount rate
-    npv = npf.npv(monthly_rate_p, [0] + interest_payments)
+    npv = npf.npv(monthly_rate, [0] + interest_payments)
     return npv
 
 
@@ -44,11 +43,10 @@ def generate_amortization_table(offer_details: dict) -> list[dict]:
     insurance_amt = offer_details.get("insurance_amount", 0.0)
     gps_monthly_fee = offer_details.get("gps_monthly_fee", 350.0 * IVA_RATE)
 
-    # IVA applies only to the interest portion. Principal amortization should use the
-    # nominal rate (without IVA) to mirror the repayment schedule used in
+    # IVA applies only to the interest portion. Principal amortization uses the
+    # same nominal rate (without IVA) to mirror the repayment schedule used in
     # _calculate_manual_payment.
-    monthly_rate_i = rate / 12
-    monthly_rate_p = rate / 12
+    monthly_rate = rate / 12
 
     financed_main = loan_amount
     financed_sf = service_fee
@@ -75,22 +73,22 @@ def generate_amortization_table(offer_details: dict) -> list[dict]:
         beginning_balance_ins = balance_ins if insurance_amt > 0 else 0.0
 
         # --- Main loan bucket ---
-        principal_main = abs(npf.ppmt(monthly_rate_p, month, term, -financed_main))
-        interest_main = abs(npf.ipmt(monthly_rate_i, month, term, -financed_main)) * IVA_RATE
+        principal_main = abs(npf.ppmt(monthly_rate, month, term, -financed_main))
+        interest_main = abs(npf.ipmt(monthly_rate, month, term, -financed_main)) * IVA_RATE
 
         # --- Service Fee bucket ---
-        principal_sf = abs(npf.ppmt(monthly_rate_p, month, term, -financed_sf))
-        interest_sf = abs(npf.ipmt(monthly_rate_i, month, term, -financed_sf)) * IVA_RATE
+        principal_sf = abs(npf.ppmt(monthly_rate, month, term, -financed_sf))
+        interest_sf = abs(npf.ipmt(monthly_rate, month, term, -financed_sf)) * IVA_RATE
 
         # --- Kavak Total bucket ---
-        principal_kt = abs(npf.ppmt(monthly_rate_p, month, term, -financed_kt))
-        interest_kt = abs(npf.ipmt(monthly_rate_i, month, term, -financed_kt)) * IVA_RATE
+        principal_kt = abs(npf.ppmt(monthly_rate, month, term, -financed_kt))
+        interest_kt = abs(npf.ipmt(monthly_rate, month, term, -financed_kt)) * IVA_RATE
 
         # --- Insurance bucket (recurring every 12 months) ---
         if insurance_amt > 0:
             month_in_cycle = months_since_insurance_reset
-            principal_ins = abs(npf.ppmt(monthly_rate_p, month_in_cycle, 12, -insurance_amt))
-            interest_ins = abs(npf.ipmt(monthly_rate_i, month_in_cycle, 12, -insurance_amt)) * IVA_RATE
+            principal_ins = abs(npf.ppmt(monthly_rate, month_in_cycle, 12, -insurance_amt))
+            interest_ins = abs(npf.ipmt(monthly_rate, month_in_cycle, 12, -insurance_amt)) * IVA_RATE
         else:
             principal_ins = interest_ins = 0.0
 
