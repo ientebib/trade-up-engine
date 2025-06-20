@@ -429,37 +429,31 @@ def _generate_single_offer(
     if car["sales_price"] <= customer["current_car_price"]:
         return None
 
-    # 2. Resolve CXA circular dependency including GPS installation fee
+    # 2. Resolve CXA circular dependency
     cxa_pct = fees_config.get("cxa_pct", 0)
     cac_bonus = fees_config.get("cac_bonus", 0)
     gps_install_with_iva = GPS_INSTALLATION_FEE * IVA_RATE
     gps_monthly_with_iva = GPS_MONTHLY_FEE * IVA_RATE
 
-    # 3. Component amounts (CXA first, because it feeds into starting equity)
-    cxa_amount = car["sales_price"] * cxa_pct
+    denominator = 1 - cxa_pct
+    if denominator <= 0:
+        return None
 
-    # 4. Determine the *starting* vehicle equity before fees/bonuses
-    starting_equity = (
-        customer["vehicle_equity"]  # effective equity currently stored in data
-        + cxa_amount                 # CXA will be deducted later, so add back
-        + gps_install_with_iva       # GPS install deducted later, so add back
-        - cac_bonus                  # CAC increases equity later, so remove
-    )
-
-    # 5. Loan amount needed equals price minus starting equity
-    loan_amount_needed = car["sales_price"] - starting_equity
+    loan_amount_needed = (
+        car["sales_price"] - customer["vehicle_equity"] - cac_bonus
+    ) / denominator
 
     if loan_amount_needed <= 0:
         return None
 
-    # 6. Other component amounts
+    # 3. Component amounts
+    cxa_amount = loan_amount_needed * cxa_pct
     service_fee_amt = car["sales_price"] * fees_config.get("service_fee_pct", 0)
     kavak_total_amt = fees_config.get("kavak_total_amount", 0)
     insurance_amt = INSURANCE_TABLE.get(
         customer["risk_profile_name"], DEFAULT_FEES["insurance_amount"]
     )
-
-    # 7. Effective equity calculation
+    # 4. Effective equity calculation (GPS and CXA reduce available equity)
     effective_equity = (
         customer["vehicle_equity"] + cac_bonus - cxa_amount - gps_install_with_iva
     )

@@ -12,5 +12,6 @@ except ModuleNotFoundError as e:
     # Common in local/mock environments where redshift_connector isn't installed or supported
     data_loader = None
 from .config import *
+from . import cache_utils
 
-__all__ = ['run_engine_for_customer', 'calculate_final_npv', 'data_loader']
+__all__ = ['run_engine_for_customer', 'calculate_final_npv', 'data_loader', 'cache_utils']
