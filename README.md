@@ -83,8 +83,12 @@ Key configuration parameters:
  - GPS Monthly Fee: 350 MXN
  - Max Combinations: 1,000
  - Early Stop Offers: 100
- - Minimum NPV Threshold: 5,000 MXN
- - See [docs/range_optimization.md](docs/range_optimization.md) for full details.
+- Minimum NPV Threshold: 5,000 MXN
+- See [docs/range_optimization.md](docs/range_optimization.md) for full details.
+
+### Scenario Analysis Metrics
+For an explanation of how offer counts and portfolio NPV are extrapolated from a customer sample see
+[docs/scenario_metrics.md](docs/scenario_metrics.md).
 
 ## API Endpoints
 

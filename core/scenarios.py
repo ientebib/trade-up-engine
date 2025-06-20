@@ -71,8 +71,8 @@ def run_scenario_analysis(config: Dict, customers_df: DataFrame, inventory_df: D
         avg_offers_per_customer = total_offers / processed_customers if processed_customers > 0 else 0
         avg_npv_per_offer = total_npv / total_offers if total_offers > 0 else 0
 
-        extrapolated_total_offers = int(avg_offers_per_customer * total_customers)
-        extrapolated_total_npv = int(avg_npv_per_offer * extrapolated_total_offers)
+        extrapolated_total_offers = int(round(avg_offers_per_customer * total_customers))
+        extrapolated_total_npv = int(round(avg_npv_per_offer * extrapolated_total_offers))
 
         execution_time = time.time() - start_time
 
@@ -87,7 +87,7 @@ def run_scenario_analysis(config: Dict, customers_df: DataFrame, inventory_df: D
             },
             "actual_metrics": {
                 "total_offers": extrapolated_total_offers,
-                "average_npv_per_offer": int(avg_npv_per_offer),
+                "average_npv_per_offer": round(avg_npv_per_offer, 2),
                 "total_portfolio_npv": extrapolated_total_npv,
                 "offers_per_customer": round(avg_offers_per_customer, 1),
                 "tier_distribution": offers_by_tier,
