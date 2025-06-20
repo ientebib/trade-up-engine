@@ -48,7 +48,10 @@ def generate_amortization_table(offer_details: dict) -> list[dict]:
     monthly_rate_i = rate / 12
     monthly_rate_p = (rate * IVA_RATE) / 12
 
-    financed_main = loan_amount
+    # "loan_amount" now represents the total financed amount including
+    # service fee, Kavak Total, and the first insurance cycle. Extract the
+    # main principal portion for the amortization buckets.
+    financed_main = loan_amount - service_fee - kavak_total - insurance_amt
     financed_sf = service_fee
     financed_kt = kavak_total
 

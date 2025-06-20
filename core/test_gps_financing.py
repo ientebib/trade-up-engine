@@ -31,10 +31,18 @@ def test_gps_installation_not_financed():
 
     gps_install_with_iva = GPS_INSTALLATION_FEE * IVA_RATE
     cxa_amount = car["sales_price"] * fees["cxa_pct"]
-    expected_loan = car["sales_price"] - (
+    expected_base_loan = car["sales_price"] - (
         customer["vehicle_equity"] + fees["cac_bonus"] - cxa_amount - gps_install_with_iva
     )
-    assert offer["loan_amount"] == pytest.approx(expected_loan)
-    assert offer["loan_amount"] + offer["effective_equity"] == pytest.approx(
-        car["sales_price"]
-    )
+    expected_total_financed = expected_base_loan + fees["service_fee_pct"] * car["sales_price"] + fees["kavak_total_amount"] + fees["insurance_amount"]
+
+    assert offer["loan_amount"] == pytest.approx(expected_total_financed)
+
+    # Verify GPS installation is not financed: removing financed fees should equal car price
+    assert (
+        offer["loan_amount"]
+        - offer["service_fee_amount"]
+        - offer["kavak_total_amount"]
+        - offer["insurance_amount"]
+        + offer["effective_equity"]
+    ) == pytest.approx(car["sales_price"])

@@ -674,6 +674,11 @@ def _generate_single_offer(
         ),
     )
 
+    # 7. Total financed amount (main loan + financed fees)
+    total_financed = (
+        loan_amount_needed + service_fee_amt + kavak_total_amt + insurance_amt
+    )
+
     # 7. Down payment check using effective equity
     required_dp_pct = DOWN_PAYMENT_TABLE.loc[customer["risk_profile_index"], term]
     if effective_equity < car["sales_price"] * required_dp_pct:
@@ -716,7 +721,7 @@ def _generate_single_offer(
         "term": term,
         "monthly_payment": actual_monthly_payment,
         "payment_delta": payment_delta,
-        "loan_amount": loan_amount_needed,
+        "loan_amount": total_financed,
         "effective_equity": effective_equity,
         "cxa_amount": cxa_amount,
         "service_fee_amount": service_fee_amt,
@@ -724,7 +729,7 @@ def _generate_single_offer(
         "insurance_amount": insurance_amt,
         "gps_install_fee": gps_install_with_iva,
         "gps_monthly_fee": gps_monthly_with_iva,
-        "npv": calculate_final_npv(loan_amount_needed, final_rate, term),
+        "npv": calculate_final_npv(total_financed, final_rate, term),
         "fees_applied": fees_config,
         "interest_rate": final_rate,
     }
