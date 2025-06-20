@@ -16,8 +16,10 @@ from contextlib import asynccontextmanager
 import time
 import logging
 from core.logging_config import setup_logging
-import numpy as np
+import os
 import json
+import numpy as np
+import redshift_connector
 from sse_starlette.sse import EventSourceResponse
 
 # Import core modules
@@ -40,14 +42,81 @@ setup_logging(logging.INFO)
 customers_df = pd.DataFrame()
 inventory_df = pd.DataFrame()
 
+# Store results of startup checks
+startup_checks = {}
+
 # Configure logger
 logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Load data on startup"""
-    global customers_df, inventory_df
+    """Load data on startup and perform environment checks"""
+    global customers_df, inventory_df, startup_checks
+
+    startup_checks = {
+        "redshift": False,
+        "csv_files": {},
+        "redis": False,
+    }
+
+    # --- Redshift connectivity check ---
+    if os.getenv("DISABLE_EXTERNAL_CALLS", "false").lower() != "true":
+        cfg = data_loader.redshift_config
+        if all(cfg.values()):
+            conn = None
+            try:
+                conn = redshift_connector.connect(
+                    host=cfg["host"],
+                    database=cfg["database"],
+                    user=cfg["user"],
+                    password=cfg["password"],
+                    port=int(cfg["port"]),
+                    timeout=5,
+                )
+                with conn.cursor() as cur:
+                    cur.execute("SELECT 1")
+                    cur.fetchone()
+                logger.info("✅ Redshift connection test successful")
+                startup_checks["redshift"] = True
+            except Exception as e:
+                logger.error(f"❌ Redshift connection failed: {e}")
+            finally:
+                if conn:
+                    conn.close()
+        else:
+            logger.warning("⚠️ Redshift configuration incomplete; skipping test")
+    else:
+        logger.info("🔌 Redshift check skipped (external calls disabled)")
+
+    # --- CSV file validation ---
+    required_csv = ["customer_data.csv", "inventory_data.csv"]
+    for csv_file in required_csv:
+        if os.path.exists(csv_file):
+            try:
+                pd.read_csv(csv_file, nrows=1)
+                startup_checks["csv_files"][csv_file] = "ok"
+            except Exception as e:
+                startup_checks["csv_files"][csv_file] = f"unreadable: {e}"
+                logger.error(f"❌ {csv_file} unreadable: {e}")
+        else:
+            startup_checks["csv_files"][csv_file] = "missing"
+            logger.error(f"❌ {csv_file} missing")
+
+    # --- Redis availability check ---
+    if cache_utils.REDIS_AVAILABLE and getattr(cache_utils, "_redis_client", None):
+        try:
+            cache_utils._redis_client.ping()
+            startup_checks["redis"] = True
+            logger.info("✅ Redis connection successful")
+        except Exception as e:
+            logger.error(f"❌ Redis unavailable: {e}")
+    else:
+        logger.info("ℹ️ Redis not configured; using in-memory cache")
+
+    # Summary log
+    logger.info(f"🔎 Startup checks: {startup_checks}")
+
     try:
         logger.info("🚀 Loading real data from Redshift and CSV...")
 
@@ -265,6 +334,25 @@ def calculate_real_metrics():
         },
         "risk_profile_distribution": risk_profile_counts,
         "top_cars": top_cars_data,
+    }
+
+
+# --- Health Endpoint ---
+@app.get("/health")
+async def health_check():
+    """Return application health status and startup checks"""
+    environment = os.getenv("ENVIRONMENT", "production")
+    external_calls = (
+        "disabled"
+        if os.getenv("DISABLE_EXTERNAL_CALLS", "false").lower() == "true"
+        else "enabled"
+    )
+
+    return {
+        "status": "healthy",
+        "environment": environment,
+        "external_calls": external_calls,
+        "checks": startup_checks,
     }
 
 
