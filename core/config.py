@@ -61,7 +61,7 @@ def get_term_search_order(priority: str) -> list[int]:
 # Updated with actual Kavak values
 DEFAULT_FEES = {
     'service_fee_pct': 0.05,        # 5% of new car value
-    'cxa_pct': 0.04,                # 4% of loan amount (Opening Fee)
+    'cxa_pct': 0.04,                # 4% of the new car price (Opening Fee)
     'cac_bonus': 0,                 # Customer bonus (starts at 0, can go up to MAX_CAC_BONUS)
     'kavak_total_amount': 25000.0,  # Fixed 25,000 MXN every two years
     'insurance_amount': 10999.0,    # Fixed 10,999 MXN (financed over 12 months)
