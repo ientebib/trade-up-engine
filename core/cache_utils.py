@@ -3,6 +3,9 @@ import json
 import time
 import hashlib
 import pickle
+import logging
+
+logger = logging.getLogger(__name__)
 
 try:
     import redis
@@ -15,7 +18,9 @@ _redis_client = None
 if REDIS_AVAILABLE and os.getenv("REDIS_URL"):
     try:
         _redis_client = redis.from_url(os.getenv("REDIS_URL"))
+        _redis_client.ping()
     except Exception:
+        logger.exception("Failed to connect to Redis")
         _redis_client = None
 
 # Fallback in-memory cache
@@ -24,6 +29,17 @@ _memory_cache = {}
 # TTL settings in seconds
 CUSTOMER_CACHE_TTL = int(os.getenv("CUSTOMER_CACHE_TTL", 86400))
 INVENTORY_CACHE_TTL = int(os.getenv("INVENTORY_CACHE_TTL", 86400))
+
+
+def redis_status() -> bool:
+    """Return True if Redis is connected."""
+    if _redis_client is None:
+        return False
+    try:
+        _redis_client.ping()
+        return True
+    except Exception:
+        return False
 
 
 def compute_config_hash(config: dict) -> str:
