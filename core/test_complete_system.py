@@ -133,7 +133,7 @@ def test_offer_generation(test_customer):
     offers = result.get("offers", [])
     logger.info(f"✅ Generated {len(offers)} offers for Customer {customer_id}")
     if offers:
-        logger.info(f"   First offer: {offers[0].get('car_id', 'unknown')} - NPV: {offers[0].get('final_npv', 'unknown')}")
+        logger.info(f"   First offer: {offers[0].get('car_id', 'unknown')} - NPV: {offers[0].get('npv', 'unknown')}")
     else:
         logger.info("   ℹ️ No offers generated (this may be normal depending on customer profile)")
 
