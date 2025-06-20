@@ -1,6 +1,8 @@
 import pandas as pd
 import numpy_financial as npf
 from abc import ABC, abstractmethod
+import logging
+from core.logging_config import setup_logging
 from .calculator import calculate_final_npv
 from .config import (
     get_hardcoded_financial_parameters,
@@ -16,6 +18,9 @@ from .config import (
 
 # Load config tables on import
 INTEREST_RATE_TABLE, DOWN_PAYMENT_TABLE = get_hardcoded_financial_parameters()
+
+setup_logging(logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 class SearchStrategy(ABC):
@@ -38,7 +43,7 @@ class SearchStrategy(ABC):
                     )
                 ),
             }
-            print(f"🎯 Using custom payment tiers: {tiers}")
+            logger.info(f"🎯 Using custom payment tiers: {tiers}")
             return tiers
         return PAYMENT_DELTA_TIERS
 
@@ -46,7 +51,7 @@ class SearchStrategy(ABC):
         try:
             current_payment = customer["current_monthly_payment"]
         except KeyError as e:
-            print(f"Error: Missing key in customer data - {e}")
+            logger.error(f"Error: Missing key in customer data - {e}")
             return pd.DataFrame()
 
         tiers = self._payment_delta_tiers(engine_config)
@@ -142,7 +147,7 @@ class TradeUpEngine:
         try:
             interest_rate = INTEREST_RATE_TABLE.loc[customer["risk_profile_name"]]
         except KeyError as e:
-            print(f"Error: Missing key in customer data or invalid risk profile - {e}")
+            logger.error(f"Error: Missing key in customer data or invalid risk profile - {e}")
             return pd.DataFrame()
 
         if self.config.get("use_range_optimization", False):
@@ -171,12 +176,12 @@ def run_engine_for_customer(
     Main orchestrator function. Generates all possible offers for a single customer.
     Supports: default hierarchical search, custom parameter mode, and range-based optimization.
     """
-    print(f"--- Running engine for customer: {customer.get('customer_id')} ---")
+    logger.info(f"--- Running engine for customer: {customer.get('customer_id')} ---")
 
     try:
         interest_rate = INTEREST_RATE_TABLE.loc[customer["risk_profile_name"]]
     except KeyError as e:
-        print(f"Error: Missing key in customer data or invalid risk profile - {e}")
+        logger.error(f"Error: Missing key in customer data or invalid risk profile - {e}")
         return pd.DataFrame()
 
     if engine_config.get("use_range_optimization", False):
@@ -203,13 +208,13 @@ def _run_default_hierarchical_search(
     min_npv_threshold = engine_config.get("min_npv_threshold", 5000.0)
 
     # --- PHASE 1: Search with NO Subsidy (Max Profit) ---
-    print("PHASE 1: Searching for offers with MAX PROFIT...")
+    logger.info("PHASE 1: Searching for offers with MAX PROFIT...")
     phase_1_fees = DEFAULT_FEES.copy()
     phase_1_fees["cac_bonus"] = 0  # Ensure no bonus in phase 1
     if not engine_config.get("include_kavak_total", True):
         phase_1_fees["kavak_total_amount"] = 0
 
-    print(
+    logger.info(
         f"   Using fees: Service={phase_1_fees['service_fee_pct']*100}%, CXA={phase_1_fees['cxa_pct']*100}%, CAC={phase_1_fees['cac_bonus']}"
     )
 
@@ -223,16 +228,16 @@ def _run_default_hierarchical_search(
     )
 
     if phase_1_offers:
-        print(f"PHASE 1 COMPLETE: Found {len(phase_1_offers)} offers. Stopping search.")
+        logger.info(f"PHASE 1 COMPLETE: Found {len(phase_1_offers)} offers. Stopping search.")
         return _finalize_offers_dataframe(
             phase_1_offers, current_monthly_payment, payment_delta_tiers
         )
 
     # --- PHASE 2: Search WITH Subsidy (Concession) - EXHAUSTIVE ---
-    print("PHASE 2: No offers found in Phase 1. Running EXHAUSTIVE subsidy search...")
+    logger.info("PHASE 2: No offers found in Phase 1. Running EXHAUSTIVE subsidy search...")
 
     # Level 1: Service Fee = 0
-    print("Phase 2 - Level 1: Reducing Service Fee to 0...")
+    logger.info("Phase 2 - Level 1: Reducing Service Fee to 0...")
     fees_level_1 = DEFAULT_FEES.copy()
     fees_level_1["service_fee_pct"] = 0
     fees_level_1["cac_bonus"] = 0
@@ -247,13 +252,13 @@ def _run_default_hierarchical_search(
         payment_delta_tiers,
     )
     if level_1_offers:
-        print(f"Level 1 COMPLETE: Found {len(level_1_offers)} offers. Stopping search.")
+        logger.info(f"Level 1 COMPLETE: Found {len(level_1_offers)} offers. Stopping search.")
         return _finalize_offers_dataframe(
             level_1_offers, current_monthly_payment, payment_delta_tiers
         )
 
     # Level 2: Service Fee = 0 AND CAC Bonus applied
-    print("Phase 2 - Level 2: Adding CAC Bonus...")
+    logger.info("Phase 2 - Level 2: Adding CAC Bonus...")
     fees_level_2 = fees_level_1.copy()
     fees_level_2["cac_bonus"] = MAX_CAC_BONUS
     level_2_offers = _run_search_phase_with_npv_filter(
@@ -265,13 +270,13 @@ def _run_default_hierarchical_search(
         payment_delta_tiers,
     )
     if level_2_offers:
-        print(f"Level 2 COMPLETE: Found {len(level_2_offers)} offers. Stopping search.")
+        logger.info(f"Level 2 COMPLETE: Found {len(level_2_offers)} offers. Stopping search.")
         return _finalize_offers_dataframe(
             level_2_offers, current_monthly_payment, payment_delta_tiers
         )
 
     # Level 3: All previous subsidies AND CXA = 0
-    print("Phase 2 - Level 3: Reducing CXA to 0...")
+    logger.info("Phase 2 - Level 3: Reducing CXA to 0...")
     fees_level_3 = fees_level_2.copy()
     fees_level_3["cxa_pct"] = 0
     level_3_offers = _run_search_phase_with_npv_filter(
@@ -283,13 +288,13 @@ def _run_default_hierarchical_search(
         payment_delta_tiers,
     )
     if level_3_offers:
-        print(f"Level 3 COMPLETE: Found {len(level_3_offers)} offers. Stopping search.")
+        logger.info(f"Level 3 COMPLETE: Found {len(level_3_offers)} offers. Stopping search.")
         return _finalize_offers_dataframe(
             level_3_offers, current_monthly_payment, payment_delta_tiers
         )
 
-    print("PHASE 2 COMPLETE: No valid offers found in any subsidy level.")
-    print(f"NPV filtering applied: Min {min_npv_threshold:,.0f} MXN")
+    logger.info("PHASE 2 COMPLETE: No valid offers found in any subsidy level.")
+    logger.info(f"NPV filtering applied: Min {min_npv_threshold:,.0f} MXN")
 
     return pd.DataFrame()
 
@@ -345,21 +350,21 @@ def _run_range_optimization_search(
         range(int(cac_bonus_range[0]), int(cac_bonus_range[1]) + 1, int(cac_bonus_step))
     )
 
-    print(f"🎯 Parameter ranges:")
-    print(
+    logger.info(f"🎯 Parameter ranges:")
+    logger.info(
         f"   Service Fee: {len(service_fee_values)} values from {service_fee_range[0]}% to {service_fee_range[1]}%"
     )
-    print(f"   CXA: {len(cxa_values)} values from {cxa_range[0]}% to {cxa_range[1]}%")
-    print(
+    logger.info(f"   CXA: {len(cxa_values)} values from {cxa_range[0]}% to {cxa_range[1]}%")
+    logger.info(
         f"   CAC Bonus: {len(cac_bonus_values)} values from {cac_bonus_range[0]} to {cac_bonus_range[1]} MXN"
     )
-    print(f"   Min NPV Threshold: {min_npv_threshold:,.0f} MXN")
+    logger.info(f"   Min NPV Threshold: {min_npv_threshold:,.0f} MXN")
 
     total_combinations = (
         len(service_fee_values) * len(cxa_values) * len(cac_bonus_values)
     )
-    print(f"   Total parameter combinations: {total_combinations:,}")
-    print(
+    logger.info(f"   Total parameter combinations: {total_combinations:,}")
+    logger.info(
         f"   ⚡ EARLY STOPPING: Will test max {max_combinations_to_test} combinations or until {early_stop_on_offers} offers found"
     )
 
@@ -410,21 +415,21 @@ def _run_range_optimization_search(
 
         # EARLY STOPPING CONDITIONS
         if combinations_tested >= max_combinations_to_test:
-            print(
+            logger.info(
                 f"   ⚡ Early stopping: Reached max combinations limit ({max_combinations_to_test})"
             )
             break
 
         if valid_offers_count >= early_stop_on_offers:
-            print(
+            logger.info(
                 f"   ⚡ Early stopping: Found enough offers ({valid_offers_count} >= {early_stop_on_offers})"
             )
             break
 
-    print(f"🎯 RANGE OPTIMIZATION COMPLETE:")
-    print(f"   Combinations tested: {combinations_tested}/{total_combinations}")
-    print(f"   Valid offers found: {valid_offers_count:,}")
-    print(f"   NPV filtering applied: Min {min_npv_threshold:,.0f} MXN")
+    logger.info(f"🎯 RANGE OPTIMIZATION COMPLETE:")
+    logger.info(f"   Combinations tested: {combinations_tested}/{total_combinations}")
+    logger.info(f"   Valid offers found: {valid_offers_count:,}")
+    logger.info(f"   NPV filtering applied: Min {min_npv_threshold:,.0f} MXN")
 
     if all_offers:
         # Remove duplicates and rank by NPV within tiers
@@ -464,7 +469,7 @@ def _run_custom_parameter_search(
         "fixed_fee": engine_config.get("gps_fee", DEFAULT_FEES["fixed_fee"]),
     }
 
-    print(f"🔧 Using custom fees: {custom_fees}")
+    logger.info(f"🔧 Using custom fees: {custom_fees}")
 
     tiers = payment_delta_tiers
 
@@ -477,7 +482,7 @@ def _run_custom_parameter_search(
     )
     all_offers.extend(custom_offers)
 
-    print(
+    logger.info(
         f"🔧 CUSTOM SEARCH COMPLETE: Found {len(all_offers)} offers with custom parameters."
     )
 

@@ -10,24 +10,29 @@ import json
 import time
 import sys
 import pytest
+import logging
+from core.logging_config import setup_logging
+
+setup_logging(logging.INFO)
+logger = logging.getLogger(__name__)
 
 BASE_URL = "http://localhost:8000"
 
 def wait_for_server(max_attempts=10, delay=2):
     """Wait for the server to be ready"""
-    print("🔄 Waiting for server to be ready...")
+    logger.info("🔄 Waiting for server to be ready...")
     for attempt in range(max_attempts):
         try:
             response = requests.get(f"{BASE_URL}/health", timeout=5)
             if response.status_code == 200:
-                print("✅ Server is ready!")
+                logger.info("✅ Server is ready!")
                 return True
         except requests.exceptions.RequestException:
             if attempt < max_attempts - 1:
-                print(f"⏳ Attempt {attempt + 1}/{max_attempts} - Server not ready, waiting {delay}s...")
+                logger.info(f"⏳ Attempt {attempt + 1}/{max_attempts} - Server not ready, waiting {delay}s...")
                 time.sleep(delay)
             else:
-                print("❌ Server is not responding after maximum attempts")
+                logger.error("❌ Server is not responding after maximum attempts")
                 return False
     return False
 
@@ -53,35 +58,35 @@ def test_customer():
 
 def test_health_check():
     """Test health check endpoint"""
-    print("🏥 Testing Health Check...")
+    logger.info("🏥 Testing Health Check...")
     response = requests.get(f"{BASE_URL}/health", timeout=10)
     assert response.status_code == 200
     health_data = response.json()
     assert health_data["status"] == "healthy"
-    print("✅ Health Check: PASSED")
-    print(f"   Environment: {health_data.get('environment', 'unknown')}")
-    print(f"   External calls: {health_data.get('external_calls', 'unknown')}")
+    logger.info("✅ Health Check: PASSED")
+    logger.info(f"   Environment: {health_data.get('environment', 'unknown')}")
+    logger.info(f"   External calls: {health_data.get('external_calls', 'unknown')}")
 
 def test_main_dashboard():
     """Test main dashboard page"""
-    print("🏠 Testing Main Dashboard...")
+    logger.info("🏠 Testing Main Dashboard...")
     response = requests.get(f"{BASE_URL}/", timeout=10)
     assert response.status_code == 200
-    print("✅ Main Dashboard: PASSED")
+    logger.info("✅ Main Dashboard: PASSED")
 
 def test_dev_info():
     """Test development info endpoint"""
-    print("🔧 Testing Development Info...")
+    logger.info("🔧 Testing Development Info...")
     response = requests.get(f"{BASE_URL}/dev-info", timeout=10)
     assert response.status_code == 200
     dev_info = response.json()
-    print("✅ Development Info: PASSED")
-    print(f"   Virtual agent compatible: {dev_info.get('virtual_agent_compatible', 'unknown')}")
-    print(f"   Data sources: {dev_info.get('data_sources', [])}")
+    logger.info("✅ Development Info: PASSED")
+    logger.info(f"   Virtual agent compatible: {dev_info.get('virtual_agent_compatible', 'unknown')}")
+    logger.info(f"   Data sources: {dev_info.get('data_sources', [])}")
 
 def test_customers_api():
     """Test customers API endpoint"""
-    print("👥 Testing Customers API...")
+    logger.info("👥 Testing Customers API...")
     response = requests.get(f"{BASE_URL}/api/customers", timeout=10)
     assert response.status_code == 200
     data = response.json()
@@ -89,11 +94,11 @@ def test_customers_api():
     assert len(customers) > 0
     assert "customer_id" in customers[0]
     assert "risk_profile_name" in customers[0]
-    print(f"✅ Found {len(customers)} customers")
+    logger.info(f"✅ Found {len(customers)} customers")
 
 def test_inventory_api():
     """Test inventory API endpoint"""
-    print("🚗 Testing Inventory API...")
+    logger.info("🚗 Testing Inventory API...")
     response = requests.get(f"{BASE_URL}/api/inventory", timeout=10)
     assert response.status_code == 200
     data = response.json()
@@ -101,47 +106,47 @@ def test_inventory_api():
     assert len(inventory) > 0
     assert "car_id" in inventory[0]
     assert "model" in inventory[0]
-    print(f"✅ Found {len(inventory)} cars in inventory")
+    logger.info(f"✅ Found {len(inventory)} cars in inventory")
 
 def test_config_api():
     """Test configuration API endpoint"""
-    print("⚙️ Testing Configuration API...")
+    logger.info("⚙️ Testing Configuration API...")
     response = requests.get(f"{BASE_URL}/api/config", timeout=10)
     assert response.status_code == 200
     data = response.json()
     config = data.get("config", {})
     assert "min_npv_threshold" in config
-    print("✅ Configuration API: PASSED")
-    print(f"   NPV Threshold: {config.get('min_npv_threshold', 'unknown')}")
+    logger.info("✅ Configuration API: PASSED")
+    logger.info(f"   NPV Threshold: {config.get('min_npv_threshold', 'unknown')}")
 
 def test_offer_generation(test_customer):
     """Test offer generation with real data"""
     if not test_customer:
         pytest.skip("No test customer available")
         
-    print("🎯 Testing Offer Generation...")
+    logger.info("🎯 Testing Offer Generation...")
     customer_id = test_customer["customer_id"]
     response = requests.post(f"{BASE_URL}/api/generate-offers?customer_id={customer_id}", timeout=30)
     
     assert response.status_code == 200
     result = response.json()
     offers = result.get("offers", [])
-    print(f"✅ Generated {len(offers)} offers for Customer {customer_id}")
+    logger.info(f"✅ Generated {len(offers)} offers for Customer {customer_id}")
     if offers:
-        print(f"   First offer: {offers[0].get('car_id', 'unknown')} - NPV: {offers[0].get('final_npv', 'unknown')}")
+        logger.info(f"   First offer: {offers[0].get('car_id', 'unknown')} - NPV: {offers[0].get('final_npv', 'unknown')}")
     else:
-        print("   ℹ️ No offers generated (this may be normal depending on customer profile)")
+        logger.info("   ℹ️ No offers generated (this may be normal depending on customer profile)")
 
 def main():
     """Run all tests when executed as standalone script"""
-    print("🚀 Starting Complete System Test")
-    print("=" * 50)
+    logger.info("🚀 Starting Complete System Test")
+    logger.info("=" * 50)
     
     # First, wait for server to be ready
     if not wait_for_server():
-        print("❌ Server is not responding. Make sure it's running:")
-        print("   • Run: uvicorn main_dev:app --host 0.0.0.0 --port 8000")
-        print("   • Or use: ./agent_setup.sh")
+        logger.error("❌ Server is not responding. Make sure it's running:")
+        logger.error("   • Run: uvicorn main_dev:app --host 0.0.0.0 --port 8000")
+        logger.error("   • Or use: ./agent_setup.sh")
         sys.exit(1)
     
     tests_passed = 0
@@ -175,7 +180,7 @@ def main():
             test_func()
             tests_passed += 1
         except Exception as e:
-            print(f"❌ {test_name} failed: {e}")
+            logger.error(f"❌ {test_name} failed: {e}")
     
     # Test offer generation
     total_tests += 1
@@ -184,26 +189,26 @@ def main():
             test_offer_generation(test_customer)
             tests_passed += 1
         else:
-            print("⚠️ Skipping offer generation - no test customer available")
+            logger.warning("⚠️ Skipping offer generation - no test customer available")
     except Exception as e:
-        print(f"❌ Offer generation failed: {e}")
+        logger.error(f"❌ Offer generation failed: {e}")
     
-    print("=" * 50)
-    print(f"📊 Test Results: {tests_passed}/{total_tests} tests passed")
+    logger.info("=" * 50)
+    logger.info(f"📊 Test Results: {tests_passed}/{total_tests} tests passed")
     
     if tests_passed == total_tests:
-        print("🎉 ALL TESTS PASSED! Trade-Up Engine is fully functional.")
-        print(f"🌐 Access your application at: {BASE_URL}")
-        print("📱 Available endpoints:")
-        print("   • Main Dashboard: /")
-        print("   • Health Check: /health")
-        print("   • Development Info: /dev-info")
-        print("   • Customers API: /api/customers")
-        print("   • Inventory API: /api/inventory")
-        print("   • Configuration API: /api/config")
+        logger.info("🎉 ALL TESTS PASSED! Trade-Up Engine is fully functional.")
+        logger.info(f"🌐 Access your application at: {BASE_URL}")
+        logger.info("📱 Available endpoints:")
+        logger.info("   • Main Dashboard: /")
+        logger.info("   • Health Check: /health")
+        logger.info("   • Development Info: /dev-info")
+        logger.info("   • Customers API: /api/customers")
+        logger.info("   • Inventory API: /api/inventory")
+        logger.info("   • Configuration API: /api/config")
         return True
     else:
-        print(f"⚠️ {total_tests - tests_passed} tests failed. Check the output above for details.")
+        logger.warning(f"⚠️ {total_tests - tests_passed} tests failed. Check the output above for details.")
         return False
 
 if __name__ == "__main__":

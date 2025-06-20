@@ -8,13 +8,14 @@ import os
 from dotenv import load_dotenv
 import redshift_connector
 import logging
+from core.logging_config import setup_logging
 from core import cache_utils  # local import to avoid circular
 
 # Load environment variables
 load_dotenv()
 
 # Set up logging
-logging.basicConfig(level=logging.INFO)
+setup_logging(logging.INFO)
 logger = logging.getLogger(__name__)
 
 class DataLoader:

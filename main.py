@@ -15,6 +15,7 @@ import uvicorn
 from contextlib import asynccontextmanager
 import time
 import logging
+from core.logging_config import setup_logging
 import numpy as np
 import json
 from sse_starlette.sse import EventSourceResponse
@@ -32,6 +33,8 @@ from core.config_manager import (
 )
 from core import cache_utils
 
+setup_logging(logging.INFO)
+
 # Global variables for data
 customers_df = pd.DataFrame()
 inventory_df = pd.DataFrame()
@@ -45,25 +48,25 @@ async def lifespan(app: FastAPI):
     """Load data on startup"""
     global customers_df, inventory_df
     try:
-        print("🚀 Loading real data from Redshift and CSV...")
+        logger.info("🚀 Loading real data from Redshift and CSV...")
 
         # Try to load real data first
         customers_df, inventory_df = data_loader.load_all_data()
 
         # Handle partial data loading (customer data loaded but inventory failed)
         if customers_df.empty:
-            print("⚠️ Customer data loading failed, falling back to sample data...")
+            logger.warning("⚠️ Customer data loading failed, falling back to sample data...")
             try:
                 customers_df = pd.read_csv("data/sample_customer_data.csv")
-                print("✅ Sample customer data loaded successfully.")
+                logger.info("✅ Sample customer data loaded successfully.")
             except FileNotFoundError as e:
-                print(f"❌ ERROR: Could not load sample customer data: {e.filename}")
+                logger.error(f"❌ ERROR: Could not load sample customer data: {e.filename}")
                 customers_df = pd.DataFrame()
         else:
-            print("✅ Real customer data loaded successfully.")
+            logger.info("✅ Real customer data loaded successfully.")
 
         if inventory_df.empty:
-            print("⚠️ Inventory data loading failed, using default inventory...")
+            logger.warning("⚠️ Inventory data loading failed, using default inventory...")
             # Create a minimal inventory for testing
             inventory_df = pd.DataFrame(
                 {
@@ -84,23 +87,23 @@ async def lifespan(app: FastAPI):
                     ],
                 }
             )
-            print("✅ Default inventory data created.")
+            logger.info("✅ Default inventory data created.")
 
-        print(
+        logger.info(
             f"📊 Final loaded data: {len(customers_df)} customers and {len(inventory_df)} cars"
         )
 
     except Exception as e:
-        print(f"❌ CRITICAL ERROR during data loading: {str(e)}")
+        logger.error(f"❌ CRITICAL ERROR during data loading: {str(e)}")
         # Try sample data as last resort
         try:
             customers_df = pd.read_csv("data/sample_customer_data.csv")
             inventory_df = pd.read_csv("data/sample_inventory_data.csv")
-            print("✅ Fallback to sample data successful.")
+            logger.info("✅ Fallback to sample data successful.")
         except:
             customers_df = pd.DataFrame()
             inventory_df = pd.DataFrame()
-            print("❌ All data loading methods failed.")
+            logger.error("❌ All data loading methods failed.")
 
     yield
 
@@ -522,5 +525,5 @@ async def scenario_analysis_stream():
 
 
 if __name__ == "__main__":
-    print("🚗 Starting Kavak Trade-Up Engine Dashboard...")
+    logger.info("🚗 Starting Kavak Trade-Up Engine Dashboard...")
     uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)
