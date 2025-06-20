@@ -12,12 +12,14 @@ from pydantic import BaseModel, Field
 import pandas as pd
 from typing import List, Dict
 import uvicorn
+import os
 from contextlib import asynccontextmanager
 import time
 import logging
 from pathlib import Path
 import os
 from core.logging_config import setup_logging
+from core.cache_utils import redis_status
 import numpy as np
 import json
 import redshift_connector
@@ -274,6 +276,20 @@ def calculate_real_metrics():
         },
         "risk_profile_distribution": risk_profile_counts,
         "top_cars": top_cars_data,
+    }
+
+
+# --- Health Check ----------------------------------------------------
+@app.get("/health")
+async def health_check():
+    """Simple health check endpoint."""
+    return {
+        "status": "healthy",
+        "environment": os.getenv("ENVIRONMENT", "production"),
+        "external_calls": "disabled"
+        if os.getenv("DISABLE_EXTERNAL_CALLS") == "true"
+        else "enabled",
+        "redis_connected": redis_status(),
     }
 
 

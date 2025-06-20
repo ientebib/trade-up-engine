@@ -19,6 +19,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 import uvicorn
 import logging
 from core.logging_config import setup_logging
+from core.cache_utils import redis_status
 
 setup_logging(logging.INFO)
 logger = logging.getLogger(__name__)
@@ -76,7 +77,8 @@ async def health_check():
         "environment": "development",
         "external_calls": "disabled",
         "mock_data": "enabled",
-        "data_sources": "CSV and sample data only"
+        "data_sources": "CSV and sample data only",
+        "redis_connected": redis_status(),
     }
 
 # Include API routes
