@@ -428,7 +428,7 @@ def _generate_single_offer(
     if car["sales_price"] <= customer["current_car_price"]:
         return None
 
-    # 2. Resolve CXA circular dependency including GPS installation fee
+    # 2. Resolve CXA circular dependency
     cxa_pct = fees_config.get("cxa_pct", 0)
     cac_bonus = fees_config.get("cac_bonus", 0)
     gps_install_with_iva = GPS_INSTALLATION_FEE * IVA_RATE
@@ -438,10 +438,7 @@ def _generate_single_offer(
         return None
 
     loan_amount_needed = (
-        car["sales_price"]
-        - customer["vehicle_equity"]
-        - cac_bonus
-        + gps_install_with_iva
+        car["sales_price"] - customer["vehicle_equity"] - cac_bonus
     ) / denominator
 
     if loan_amount_needed <= 0:
@@ -455,7 +452,7 @@ def _generate_single_offer(
         customer["risk_profile_name"], DEFAULT_FEES["insurance_amount"]
     )
 
-    # 4. Effective equity calculation
+    # 4. Effective equity calculation (GPS and CXA reduce available equity)
     effective_equity = (
         customer["vehicle_equity"] + cac_bonus - cxa_amount - gps_install_with_iva
     )
