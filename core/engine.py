@@ -203,7 +203,37 @@ def _run_default_hierarchical_search(
     current_monthly_payment,
     payment_delta_tiers,
 ):
-    """Original hierarchical search with hardcoded subsidy levers and NPV filtering."""
+    """Search for offers using the fixed concession hierarchy described in the
+    business rules.
+
+    Parameters
+    ----------
+    customer : dict
+        Customer data used to determine affordability and risk profile.
+    inventory : pandas.DataFrame
+        List of cars to evaluate as potential upgrades.
+    interest_rate : float
+        Base annual rate derived from ``INTEREST_RATE_TABLE``.
+    engine_config : dict
+        Current engine settings controlling fees and thresholds.
+    current_monthly_payment : float
+        Customer's existing monthly loan payment.
+    payment_delta_tiers : dict
+        Mapping of tier names to allowed payment delta ranges.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Ranked offers for the customer or an empty frame if none pass the
+        checks.
+
+    Notes
+    -----
+    The function implements the two-phased hierarchy outlined in
+    ``docs/project-charter.md`` section 4.2. Phase 1 keeps all fees at their
+    maximum. Phase 2 gradually removes service fee, adds CAC bonus and finally
+    reduces CXA, filtering each step by Net Present Value (NPV).
+    """
 
     # Extract NPV threshold for filtering
     min_npv_threshold = engine_config.get("min_npv_threshold", 5000.0)
@@ -313,9 +343,35 @@ def _run_range_optimization_search(
     current_monthly_payment,
     payment_delta_tiers,
 ):
-    """
-    Range-based optimization search with extreme granularity and NPV filtering.
-    Generates all parameter combinations within specified ranges for maximum flexibility.
+    """Exhaustively evaluate fee combinations within configured ranges.
+
+    Parameters
+    ----------
+    customer : dict
+        Customer record for which offers will be generated.
+    inventory : pandas.DataFrame
+        Inventory of vehicles to test.
+    interest_rate : float
+        Base annual interest rate based on risk profile.
+    engine_config : dict
+        Engine settings defining range bounds and steps.
+    current_monthly_payment : float
+        Customer's current payment used to compute payment deltas.
+    payment_delta_tiers : dict
+        Mapping of tier names to allowed payment delta ranges.
+
+    Returns
+    -------
+    pandas.DataFrame
+        DataFrame of ranked offers meeting the NPV threshold.
+
+    Notes
+    -----
+    The search iterates over ``service_fee_pct``, ``cxa_pct`` and ``cac_bonus``
+    values using the ranges from ``engine_config``. For each combination the
+    engine calculates offers and filters them by NPV.  Early stopping parameters
+    limit the number of combinations tested, as described in
+    ``docs/range_optimization.md``.
     """
     import itertools
 
@@ -543,9 +599,44 @@ def _run_search_phase(
 
 
 def _generate_single_offer(
-    customer, car, term, interest_rate, fees_config, payment_delta_tiers
+    customer,
+    car,
+    term,
+    interest_rate,
+    fees_config,
+    payment_delta_tiers,
 ):
-    """Generate a single offer following the final MVP specification."""
+    """Return a single valid offer if all business rules are satisfied.
+
+    Parameters
+    ----------
+    customer : dict
+        Customer information including ``vehicle_equity`` and current payment.
+    car : pandas.Series
+        Inventory row describing the potential upgrade vehicle.
+    term : int
+        Loan term in months.
+    interest_rate : float
+        Base annual interest rate for the customer's risk profile.
+    fees_config : dict
+        Dictionary of fee parameters such as ``service_fee_pct`` and ``cxa_pct``.
+    payment_delta_tiers : dict
+        Mapping of tier names to accepted payment delta ranges.
+
+    Returns
+    -------
+    Optional[dict]
+        Offer data structured for ranking or ``None`` if any rule fails.
+
+    Notes
+    -----
+    Effective equity is computed as
+    ``vehicle_equity + CAC_bonus - CXA_amount - GPS_install_fee`` and must meet
+    the minimum down-payment requirement from ``DOWN_PAYMENT_TABLE``. The loan
+    amount is ``sales_price - effective_equity`` and the payment is calculated
+    with :func:`_calculate_manual_payment`.  For a full description of the
+    underlying rules see ``docs/project-charter.md`` section 4.
+    """
     # 1. Hard Filter: Price must exceed current car price
     if car["sales_price"] <= customer["current_car_price"]:
         return None

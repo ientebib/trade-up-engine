@@ -14,8 +14,32 @@ setup_logging(logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-def run_scenario_analysis(config: Dict, customers_df: DataFrame, inventory_df: DataFrame) -> Dict:
-    """Run scenario analysis using the provided configuration and datasets."""
+def run_scenario_analysis(
+    config: Dict, customers_df: DataFrame, inventory_df: DataFrame
+) -> Dict:
+    """Execute the engine for many customers and summarise the results.
+
+    Parameters
+    ----------
+    config : dict
+        Engine configuration to apply during the run.
+    customers_df : pandas.DataFrame
+        Dataset of customers to analyse.
+    inventory_df : pandas.DataFrame
+        Inventory of vehicles available for offers.
+
+    Returns
+    -------
+    dict
+        Aggregated metrics and execution details. The results are also persisted
+        via :func:`save_scenario_results`.
+
+    Notes
+    -----
+    Only a sample of up to 100 customers is processed for speed.  Metrics such
+    as total NPV and offer counts are extrapolated to the full portfolio.  This
+    function is used by the API endpoints exposed in ``main.py``.
+    """
     try:
         start_time = time.time()
 
