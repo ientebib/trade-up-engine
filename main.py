@@ -19,7 +19,6 @@ import logging
 from pathlib import Path
 import os
 from core.logging_config import setup_logging
-from core.cache_utils import redis_status
 import numpy as np
 import json
 import redshift_connector
@@ -45,14 +44,64 @@ setup_logging(logging.INFO)
 customers_df = pd.DataFrame()
 inventory_df = pd.DataFrame()
 
+# Store results of startup checks for the /health endpoint
+startup_checks: Dict[str, object] = {}
+
 # Configure logger
 logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Load data on startup"""
-    global customers_df, inventory_df
+    """Run startup diagnostics and load initial data."""
+    global customers_df, inventory_df, startup_checks
+
+    checks: Dict[str, object] = {}
+
+    logger.info("🔎 Running startup checks...")
+
+    # Test Redshift connection if external calls are allowed
+    if os.getenv("DISABLE_EXTERNAL_CALLS", "false").lower() != "true":
+        try:
+            conn = redshift_connector.connect(
+                host=os.getenv("REDSHIFT_HOST"),
+                database=os.getenv("REDSHIFT_DATABASE"),
+                user=os.getenv("REDSHIFT_USER"),
+                password=os.getenv("REDSHIFT_PASSWORD"),
+                port=int(os.getenv("REDSHIFT_PORT", 5439)),
+            )
+            conn.close()
+            checks["redshift"] = "connected"
+            logger.info("✅ Redshift connection test succeeded")
+        except Exception as e:
+            checks["redshift"] = f"error: {type(e).__name__}"
+            logger.warning("❌ Redshift connection test failed: %s", e)
+    else:
+        checks["redshift"] = "skipped"
+        logger.info("🚫 Redshift check skipped (DISABLE_EXTERNAL_CALLS=true)")
+
+    def csv_readable(path: Path) -> bool:
+        try:
+            with open(path, "r"):
+                pass
+            return True
+        except Exception:
+            return False
+
+    checks["csv_files"] = {
+        "customer_data.csv": csv_readable(Path("customer_data.csv")),
+        "inventory_data.csv": csv_readable(Path("inventory_data.csv")),
+    }
+
+    checks["redis"] = cache_utils.redis_status()
+    logger.info("🔌 Redis status: %s", checks["redis"])
+
+    # Persist checks for the /health endpoint
+    startup_checks = checks
+    app.state.startup_checks = checks
+
+    logger.info("📋 Startup checks summary: %s", checks)
+
     try:
         logger.info("🚀 Loading real data from Redshift and CSV...")
 
@@ -279,20 +328,6 @@ def calculate_real_metrics():
     }
 
 
-# --- Health Check ----------------------------------------------------
-@app.get("/health")
-async def health_check():
-    """Simple health check endpoint."""
-    return {
-        "status": "healthy",
-        "environment": os.getenv("ENVIRONMENT", "production"),
-        "external_calls": "disabled"
-        if os.getenv("DISABLE_EXTERNAL_CALLS") == "true"
-        else "enabled",
-        "redis_connected": redis_status(),
-    }
-
-
 # --- HTML Endpoints ---
 @app.get("/", response_class=HTMLResponse)
 async def serve_main_dashboard(request: Request):
@@ -367,23 +402,8 @@ async def health_check():
             "inventory_data.csv": Path("inventory_data.csv").exists(),
         },
         "redis": cache_utils.redis_status(),
+        "startup": getattr(app.state, "startup_checks", {}),
     }
-
-    if os.getenv("DISABLE_EXTERNAL_CALLS", "false").lower() != "true":
-        try:
-            conn = redshift_connector.connect(
-                host=os.getenv("REDSHIFT_HOST"),
-                database=os.getenv("REDSHIFT_DATABASE"),
-                user=os.getenv("REDSHIFT_USER"),
-                password=os.getenv("REDSHIFT_PASSWORD"),
-                port=int(os.getenv("REDSHIFT_PORT", 5439)),
-            )
-            conn.close()
-            checks["redshift"] = "connected"
-        except Exception as e:
-            checks["redshift"] = f"error: {type(e).__name__}"
-    else:
-        checks["redshift"] = "skipped"
 
     return {
         "status": "healthy",
