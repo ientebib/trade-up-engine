@@ -510,22 +510,21 @@ def _generate_single_offer(
     if car["sales_price"] <= customer["current_car_price"]:
         return None
 
-    # 2. Resolve CXA circular dependency including GPS installation fee
+    # 2. Resolve fees that are deducted from equity but not financed
     cxa_pct = fees_config.get("cxa_pct", 0)
     cac_bonus = fees_config.get("cac_bonus", 0)
     gps_install_with_iva = GPS_INSTALLATION_FEE * IVA_RATE
     gps_monthly_with_iva = GPS_MONTHLY_FEE * IVA_RATE
 
-    # 3. Determine starting equity (pre-fees)
+    # 3. CXA is calculated on the new car price and paid upfront
+    cxa_amount = car["sales_price"] * cxa_pct
+
+    # 4. Determine effective equity available for down payment
     starting_equity = customer["vehicle_equity"]
+    effective_equity = starting_equity + cac_bonus - cxa_amount - gps_install_with_iva
 
-    # 4. Loan amount needed considering CXA percentage
-    loan_amount_needed = (
-        car["sales_price"] - starting_equity - cac_bonus
-    ) / (1 - cxa_pct)
-
-    # 5. Component amounts dependent on the loan amount
-    cxa_amount = loan_amount_needed * cxa_pct
+    # 5. Loan amount needed after applying effective equity
+    loan_amount_needed = car["sales_price"] - effective_equity
 
     if loan_amount_needed <= 0:
         return None
@@ -537,12 +536,7 @@ def _generate_single_offer(
         customer["risk_profile_name"], DEFAULT_FEES["insurance_amount"]
     )
 
-    # 7. Effective equity calculation
-    effective_equity = (
-        customer["vehicle_equity"] + cac_bonus - cxa_amount - gps_install_with_iva
-    )
-
-    # 8. Down payment check
+    # 7. Down payment check using effective equity
     required_dp_pct = DOWN_PAYMENT_TABLE.loc[customer["risk_profile_index"], term]
     if effective_equity < car["sales_price"] * required_dp_pct:
         return None
