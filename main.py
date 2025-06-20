@@ -23,6 +23,7 @@ from sse_starlette.sse import EventSourceResponse
 from core.engine import run_engine_for_customer
 from core.calculator import generate_amortization_table
 from core.data_loader import data_loader
+from core.scenarios import run_scenario_analysis as core_run_scenario_analysis
 from core.config_manager import (
     save_engine_config,
     load_engine_config,
@@ -450,156 +451,8 @@ def save_configuration(config: ScenarioConfig):
 
 @app.post("/api/scenario-analysis", tags=["Configuration"])
 def run_scenario_analysis(config: ScenarioConfig):
-    """Run a REAL scenario analysis by actually executing the engine with given configuration."""
-    try:
-        start_time = time.time()
-
-        # Save configuration first
-        config_dict = config.dict()
-        save_engine_config(config_dict)
-
-        # Initialize metrics
-        total_customers = len(customers_df) if not customers_df.empty else 0
-        total_offers = 0
-        total_npv = 0
-        offers_by_tier = {"Refresh": 0, "Upgrade": 0, "Max Upgrade": 0}
-        processing_errors = 0
-
-        # Get baseline metrics for comparison (default configuration)
-        baseline_config = {
-            "use_custom_params": False,
-            "use_range_optimization": False,
-            "include_kavak_total": True,
-            "min_npv_threshold": 5000.0,
-        }
-
-        print(f"🎯 Starting REAL scenario analysis with {total_customers} customers...")
-        print(f"Configuration: {config_dict}")
-
-        # Sample customers for analysis (process a subset for performance)
-        sample_size = min(100, total_customers)  # Process up to 100 customers
-        if total_customers > sample_size:
-            customer_sample = customers_df.sample(sample_size, random_state=42)
-            print(f"📊 Processing sample of {sample_size} customers for analysis...")
-        else:
-            customer_sample = customers_df
-
-        # Run engine for each customer in sample
-        for _, customer in customer_sample.iterrows():
-            try:
-                customer_dict = customer.to_dict()
-
-                # Run with scenario configuration
-                offers_df = run_engine_for_customer(
-                    customer_dict, inventory_df, config_dict
-                )
-
-                if not offers_df.empty:
-                    total_offers += len(offers_df)
-                    total_npv += offers_df["npv"].sum()
-
-                    # Count by tier
-                    for tier in offers_df["tier"].unique():
-                        offers_by_tier[tier] += len(
-                            offers_df[offers_df["tier"] == tier]
-                        )
-
-            except Exception as e:
-                print(
-                    f"⚠️ Error processing customer {customer.get('customer_id', 'unknown')}: {e}"
-                )
-                processing_errors += 1
-
-        # Calculate averages
-        processed_customers = sample_size - processing_errors
-        avg_offers_per_customer = (
-            total_offers / processed_customers if processed_customers > 0 else 0
-        )
-        avg_npv_per_offer = total_npv / total_offers if total_offers > 0 else 0
-
-        # Extrapolate to full portfolio
-        extrapolated_total_offers = int(avg_offers_per_customer * total_customers)
-        extrapolated_total_npv = int(avg_npv_per_offer * extrapolated_total_offers)
-
-        execution_time = time.time() - start_time
-
-        # Build results
-        results = {
-            "scenario_config": config_dict,
-            "execution_details": {
-                "sample_size": sample_size,
-                "total_customers": total_customers,
-                "processed_customers": processed_customers,
-                "processing_errors": processing_errors,
-                "execution_time_seconds": round(execution_time, 2),
-            },
-            "actual_metrics": {
-                "total_offers": extrapolated_total_offers,
-                "average_npv_per_offer": int(avg_npv_per_offer),
-                "total_portfolio_npv": extrapolated_total_npv,
-                "offers_per_customer": round(avg_offers_per_customer, 1),
-                "tier_distribution": offers_by_tier,
-            },
-            "mode_info": {
-                "mode": (
-                    "Range Optimization"
-                    if config_dict.get("use_range_optimization")
-                    else (
-                        "Custom Parameters"
-                        if config_dict.get("use_custom_params")
-                        else "Default Hierarchical"
-                    )
-                ),
-                "parameter_combinations": 0,
-            },
-        }
-
-        # Calculate parameter combinations for range optimization
-        if config_dict.get("use_range_optimization"):
-            service_fee_count = (
-                int(
-                    (
-                        config_dict["service_fee_range"][1]
-                        - config_dict["service_fee_range"][0]
-                    )
-                    / config_dict["service_fee_step"]
-                )
-                + 1
-            )
-            cxa_count = (
-                int(
-                    (config_dict["cxa_range"][1] - config_dict["cxa_range"][0])
-                    / config_dict["cxa_step"]
-                )
-                + 1
-            )
-            cac_count = (
-                int(
-                    (
-                        config_dict["cac_bonus_range"][1]
-                        - config_dict["cac_bonus_range"][0]
-                    )
-                    / config_dict["cac_bonus_step"]
-                )
-                + 1
-            )
-            results["mode_info"]["parameter_combinations"] = (
-                service_fee_count * cxa_count * cac_count
-            )
-
-        # Save results
-        save_scenario_results(results)
-
-        return results
-
-    except Exception as e:
-        print(f"❌ Scenario analysis failed: {str(e)}")
-        import traceback
-
-        traceback.print_exc()
-        raise HTTPException(
-            status_code=500, detail=f"Scenario analysis failed: {str(e)}"
-        )
+    """Run a REAL scenario analysis by executing the engine with the given configuration."""
+    return core_run_scenario_analysis(config.dict(), customers_df, inventory_df)
 
 
 @app.get("/api/scenario-results", response_class=JSONResponse)
