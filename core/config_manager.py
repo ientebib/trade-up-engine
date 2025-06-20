@@ -29,8 +29,16 @@ class ConfigManager:
                         f"✅ Loaded engine configuration from {self.config_file}"
                     )
                     return EngineSettings.model_validate(data)
-        except Exception as e:
-            logger.warning(f"⚠️ Could not load config: {e}")
+        except FileNotFoundError:
+            logger.exception(
+                f"Config file {self.config_file} not found while loading configuration"
+            )
+        except PermissionError:
+            logger.exception(
+                f"Permission denied when reading config file {self.config_file}"
+            )
+        except OSError as e:
+            logger.exception(f"OS error while reading config file: {e}")
 
         # Return default settings instance
         return self._default_settings
@@ -50,9 +58,17 @@ class ConfigManager:
 
             logger.info(f"✅ Engine configuration saved to {self.config_file}")
             return True
-        except Exception as e:
-            logger.error(f"❌ Error saving config: {e}")
-            return False
+        except FileNotFoundError:
+            logger.exception(
+                f"Config file {self.config_file} not found while saving configuration"
+            )
+        except PermissionError:
+            logger.exception(
+                f"Permission denied when writing config file {self.config_file}"
+            )
+        except OSError as e:
+            logger.exception(f"OS error while saving config file: {e}")
+        return False
     
     def reset_config(self) -> bool:
         """Reset configuration to defaults."""
@@ -89,9 +105,17 @@ def save_scenario_results(results: Dict[str, Any]) -> bool:
             json.dump(results, f, indent=2)
         logger.info(f"✅ Scenario results saved to {SCENARIO_RESULTS_FILE}")
         return True
-    except Exception as e:
-        logger.error(f"❌ Error saving scenario results: {e}")
-        return False
+    except FileNotFoundError:
+        logger.exception(
+            f"Scenario results file {SCENARIO_RESULTS_FILE} not found while saving"
+        )
+    except PermissionError:
+        logger.exception(
+            f"Permission denied when writing scenario results file {SCENARIO_RESULTS_FILE}"
+        )
+    except OSError as e:
+        logger.exception(f"OS error while saving scenario results file: {e}")
+    return False
 
 
 def load_latest_scenario_results() -> Optional[Dict[str, Any]]:
@@ -100,6 +124,14 @@ def load_latest_scenario_results() -> Optional[Dict[str, Any]]:
         if os.path.exists(SCENARIO_RESULTS_FILE):
             with open(SCENARIO_RESULTS_FILE, "r") as f:
                 return json.load(f)
-    except Exception as e:
-        logger.warning(f"⚠️ Could not load scenario results: {e}")
+    except FileNotFoundError:
+        logger.exception(
+            f"Scenario results file {SCENARIO_RESULTS_FILE} not found while loading"
+        )
+    except PermissionError:
+        logger.exception(
+            f"Permission denied when reading scenario results file {SCENARIO_RESULTS_FILE}"
+        )
+    except OSError as e:
+        logger.exception(f"OS error while reading scenario results file: {e}")
     return None

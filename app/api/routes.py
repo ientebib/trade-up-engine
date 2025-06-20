@@ -23,6 +23,7 @@ router = APIRouter()
 engine = TradeUpEngine()
 data_loader = dev_data_loader
 config_manager = ConfigManager()
+logger = logging.getLogger(__name__)
 
 # --- Pydantic Models (matching production) ---
 class CustomerData(BaseModel):
@@ -94,9 +95,18 @@ async def get_customers():
     """Get all customers"""
     try:
         customers = data_loader.load_customers()
-        return customers.to_dict(orient='records')
+        return customers.to_dict(orient="records")
+    except FileNotFoundError:
+        logger.exception("Customer data file not found")
+        raise HTTPException(status_code=500, detail="Customer data file not found")
+    except PermissionError:
+        logger.exception("Permission denied reading customer data file")
+        raise HTTPException(status_code=500, detail="Customer data file not readable")
+    except OSError as e:
+        logger.exception(f"OS error while loading customers: {e}")
+        raise HTTPException(status_code=500, detail="Failed to load customer data")
     except Exception as e:
-        logging.error(f"Error loading customers: {e}")
+        logger.exception(f"Error loading customers: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/customer/{customer_id}")
@@ -104,14 +114,23 @@ async def get_customer(customer_id: str):
     """Get specific customer details"""
     try:
         customers = data_loader.load_customers()
-        customer = customers[customers['customer_id'] == customer_id]
+        customer = customers[customers["customer_id"] == customer_id]
         if customer.empty:
             raise HTTPException(status_code=404, detail="Customer not found")
         return {"customer": customer.iloc[0].to_dict()}
     except HTTPException:
         raise
+    except FileNotFoundError:
+        logger.exception("Customer data file not found")
+        raise HTTPException(status_code=500, detail="Customer data file not found")
+    except PermissionError:
+        logger.exception("Permission denied reading customer data file")
+        raise HTTPException(status_code=500, detail="Customer data file not readable")
+    except OSError as e:
+        logger.exception(f"OS error while loading customer {customer_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to load customer data")
     except Exception as e:
-        logging.error(f"Error loading customer {customer_id}: {e}")
+        logger.exception(f"Error loading customer {customer_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/generate-offers")
@@ -150,10 +169,19 @@ async def generate_offers(request: OfferRequest) -> Dict:
         }
         
     except ValueError as ve:
-        logging.error(f"Invalid parameters: {ve}")
+        logger.exception(f"Invalid parameters: {ve}")
         raise HTTPException(status_code=400, detail=str(ve))
+    except FileNotFoundError:
+        logger.exception("Inventory data file not found")
+        raise HTTPException(status_code=500, detail="Inventory data file not found")
+    except PermissionError:
+        logger.exception("Permission denied reading inventory data file")
+        raise HTTPException(status_code=500, detail="Inventory data file not readable")
+    except OSError as e:
+        logger.exception(f"OS error during offer generation: {e}")
+        raise HTTPException(status_code=500, detail="Failed to generate offers due to file error")
     except Exception as e:
-        logging.error(f"Error generating offers: {e}")
+        logger.exception(f"Error generating offers: {e}")
         raise HTTPException(status_code=500, detail=f"An internal error occurred: {str(e)}")
 
 @router.post("/amortization-table")
@@ -185,7 +213,7 @@ async def amortization_table(offer: Dict):
                 
         return {"table": table}
     except Exception as e:
-        logging.error(f"Error generating amortization table: {e}")
+        logger.exception(f"Error generating amortization table: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to generate amortization table: {str(e)}")
 
 @router.get("/config")
@@ -195,7 +223,7 @@ async def get_config():
         settings: EngineSettings = config_manager.load_config()
         return {"config": settings.model_dump()}
     except Exception as e:
-        logging.error(f"Error loading config: {e}")
+        logger.exception(f"Error loading config: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/config-status")
@@ -216,10 +244,10 @@ async def get_config_status():
             "latest_results": None  # Mock for development
         }
     except Exception as e:
-        logging.error(f"Error getting config status: {e}")
+        logger.exception(f"Error getting config status: {e}")
         return {
             "has_custom_config": False,
-            "mode": "Default Hierarchical", 
+            "mode": "Default Hierarchical",
             "last_updated": "Never",
             "latest_results": None
         }
@@ -230,16 +258,28 @@ async def save_config(config: ScenarioConfig):
     try:
         config_dict = config.dict()
         config_dict["last_updated"] = time.strftime("%Y-%m-%d %H:%M:%S")
-        
-        config_manager.save_config(config_dict)
+
+        if not config_manager.save_config(config_dict):
+            raise HTTPException(status_code=500, detail="Configuration file not writable")
         engine.update_config(config_dict)
-        
+
         return {
             "message": "Configuration saved successfully",
             "config": config_dict
         }
+    except HTTPException:
+        raise
+    except FileNotFoundError:
+        logger.exception("Configuration file not found")
+        raise HTTPException(status_code=500, detail="Configuration file not found")
+    except PermissionError:
+        logger.exception("Permission denied writing configuration file")
+        raise HTTPException(status_code=500, detail="Configuration file not writable")
+    except OSError as e:
+        logger.exception(f"OS error while saving configuration: {e}")
+        raise HTTPException(status_code=500, detail="Configuration file not writable")
     except Exception as e:
-        logging.error(f"Error saving config: {e}")
+        logger.exception(f"Error saving config: {e}")
         raise HTTPException(status_code=500, detail=f"Error saving configuration: {str(e)}")
 
 @router.post("/scenario-analysis")
@@ -251,7 +291,8 @@ async def run_scenario_analysis(config: ScenarioConfig):
         # Save configuration first
         config_dict = config.dict()
         config_dict["last_updated"] = time.strftime("%Y-%m-%d %H:%M:%S")
-        config_manager.save_config(config_dict)
+        if not config_manager.save_config(config_dict):
+            raise HTTPException(status_code=500, detail="Configuration file not writable")
         
         # Load customer data for metrics
         customers_df = data_loader.load_customers()
@@ -297,15 +338,25 @@ async def run_scenario_analysis(config: ScenarioConfig):
         # Save mock results
         try:
             results_file = Path("scenario_results.json")
-            with open(results_file, 'w') as f:
+            with open(results_file, "w") as f:
                 json.dump(mock_results, f, indent=2)
+        except FileNotFoundError:
+            logger.exception("Scenario results file not found")
+            raise HTTPException(status_code=500, detail="Scenario results file not writable")
+        except PermissionError:
+            logger.exception("Permission denied writing scenario results file")
+            raise HTTPException(status_code=500, detail="Scenario results file not writable")
+        except OSError as e:
+            logger.exception(f"OS error while saving scenario results: {e}")
+            raise HTTPException(status_code=500, detail="Scenario results file not writable")
         except Exception as e:
-            logging.warning(f"Could not save scenario results: {e}")
+            logger.exception(f"Could not save scenario results: {e}")
+            raise HTTPException(status_code=500, detail="Scenario results file not writable")
             
         return mock_results
         
     except Exception as e:
-        logging.error(f"Error in scenario analysis: {e}")
+        logger.exception(f"Error in scenario analysis: {e}")
         raise HTTPException(status_code=500, detail=f"Scenario analysis failed: {str(e)}")
 
 @router.get("/inventory")
@@ -313,7 +364,16 @@ async def get_inventory():
     """Get available inventory"""
     try:
         inventory = data_loader.load_inventory()
-        return inventory.to_dict(orient='records')
+        return inventory.to_dict(orient="records")
+    except FileNotFoundError:
+        logger.exception("Inventory data file not found")
+        raise HTTPException(status_code=500, detail="Inventory data file not found")
+    except PermissionError:
+        logger.exception("Permission denied reading inventory data file")
+        raise HTTPException(status_code=500, detail="Inventory data file not readable")
+    except OSError as e:
+        logger.exception(f"OS error while loading inventory: {e}")
+        raise HTTPException(status_code=500, detail="Failed to load inventory")
     except Exception as e:
-        logging.error(f"Error loading inventory: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) 
+        logger.exception(f"Error loading inventory: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
