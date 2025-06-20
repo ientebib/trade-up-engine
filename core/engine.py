@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy_financial as npf
+from abc import ABC, abstractmethod
 from .calculator import calculate_final_npv
 from .config import (
     get_hardcoded_financial_parameters,
@@ -17,13 +18,141 @@ from .config import (
 INTEREST_RATE_TABLE, DOWN_PAYMENT_TABLE = get_hardcoded_financial_parameters()
 
 
+class SearchStrategy(ABC):
+    """Abstract base class for offer search strategies."""
+
+    @staticmethod
+    def _payment_delta_tiers(engine_config):
+        if "payment_delta_tiers" in engine_config:
+            custom_tiers = engine_config["payment_delta_tiers"]
+            tiers = {
+                "Refresh": tuple(
+                    custom_tiers.get("refresh", PAYMENT_DELTA_TIERS["Refresh"])
+                ),
+                "Upgrade": tuple(
+                    custom_tiers.get("upgrade", PAYMENT_DELTA_TIERS["Upgrade"])
+                ),
+                "Max Upgrade": tuple(
+                    custom_tiers.get(
+                        "max_upgrade", PAYMENT_DELTA_TIERS["Max Upgrade"]
+                    )
+                ),
+            }
+            print(f"🎯 Using custom payment tiers: {tiers}")
+            return tiers
+        return PAYMENT_DELTA_TIERS
+
+    def run(self, customer, inventory, interest_rate, engine_config):
+        try:
+            current_payment = customer["current_monthly_payment"]
+        except KeyError as e:
+            print(f"Error: Missing key in customer data - {e}")
+            return pd.DataFrame()
+
+        tiers = self._payment_delta_tiers(engine_config)
+        return self._execute(
+            customer,
+            inventory,
+            interest_rate,
+            engine_config,
+            current_payment,
+            tiers,
+        )
+
+    @abstractmethod
+    def _execute(
+        self,
+        customer,
+        inventory,
+        interest_rate,
+        engine_config,
+        current_monthly_payment,
+        payment_delta_tiers,
+    ):
+        """Run the search strategy."""
+        raise NotImplementedError
+
+
+class HierarchicalSearchStrategy(SearchStrategy):
+    def _execute(
+        self,
+        customer,
+        inventory,
+        interest_rate,
+        engine_config,
+        current_monthly_payment,
+        payment_delta_tiers,
+    ):
+        return _run_default_hierarchical_search(
+            customer,
+            inventory,
+            interest_rate,
+            engine_config,
+            current_monthly_payment,
+            payment_delta_tiers,
+        )
+
+
+class CustomParameterSearchStrategy(SearchStrategy):
+    def _execute(
+        self,
+        customer,
+        inventory,
+        interest_rate,
+        engine_config,
+        current_monthly_payment,
+        payment_delta_tiers,
+    ):
+        return _run_custom_parameter_search(
+            customer,
+            inventory,
+            interest_rate,
+            engine_config,
+            current_monthly_payment,
+            payment_delta_tiers,
+        )
+
+
+class RangeOptimizationSearchStrategy(SearchStrategy):
+    def _execute(
+        self,
+        customer,
+        inventory,
+        interest_rate,
+        engine_config,
+        current_monthly_payment,
+        payment_delta_tiers,
+    ):
+        return _run_range_optimization_search(
+            customer,
+            inventory,
+            interest_rate,
+            engine_config,
+            current_monthly_payment,
+            payment_delta_tiers,
+        )
+
+
 class TradeUpEngine:
     def __init__(self, config=None):
         self.config = config or {}
 
     def generate_offers(self, customer: dict, inventory: pd.DataFrame):
         """Main entry point for offer generation."""
-        return run_engine_for_customer(customer, inventory, self.config)
+        try:
+            interest_rate = INTEREST_RATE_TABLE.loc[customer["risk_profile_name"]]
+        except KeyError as e:
+            print(f"Error: Missing key in customer data or invalid risk profile - {e}")
+            return pd.DataFrame()
+
+        if self.config.get("use_range_optimization", False):
+            strategy = RangeOptimizationSearchStrategy()
+        elif self.config.get("use_custom_params", False):
+            strategy = CustomParameterSearchStrategy()
+        else:
+            strategy = HierarchicalSearchStrategy()
+
+        return strategy.run(customer, inventory, interest_rate, self.config)
 
     def update_config(self, new_config: dict):
         """Update engine configuration."""
@@ -45,67 +174,19 @@ def run_engine_for_customer(
     print(f"--- Running engine for customer: {customer.get('customer_id')} ---")
 
     try:
-        current_monthly_payment = customer["current_monthly_payment"]
-        # Engine is responsible for interest rate lookup from risk profile
         interest_rate = INTEREST_RATE_TABLE.loc[customer["risk_profile_name"]]
     except KeyError as e:
         print(f"Error: Missing key in customer data or invalid risk profile - {e}")
         return pd.DataFrame()
 
-    # Determine payment delta tiers to use
-    if "payment_delta_tiers" in engine_config:
-        custom_tiers = engine_config["payment_delta_tiers"]
-        payment_delta_tiers = {
-            "Refresh": tuple(
-                custom_tiers.get("refresh", PAYMENT_DELTA_TIERS["Refresh"])
-            ),
-            "Upgrade": tuple(
-                custom_tiers.get("upgrade", PAYMENT_DELTA_TIERS["Upgrade"])
-            ),
-            "Max Upgrade": tuple(
-                custom_tiers.get("max_upgrade", PAYMENT_DELTA_TIERS["Max Upgrade"])
-            ),
-        }
-        print(f"🎯 Using custom payment tiers: {payment_delta_tiers}")
+    if engine_config.get("use_range_optimization", False):
+        strategy = RangeOptimizationSearchStrategy()
+    elif engine_config.get("use_custom_params", False):
+        strategy = CustomParameterSearchStrategy()
     else:
-        payment_delta_tiers = PAYMENT_DELTA_TIERS
+        strategy = HierarchicalSearchStrategy()
 
-    # Check engine mode
-    use_custom_params = engine_config.get("use_custom_params", False)
-    use_range_optimization = engine_config.get("use_range_optimization", False)
-
-    if use_range_optimization:
-        print(
-            "🎯 RANGE OPTIMIZATION MODE: Using parameter ranges with NPV filtering..."
-        )
-        return _run_range_optimization_search(
-            customer,
-            inventory,
-            interest_rate,
-            engine_config,
-            current_monthly_payment,
-            payment_delta_tiers,
-        )
-    elif use_custom_params:
-        print("🔧 CUSTOM PARAMETER MODE: Using user-defined configuration...")
-        return _run_custom_parameter_search(
-            customer,
-            inventory,
-            interest_rate,
-            engine_config,
-            current_monthly_payment,
-            payment_delta_tiers,
-        )
-    else:
-        print("⚙️ DEFAULT MODE: Using hierarchical subsidy search...")
-        return _run_default_hierarchical_search(
-            customer,
-            inventory,
-            interest_rate,
-            engine_config,
-            current_monthly_payment,
-            payment_delta_tiers,
-        )
+    return strategy.run(customer, inventory, interest_rate, engine_config)
 
 
 def _run_default_hierarchical_search(
@@ -435,19 +516,16 @@ def _generate_single_offer(
     gps_install_with_iva = GPS_INSTALLATION_FEE * IVA_RATE
     gps_monthly_with_iva = GPS_MONTHLY_FEE * IVA_RATE
 
-    # 3. Component amounts (CXA first, because it feeds into starting equity)
-    cxa_amount = car["sales_price"] * cxa_pct
+    # 3. Determine starting equity (pre-fees)
+    starting_equity = customer["vehicle_equity"]
 
-    # 4. Determine the *starting* vehicle equity before fees/bonuses
-    starting_equity = (
-        customer["vehicle_equity"]  # effective equity currently stored in data
-        + cxa_amount                 # CXA will be deducted later, so add back
-        + gps_install_with_iva       # GPS install deducted later, so add back
-        - cac_bonus                  # CAC increases equity later, so remove
-    )
+    # 4. Loan amount needed considering CXA percentage
+    loan_amount_needed = (
+        car["sales_price"] - starting_equity - cac_bonus
+    ) / (1 - cxa_pct)
 
-    # 5. Loan amount needed equals price minus starting equity
-    loan_amount_needed = car["sales_price"] - starting_equity
+    # 5. Component amounts dependent on the loan amount
+    cxa_amount = loan_amount_needed * cxa_pct
 
     if loan_amount_needed <= 0:
         return None
