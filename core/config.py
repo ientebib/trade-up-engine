@@ -48,6 +48,15 @@ def get_hardcoded_financial_parameters():
 # The specific order in which loan terms will be tested
 TERM_SEARCH_ORDER = [60, 72, 48, 36, 24, 12]
 
+
+def get_term_search_order(priority: str) -> list[int]:
+    """Return loan term order based on priority setting."""
+    if priority == "ascending":
+        return sorted(TERM_SEARCH_ORDER)
+    if priority == "descending":
+        return sorted(TERM_SEARCH_ORDER, reverse=True)
+    return TERM_SEARCH_ORDER
+
 # The default fee structure (Max Profit scenario)
 # Updated with actual Kavak values
 DEFAULT_FEES = {
@@ -56,7 +65,8 @@ DEFAULT_FEES = {
     'cac_bonus': 0,                 # Customer bonus (starts at 0, can go up to MAX_CAC_BONUS)
     'kavak_total_amount': 25000.0,  # Fixed 25,000 MXN every two years
     'insurance_amount': 10999.0,    # Fixed 10,999 MXN (financed over 12 months)
-    'fixed_fee': 350.0              # GPS fee 350 MXN
+    'gps_installation_fee': 750.0,  # Upfront GPS installation cost
+    'gps_monthly_fee': 350.0        # Recurring GPS monitoring fee
 }
 
 # The maximum CAC (Customer Bonus) we are willing to apply

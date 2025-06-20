@@ -79,7 +79,12 @@ Key configuration parameters:
 - Service Fee Range: 0-5%
 - CXA Range: 0-4%
 - CAC Bonus Range: 0-10,000 MXN
-- Minimum NPV Threshold: 5,000 MXN
+ - GPS Installation Fee: 750 MXN
+ - GPS Monthly Fee: 350 MXN
+ - Max Combinations: 1,000
+ - Early Stop Offers: 100
+ - Minimum NPV Threshold: 5,000 MXN
+ - See [docs/range_optimization.md](docs/range_optimization.md) for full details.
 
 ## API Endpoints
 

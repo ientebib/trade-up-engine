@@ -717,7 +717,8 @@ function getConfigFormData() {
         cxa_pct: parseFloat(document.getElementById('cxa-fee')?.value || 4) / 100,
         cac_bonus: parseFloat(document.getElementById('cac-bonus')?.value || 5000),
         insurance_amount: parseFloat(document.getElementById('insurance-amount')?.value || 10999),
-        gps_fee: parseFloat(document.getElementById('gps-fee')?.value || 350),
+        gps_installation_fee: parseFloat(document.getElementById('gps-installation-fee')?.value || 750),
+        gps_monthly_fee: parseFloat(document.getElementById('gps-monthly-fee')?.value || 350),
         service_fee_range: [
             parseFloat(document.getElementById('service-fee-min')?.value || 0),
             parseFloat(document.getElementById('service-fee-max')?.value || 5)
@@ -734,6 +735,8 @@ function getConfigFormData() {
         cxa_step: parseFloat(document.getElementById('cxa-step')?.value || 0.01),
         cac_bonus_step: parseFloat(document.getElementById('cac-bonus-step')?.value || 100),
         max_offers_per_tier: parseInt(document.getElementById('max-offers-per-tier')?.value || 50, 10),
+        max_combinations_to_test: parseInt(document.getElementById('max-combos')?.value || 1000, 10),
+        early_stop_on_offers: parseInt(document.getElementById('early-stop')?.value || 100, 10),
         payment_delta_tiers: {
             refresh: [refreshMin, refreshMax],
             upgrade: [upgradeMin, upgradeMax],
@@ -955,7 +958,8 @@ function resetConfiguration() {
     const cacBonus = document.getElementById('cac-bonus');
     const kavakToggle = document.getElementById('kavak-total-toggle');
     const insuranceAmount = document.getElementById('insurance-amount');
-    const gpsFee = document.getElementById('gps-fee');
+    const gpsInstall = document.getElementById('gps-installation-fee');
+    const gpsMonthly = document.getElementById('gps-monthly-fee');
     
     // Payment Delta Thresholds defaults
     const refreshMin = document.getElementById('refresh-min');
@@ -980,6 +984,8 @@ function resetConfiguration() {
     const cacBonusMax = document.getElementById('cac-bonus-max');
     const cacBonusStep = document.getElementById('cac-bonus-step');
     const maxOffersPerTier = document.getElementById('max-offers-per-tier');
+    const maxCombos = document.getElementById('max-combos');
+    const earlyStop = document.getElementById('early-stop');
     
     if (serviceFeeMin) serviceFeeMin.value = 0;
     if (serviceFeeMax) serviceFeeMax.value = 5;
@@ -991,6 +997,8 @@ function resetConfiguration() {
     if (cacBonusMax) cacBonusMax.value = 10000;
     if (cacBonusStep) cacBonusStep.value = 100;
     if (maxOffersPerTier) maxOffersPerTier.value = 50;
+    if (maxCombos) maxCombos.value = 1000;
+    if (earlyStop) earlyStop.value = 100;
     
     // Reset Fee Structure
     if (serviceFee) {
@@ -1007,7 +1015,8 @@ function resetConfiguration() {
     }
     if (kavakToggle) kavakToggle.checked = true;
     if (insuranceAmount) insuranceAmount.value = 10999;
-    if (gpsFee) gpsFee.value = 350;
+    if (gpsInstall) gpsInstall.value = 750;
+    if (gpsMonthly) gpsMonthly.value = 350;
     
     // Reset Payment Delta Thresholds
     if (refreshMin) refreshMin.value = -5;
@@ -1151,7 +1160,8 @@ function buildEngineConfigForRequest(){
             cxa_pct:parseFloat(document.getElementById('cxa-fee')?.value||4)/100,
             cac_bonus:parseFloat(document.getElementById('cac-bonus')?.value||5000),
             insurance_amount:parseFloat(document.getElementById('insurance-amount')?.value||10999),
-            gps_fee:parseFloat(document.getElementById('gps-fee')?.value||350)
+            gps_installation_fee:parseFloat(document.getElementById('gps-installation-fee')?.value||750),
+            gps_monthly_fee:parseFloat(document.getElementById('gps-monthly-fee')?.value||350)
         };
     }
     if(mode==='range'){
