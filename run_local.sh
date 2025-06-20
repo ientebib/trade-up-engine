@@ -18,18 +18,10 @@ fi
 # Activate it
 source venv/bin/activate
 
-# Install dependencies only if site-packages is empty
-if ! python - <<'PY' - >/dev/null 2>&1; then
-import importlib.util, pkg_resources, sys
-exit(0 if pkg_resources.working_set else 1)
-PY
-then
-  echo "🔧 Installing Python packages …"
-  python -m pip install --upgrade pip
-  pip install -r requirements.txt
-else
-  echo "✅ Dependencies already present – skipping install"
-fi
+# Install dependencies (always run — quick and reliable)
+echo "🔧 Installing Python packages …"
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
 
 # Disable any external calls so no VPN / Redshift is required
 export DISABLE_EXTERNAL_CALLS=true
