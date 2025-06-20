@@ -120,6 +120,21 @@ Then execute:
 ```bash
 pytest
 ```
+## Common Connection Failures
+
+1. **Missing `.env` or incorrect Redshift credentials**
+   - Ensure the `.env` file exists in the project root.
+   - Double-check `REDSHIFT_HOST`, `REDSHIFT_USER`, `REDSHIFT_PASSWORD`, and related values.
+   - Restart the application and visit `/health` to verify a successful connection.
+2. **File permission issues for configuration or scenario result files**
+   - Verify read/write permissions on `engine_config.json` and `scenario_results.json`.
+   - Adjust permissions with `chmod` or run the server with a user that has access.
+   - The `/health` endpoint will report errors if these files cannot be opened.
+3. **Redis not running or unreachable**
+   - Check that the Redis service is running and the `REDIS_URL` in `.env` is correct.
+   - If Redis is unavailable, the system falls back to in-memory caching.
+   - Use `/health` to confirm whether Redis connectivity is active.
+
 
 ## Contributing
 
