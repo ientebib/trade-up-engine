@@ -13,7 +13,8 @@ from pathlib import Path
 
 from core.engine import TradeUpEngine
 from core.data_loader_dev import dev_data_loader
-from core.config_manager import ConfigManager
+from core.config_manager import ConfigManager, load_latest_scenario_results
+from core.calculator import generate_amortization_table
 from core.settings import EngineSettings
 
 # Initialize router
@@ -188,29 +189,7 @@ async def generate_offers(request: OfferRequest) -> Dict:
 async def amortization_table(offer: Dict):
     """Return full amortization table for a given offer"""
     try:
-        # Mock amortization table for development
-        table = []
-        loan_amount = offer.get('loan_amount', 100000)
-        monthly_payment = offer.get('monthly_payment', 5000)
-        term_months = offer.get('term_months', 24)
-        
-        balance = loan_amount
-        for month in range(1, term_months + 1):
-            interest = balance * 0.01  # 1% monthly for demo
-            principal = monthly_payment - interest
-            balance = max(0, balance - principal)
-            
-            table.append({
-                'month': month,
-                'payment': monthly_payment,
-                'principal': principal,
-                'interest': interest,
-                'balance': balance
-            })
-            
-            if balance <= 0:
-                break
-                
+        table = generate_amortization_table(offer)
         return {"table": table}
     except Exception as e:
         logger.exception(f"Error generating amortization table: {e}")
@@ -383,3 +362,15 @@ async def get_inventory():
     except Exception as e:
         logger.exception(f"Error loading inventory: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/scenario-results")
+async def get_scenario_results():
+    """Return the latest scenario analysis results if available."""
+    try:
+        results = load_latest_scenario_results()
+        if results is None:
+            return {}
+        return results
+    except Exception as e:
+        logger.exception(f"Error loading scenario results: {e}")
+        return {}
