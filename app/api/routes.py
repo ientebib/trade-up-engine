@@ -71,7 +71,9 @@ class ScenarioConfig(BaseModel):
 
     # Payment Delta Thresholds
     payment_delta_tiers: PaymentDeltaTiers = PaymentDeltaTiers(
-        refresh=[-0.05, 0.05], upgrade=[0.0501, 0.25], max_upgrade=[0.2501, 1.00]
+        refresh=[-0.05, 0.05],
+        upgrade=[0.0501, 0.25],
+        max_upgrade=[0.2501, 1.00],
     )
 
     # Engine Behavior

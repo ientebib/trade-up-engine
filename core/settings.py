@@ -10,7 +10,7 @@ class PaymentDeltaTiers(BaseModel):
 
 class EngineSettings(BaseModel):
     use_custom_params: bool = False
-    use_range_optimization: bool = True
+    use_range_optimization: bool = False
     include_kavak_total: bool = True
 
     service_fee_pct: float = 0.05
