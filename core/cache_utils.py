@@ -6,6 +6,7 @@ import pickle
 
 try:
     import redis
+
     REDIS_AVAILABLE = True
 except ImportError:
     redis = None
@@ -58,6 +59,7 @@ def _set(key: str, value, ttl: int | None = None):
 
 # Offer cache helpers -------------------------------------------------
 
+
 def get_cached_offers(customer_id: str, config_hash: str):
     key = f"offers:{customer_id}:{config_hash}"
     return _get(key)
@@ -70,6 +72,7 @@ def set_cached_offers(customer_id: str, config_hash: str, offers_df):
 
 # Inventory cache helpers ---------------------------------------------
 
+
 def get_cached_inventory():
     return _get("inventory")
 
@@ -80,9 +83,25 @@ def set_cached_inventory(df):
 
 # Customer cache helpers ----------------------------------------------
 
+
 def get_cached_customers():
     return _get("customers")
 
 
 def set_cached_customers(df):
     _set("customers", df, CUSTOMER_CACHE_TTL)
+
+
+def redis_status() -> str:
+    """Return a simple status string for the Redis connection."""
+    if not REDIS_AVAILABLE:
+        return "redis library missing"
+
+    if _redis_client is None:
+        return "not configured"
+
+    try:
+        _redis_client.ping()
+        return "connected"
+    except Exception as e:
+        return f"error: {type(e).__name__}"

@@ -15,9 +15,12 @@ import uvicorn
 from contextlib import asynccontextmanager
 import time
 import logging
+from pathlib import Path
+import os
 from core.logging_config import setup_logging
 import numpy as np
 import json
+import redshift_connector
 from sse_starlette.sse import EventSourceResponse
 
 # Import core modules
@@ -56,18 +59,24 @@ async def lifespan(app: FastAPI):
 
         # Handle partial data loading (customer data loaded but inventory failed)
         if customers_df.empty:
-            logger.warning("⚠️ Customer data loading failed, falling back to sample data...")
+            logger.warning(
+                "⚠️ Customer data loading failed, falling back to sample data..."
+            )
             try:
                 customers_df = pd.read_csv("data/sample_customer_data.csv")
                 logger.info("✅ Sample customer data loaded successfully.")
             except FileNotFoundError as e:
-                logger.error(f"❌ ERROR: Could not load sample customer data: {e.filename}")
+                logger.error(
+                    f"❌ ERROR: Could not load sample customer data: {e.filename}"
+                )
                 customers_df = pd.DataFrame()
         else:
             logger.info("✅ Real customer data loaded successfully.")
 
         if inventory_df.empty:
-            logger.warning("⚠️ Inventory data loading failed, using default inventory...")
+            logger.warning(
+                "⚠️ Inventory data loading failed, using default inventory..."
+            )
             # Create a minimal inventory for testing
             inventory_df = pd.DataFrame(
                 {
@@ -317,9 +326,59 @@ async def serve_customers_page(request: Request):
         scenario_results = {}
 
     return templates.TemplateResponse(
-        "customer_list.html", 
-        {"request": request, "scenario_results": json.dumps(scenario_results)}
+        "customer_list.html",
+        {"request": request, "scenario_results": json.dumps(scenario_results)},
     )
+
+
+@app.get("/health")
+async def health_check():
+    """Perform basic application health checks."""
+
+    def check_rw(path: Path) -> bool:
+        try:
+            with open(path, "a+"):
+                pass
+            return True
+        except Exception:
+            return False
+
+    checks = {
+        "engine_config_rw": check_rw(Path("engine_config.json")),
+        "scenario_results_rw": check_rw(Path("scenario_results.json")),
+        "csv_files": {
+            "customer_data.csv": Path("customer_data.csv").exists(),
+            "inventory_data.csv": Path("inventory_data.csv").exists(),
+        },
+        "redis": cache_utils.redis_status(),
+    }
+
+    if os.getenv("DISABLE_EXTERNAL_CALLS", "false").lower() != "true":
+        try:
+            conn = redshift_connector.connect(
+                host=os.getenv("REDSHIFT_HOST"),
+                database=os.getenv("REDSHIFT_DATABASE"),
+                user=os.getenv("REDSHIFT_USER"),
+                password=os.getenv("REDSHIFT_PASSWORD"),
+                port=int(os.getenv("REDSHIFT_PORT", 5439)),
+            )
+            conn.close()
+            checks["redshift"] = "connected"
+        except Exception as e:
+            checks["redshift"] = f"error: {type(e).__name__}"
+    else:
+        checks["redshift"] = "skipped"
+
+    return {
+        "status": "healthy",
+        "environment": os.getenv("ENVIRONMENT", "production"),
+        "external_calls": (
+            "disabled"
+            if os.getenv("DISABLE_EXTERNAL_CALLS", "false").lower() == "true"
+            else "enabled"
+        ),
+        "checks": checks,
+    }
 
 
 # --- API Endpoints ---
@@ -337,22 +396,32 @@ def generate_offers(request: OfferRequest) -> Dict:
         if inventory_df_request.empty:
             raise HTTPException(status_code=400, detail="Inventory cannot be empty.")
 
-        logger.info(f"--- Running engine for customer: {customer_dict.get('customer_id')} ---")
+        logger.info(
+            f"--- Running engine for customer: {customer_dict.get('customer_id')} ---"
+        )
         # Caching logic
         config_hash = cache_utils.compute_config_hash(config_dict)
-        cached_df = cache_utils.get_cached_offers(customer_dict['customer_id'], config_hash)
+        cached_df = cache_utils.get_cached_offers(
+            customer_dict["customer_id"], config_hash
+        )
         if cached_df is not None and not cached_df.empty:
-            logger.info("♻️ Using cached offers for customer %s", customer_dict['customer_id'])
+            logger.info(
+                "♻️ Using cached offers for customer %s", customer_dict["customer_id"]
+            )
             all_offers_df = cached_df
         else:
             all_offers_df = run_engine_for_customer(
                 customer_dict, inventory_df_request, config_dict
             )
             # Save to cache
-            cache_utils.set_cached_offers(customer_dict['customer_id'], config_hash, all_offers_df)
+            cache_utils.set_cached_offers(
+                customer_dict["customer_id"], config_hash, all_offers_df
+            )
 
         if all_offers_df.empty:
-            logger.warning(f"No valid offers found for customer {customer_dict.get('customer_id')}.")
+            logger.warning(
+                f"No valid offers found for customer {customer_dict.get('customer_id')}."
+            )
             return {"message": "No valid offers found for this customer.", "offers": {}}
 
         offers_by_tier = {
@@ -396,10 +465,10 @@ def get_inventory():
     """Returns the full inventory list, ensuring JSON compatibility."""
     if inventory_df.empty:
         return []
-    
+
     # Create a copy to handle NaN values for JSON conversion
     df_copy = inventory_df.copy()
-    
+
     # Replace NaN with None (which becomes 'null' in JSON)
     # This is more robust than trying to convert types
     df_copy = df_copy.replace({np.nan: None})
@@ -478,6 +547,7 @@ async def api_get_scenario_results():
 
 # Real-time scenario analysis with SSE
 
+
 @app.get("/api/scenario-analysis-stream")
 async def scenario_analysis_stream():
     """Run scenario analysis and stream progress using Server-Sent Events based on the latest saved configuration."""
@@ -497,12 +567,18 @@ async def scenario_analysis_stream():
 
             # Use cached offers if available
             config_hash = cache_utils.compute_config_hash(config_dict)
-            cached_df = cache_utils.get_cached_offers(customer_dict['customer_id'], config_hash)
+            cached_df = cache_utils.get_cached_offers(
+                customer_dict["customer_id"], config_hash
+            )
             if cached_df is not None and not cached_df.empty:
                 offers_df = cached_df
             else:
-                offers_df = run_engine_for_customer(customer_dict, inventory_df, config_dict)
-                cache_utils.set_cached_offers(customer_dict['customer_id'], config_hash, offers_df)
+                offers_df = run_engine_for_customer(
+                    customer_dict, inventory_df, config_dict
+                )
+                cache_utils.set_cached_offers(
+                    customer_dict["customer_id"], config_hash, offers_df
+                )
 
             offers_accum += len(offers_df)
             processed += 1
@@ -511,17 +587,14 @@ async def scenario_analysis_stream():
                 "processed": processed,
                 "total": total_customers,
                 "offers_so_far": offers_accum,
-                "percent": round((processed / total_customers) * 100, 2)
+                "percent": round((processed / total_customers) * 100, 2),
             }
-            yield {
-                "event": "progress",
-                "data": json.dumps(progress_payload)
-            }
+            yield {"event": "progress", "data": json.dumps(progress_payload)}
 
         # When done compute metrics (simple example)
         execution_details = {
             "processed_customers": processed,
-            "execution_time_seconds": round(time.time() - start_time, 2)
+            "execution_time_seconds": round(time.time() - start_time, 2),
         }
 
         final_payload = {"status": "finished", "execution_details": execution_details}
