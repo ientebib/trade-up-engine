@@ -118,6 +118,7 @@ The amortized payment for the financed Kavak Total (25,000 MXN) over the full lo
 
 Any other fixed fees (GPS fee: 350 MXN).
 
+The monthly payment is calculated using the `_calculate_manual_payment` function in `core/engine.py`, which is the engine's official implementation.
 All interest and fee components include a 16% IVA tax.
 
 5. Required Data & Integration Points

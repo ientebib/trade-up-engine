@@ -730,44 +730,6 @@ def _generate_single_offer(
     }
     return offer_data
 
-
-def _calculate_forward_payment(
-    loan_amount, interest_rate, term, fees_config, car_price
-):
-    """
-    A precise forward payment calculator that matches the solver's logic.
-    """
-    tasa_mensual_sin_iva = interest_rate / 12
-    tasa_mensual_con_iva = tasa_mensual_sin_iva * IVA_RATE
-
-    # Calculate financed amounts
-    valor_kt = fees_config.get("kavak_total_amount", 0)
-    valor_seguro = fees_config.get("insurance_amount", 0)
-    valor_service_fee = car_price * fees_config.get("service_fee_pct", 0)
-
-    # We sum up the individual PMT of each financed component
-    total_payment = npf.pmt(tasa_mensual_con_iva, term, -loan_amount)
-
-    # Service fee financed over the full loan term
-    if valor_service_fee > 0:
-        total_payment += npf.pmt(tasa_mensual_con_iva, term, -valor_service_fee)
-
-    # Kavak Total financed over the full loan term
-    if valor_kt > 0:
-        total_payment += npf.pmt(tasa_mensual_con_iva, term, -valor_kt)
-
-    # Insurance financed over 12 months
-    if valor_seguro > 0:
-        total_payment += npf.pmt(tasa_mensual_con_iva, 12, -valor_seguro)
-
-    # Fixed GPS monthly fee (not financed)
-    total_payment += fees_config.get(
-        "gps_monthly_fee", GPS_MONTHLY_FEE
-    ) * IVA_RATE
-
-    return total_payment
-
-
 def _calculate_manual_payment(
     loan_amount: float,
     interest_rate: float,
