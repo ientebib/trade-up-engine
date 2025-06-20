@@ -334,7 +334,8 @@ async def serve_main_dashboard(request: Request):
     """Serves the main portfolio dashboard."""
     metrics = calculate_real_metrics()
     return templates.TemplateResponse(
-        "main_dashboard.html", {"request": request, "metrics": metrics}
+        "main_dashboard.html",
+        {"request": request, "metrics": metrics, "active_page": "dashboard"},
     )
 
 
@@ -347,20 +348,25 @@ async def serve_customer_dashboard(request: Request, customer_id: str):
 
     customer_dict = customer_data.iloc[0].to_dict()
     return templates.TemplateResponse(
-        "customer_view.html", {"request": request, "customer": customer_dict}
+        "customer_view.html",
+        {"request": request, "customer": customer_dict, "active_page": "customer"},
     )
 
 
 @app.get("/config", response_class=HTMLResponse)
 async def serve_config_page(request: Request):
     """Serves the global configuration page."""
-    return templates.TemplateResponse("global_config.html", {"request": request})
+    return templates.TemplateResponse(
+        "global_config.html", {"request": request, "active_page": "config"}
+    )
 
 
 @app.get("/calculations", response_class=HTMLResponse)
 async def serve_calculations_page(request: Request):
     """Serves the calculations explanation page in Spanish."""
-    return templates.TemplateResponse("calculations.html", {"request": request})
+    return templates.TemplateResponse(
+        "calculations.html", {"request": request, "active_page": "calculations"}
+    )
 
 
 @app.get("/customers", response_class=HTMLResponse)
@@ -378,7 +384,11 @@ async def serve_customers_page(request: Request):
 
     return templates.TemplateResponse(
         "customer_list.html",
-        {"request": request, "scenario_results": json.dumps(scenario_results)},
+        {
+            "request": request,
+            "scenario_results": json.dumps(scenario_results),
+            "active_page": "customers",
+        },
     )
 
 
