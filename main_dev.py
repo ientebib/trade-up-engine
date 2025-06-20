@@ -89,21 +89,49 @@ app.include_router(api_router, prefix="/api")
 async def main_dashboard(request: Request):
     """Main dashboard page"""
     try:
+        # Load data required for the dashboard
+        customers = data_loader.load_customers()
+        inventory = data_loader.load_inventory()
+        
+        # Calculate metrics, providing defaults if data is missing
+        metrics = {
+            "total_customers": len(customers) if customers is not None else 0,
+            "total_inventory": len(inventory) if inventory is not None else 0,
+            "total_offers": 12500,  # Mocked
+            "avg_npv": 15230, # Mocked
+            "avg_offers_per_customer": 4.5, # Mocked
+            "tier_distribution": { # Mocked data for chart
+                "Refresh": 450,
+                "Upgrade": 650,
+                "Max Upgrade": 150
+            },
+            "top_cars": [ # Mocked data for chart
+                {"Model": "Honda Civic", "Estimated_Matches": 120},
+                {"Model": "Toyota RAV4", "Estimated_Matches": 110},
+                {"Model": "Ford F-150", "Estimated_Matches": 95},
+                {"Model": "Nissan Sentra", "Estimated_Matches": 80},
+                {"Model": "Jeep Wrangler", "Estimated_Matches": 75}
+            ]
+        }
+        
         return templates.TemplateResponse(
             "main_dashboard.html",
-            {"request": request},
+            {
+                "request": request,
+                "metrics": metrics,
+                "active_page": "dashboard"
+            }
         )
     except Exception as e:
         logging.error(f"Error rendering main dashboard: {e}")
+        # Render a safe error page if data loading fails
         return HTMLResponse(f"""
         <html>
-            <head><title>Trade-Up Engine - Development</title></head>
+            <head><title>Trade-Up Engine - Error</title></head>
             <body>
-                <h1>Trade-Up Engine - Development Mode</h1>
-                <p>External network calls are disabled.</p>
-                <p>Using CSV files and sample data instead of Redshift.</p>
+                <h1>An Error Occurred</h1>
+                <p>Could not load the dashboard. Please check the logs.</p>
                 <p>Error: {e}</p>
-                <p><a href="/health">Health Check</a></p>
             </body>
         </html>
         """)
@@ -126,13 +154,29 @@ async def customer_list(request: Request):
 async def customer_view(request: Request, customer_id: str):
     """Customer view page"""
     try:
+        customers = data_loader.load_customers()
+        if customers is None or customers.empty:
+            raise HTTPException(status_code=500, detail="Customer data could not be loaded.")
+
+        # Find the specific customer
+        customer_data = customers[customers['customer_id'] == customer_id].to_dict('records')
+        
+        if not customer_data:
+            raise HTTPException(status_code=404, detail=f"Customer with ID {customer_id} not found.")
+            
+        customer = customer_data[0]
+
         return templates.TemplateResponse(
             "customer_view.html",
-            {"request": request, "customer_id": customer_id},
+            {
+                "request": request,
+                "customer": customer,
+                "active_page": "customer"
+            },
         )
     except Exception as e:
-        logging.error(f"Error rendering customer view: {e}")
-        return HTMLResponse(f"<h1>Customer View</h1><p>Error: {e}</p>")
+        logging.error(f"Error rendering customer view for {customer_id}: {e}")
+        return HTMLResponse(f"<h1>Customer View - Error</h1><p>Could not render page for customer {customer_id}.</p><p>Error: {e}</p>")
 
 # Calculations page
 @app.get("/calculations", response_class=HTMLResponse)
@@ -154,7 +198,7 @@ async def global_config_page(request: Request):
     try:
         return templates.TemplateResponse(
             "global_config.html",
-            {"request": request},
+            {"request": request, "active_page": "config"},
         )
     except Exception as e:
         logging.error(f"Error rendering global config: {e}")

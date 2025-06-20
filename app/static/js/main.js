@@ -8,6 +8,9 @@
 let currentCustomer = null;
 let allCustomers = [];
 
+// Global flag to prevent unwanted modal display
+let allowAmortizationModal = false;
+
 document.addEventListener('DOMContentLoaded', function() {
     console.log("🚗 Kavak Dashboard JS Loaded");
     loadCustomersList();
@@ -71,7 +74,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Initialize customer view page
 function initializeCustomerView(customerId) {
+    console.log('🏁 Initializing customer view for:', customerId);
     currentCustomer = customerId;
+    allowAmortizationModal = false; // Reset flag
     updateConfigStatusBadge();
     loadCustomersList().then(() => {
         // Auto-generate offers for the current customer
@@ -435,36 +440,133 @@ function renderFeeComponent(label, rawValue, isPercent=false, treatZeroAsCross=f
 
 // Fetch amortization table and display in modal
 async function viewAmortizationTable(offer) {
+    console.log('🔍 Requesting amortization table for offer:', offer);
+    allowAmortizationModal = true; // Allow modal to show since user explicitly requested it
+    
     try {
         const response = await fetch('/api/amortization-table', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(offer)
         });
+        
         const data = await response.json();
-        if (!response.ok) throw new Error(data.detail || 'Failed to get table');
+        console.log('📊 Amortization response:', data);
+        
+        if (!response.ok) {
+            throw new Error(data.detail || 'Failed to get amortization table');
+        }
+        
+        if (!data.table || data.table.length === 0) {
+            console.warn('⚠️ Empty amortization table received');
+            showAmortizationModal([]); // This will show the "No data available" message
+            return;
+        }
+        
         showAmortizationModal(data.table);
+        
     } catch (err) {
-        console.error('Amortization error', err);
+        console.error('❌ Amortization error:', err);
+        // Show error message instead of empty modal
+        showAmortizationError(err.message);
     }
 }
 
-function showAmortizationModal(table) {
+// Show amortization error in modal
+function showAmortizationError(errorMessage) {
+    if (!allowAmortizationModal) {
+        console.warn('🚫 Blocked amortization error modal - not explicitly requested');
+        return;
+    }
+    
     const modal = document.getElementById('amortization-modal');
     const container = document.getElementById('amortization-table');
     if (!modal || !container) return;
-    let html = '<table class="amort-table"><tr><th>Month</th><th>Beginning Balance</th><th>Payment</th><th>Principal</th><th>Interest</th><th>Ending Balance</th></tr>';
+    
+    container.innerHTML = `
+        <div class="error-state">
+            <h3>Error Loading Amortization Table</h3>
+            <p>${errorMessage}</p>
+            <button class="btn-secondary" onclick="closeAmortizationModal()">Close</button>
+        </div>
+    `;
+    modal.style.display = 'block';
+}
+
+function showAmortizationModal(table) {
+    console.log('🎯 showAmortizationModal called with table:', table);
+    console.trace('Call stack:'); // This will show us exactly where this function is being called from
+    
+    // Block unwanted modal displays
+    if (!allowAmortizationModal) {
+        console.warn('🚫 Blocked amortization modal - not explicitly requested by user');
+        console.log('💡 If you want to show this modal, call viewAmortizationTable() instead');
+        return;
+    }
+    
+    const modal = document.getElementById('amortization-modal');
+    const container = document.getElementById('amortization-table');
+    if (!modal || !container) {
+        console.error('Amortization modal elements not found');
+        return;
+    }
+    
+    if (!table || table.length === 0) {
+        console.warn('⚠️ Showing empty amortization modal');
+        container.innerHTML = '<p class="no-data">No amortization data available</p>';
+        modal.style.display = 'block';
+        return;
+    }
+    
+    console.log(`✅ Showing amortization table with ${table.length} rows`);
+    
+    let html = `
+        <table class="amort-table">
+            <thead>
+                <tr>
+                    <th>Month</th>
+                    <th>Beginning Balance</th>
+                    <th>Payment</th>
+                    <th>Principal</th>
+                    <th>Interest</th>
+                    <th>Ending Balance</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+    
     table.forEach(row => {
-        html += `<tr><td>${row.month}</td><td>$${Math.round(row.beginning_balance).toLocaleString()}</td><td>$${Math.round(row.payment).toLocaleString()}</td><td>$${Math.round(row.principal).toLocaleString()}</td><td>$${Math.round(row.interest).toLocaleString()}</td><td>$${Math.round(row.ending_balance).toLocaleString()}</td></tr>`;
+        html += `
+            <tr>
+                <td>${row.month}</td>
+                <td>$${Math.round(row.beginning_balance || 0).toLocaleString()}</td>
+                <td>$${Math.round(row.payment || 0).toLocaleString()}</td>
+                <td>$${Math.round(row.principal || 0).toLocaleString()}</td>
+                <td>$${Math.round(row.interest || 0).toLocaleString()}</td>
+                <td>$${Math.round(row.ending_balance || 0).toLocaleString()}</td>
+            </tr>
+        `;
     });
-    html += '</table>';
+    
+    html += `
+            </tbody>
+        </table>
+        <div class="amort-summary">
+            <p><strong>Total Payments:</strong> $${(table.reduce((sum, row) => sum + (row.payment || 0), 0)).toLocaleString()}</p>
+            <p><strong>Total Interest:</strong> $${(table.reduce((sum, row) => sum + (row.interest || 0), 0)).toLocaleString()}</p>
+        </div>
+    `;
+    
     container.innerHTML = html;
     modal.style.display = 'block';
 }
 
 function closeAmortizationModal() {
     const modal = document.getElementById('amortization-modal');
-    if (modal) modal.style.display = 'none';
+    if (modal) {
+        modal.style.display = 'none';
+        allowAmortizationModal = false; // Reset flag when closing
+    }
 }
 
 // Show loading state

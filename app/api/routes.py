@@ -137,21 +137,44 @@ async def get_customer(customer_id: str):
 async def generate_offers(request: OfferRequest) -> Dict:
     """Generate all possible Trade-Up offers for a single customer - Production API Compatible"""
     try:
+        logger.info(f"🎯 Starting offer generation for customer: {request.customer_data.customer_id}")
+        
         # Convert request to DataFrames
-        inventory_df = data_loader.load_inventory()
+        try:
+            inventory_df = data_loader.load_inventory()
+            if inventory_df.empty:
+                logger.warning("⚠️ Inventory is empty - this may cause offer generation to fail")
+        except Exception as e:
+            logger.error(f"❌ Failed to load inventory: {e}")
+            raise HTTPException(status_code=500, detail=f"Failed to load inventory data: {str(e)}")
+        
         customer_dict = request.customer_data.dict()
         
         # Load current config and merge with request config
-        settings: EngineSettings = config_manager.load_config()
-        config_dict = {**settings.model_dump(), **request.engine_config.dict()}
+        try:
+            settings: EngineSettings = config_manager.load_config()
+            config_dict = {**settings.model_dump(), **request.engine_config.dict()}
+        except Exception as e:
+            logger.error(f"❌ Failed to load engine config: {e}")
+            # Use default config as fallback
+            config_dict = request.engine_config.dict()
         
         # Update engine with current config
-        engine.update_config(config_dict)
+        try:
+            engine.update_config(config_dict)
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to update engine config: {e}")
         
         # Generate offers
-        offers_df = engine.generate_offers(customer_dict, inventory_df)
+        try:
+            logger.info(f"🔄 Generating offers with {len(inventory_df)} inventory items")
+            offers_df = engine.generate_offers(customer_dict, inventory_df)
+        except Exception as e:
+            logger.error(f"❌ Offer generation failed: {e}")
+            raise HTTPException(status_code=500, detail=f"Offer generation failed: {str(e)}")
         
         if offers_df.empty:
+            logger.warning(f"⚠️ No valid offers found for customer {customer_dict.get('customer_id')}")
             return {"message": "No valid offers found for this customer.", "offers": {}}
         
         # Group offers by tier (matching production format)
@@ -163,55 +186,86 @@ async def generate_offers(request: OfferRequest) -> Dict:
             # Fallback: put all offers in a single group
             offers_by_tier['All'] = offers_df.to_dict(orient='records')
         
+        logger.info(f"✅ Successfully generated {len(offers_df)} offers across {len(offers_by_tier)} tiers")
         return {
             "message": f"Successfully generated {len(offers_df)} offers.",
             "offers": offers_by_tier
         }
         
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        raise
     except ValueError as ve:
         logger.exception(f"Invalid parameters: {ve}")
-        raise HTTPException(status_code=400, detail=str(ve))
-    except FileNotFoundError:
-        logger.exception("Inventory data file not found")
-        raise HTTPException(status_code=500, detail="Inventory data file not found")
-    except PermissionError:
-        logger.exception("Permission denied reading inventory data file")
-        raise HTTPException(status_code=500, detail="Inventory data file not readable")
+        raise HTTPException(status_code=400, detail=f"Invalid parameters: {str(ve)}")
+    except FileNotFoundError as e:
+        logger.exception("Required data file not found")
+        raise HTTPException(status_code=500, detail=f"Required data file not found: {str(e)}")
+    except PermissionError as e:
+        logger.exception("Permission denied accessing data files")
+        raise HTTPException(status_code=500, detail=f"Permission denied: {str(e)}")
     except OSError as e:
-        logger.exception(f"OS error during offer generation: {e}")
-        raise HTTPException(status_code=500, detail="Failed to generate offers due to file error")
+        logger.exception(f"File system error during offer generation: {e}")
+        if e.errno == 5:  # Input/output error
+            raise HTTPException(status_code=500, detail="File system I/O error - please check file permissions and disk space")
+        else:
+            raise HTTPException(status_code=500, detail=f"File system error: {str(e)}")
     except Exception as e:
-        logger.exception(f"Error generating offers: {e}")
+        logger.exception(f"Unexpected error during offer generation: {e}")
         raise HTTPException(status_code=500, detail=f"An internal error occurred: {str(e)}")
 
 @router.post("/amortization-table")
 async def amortization_table(offer: Dict):
     """Return full amortization table for a given offer"""
     try:
-        # Mock amortization table for development
-        table = []
-        loan_amount = offer.get('loan_amount', 100000)
-        monthly_payment = offer.get('monthly_payment', 5000)
-        term_months = offer.get('term_months', 24)
+        # Extract data from the offer with proper field mapping
+        loan_amount = offer.get('loan_amount', 0)
+        monthly_payment = offer.get('monthly_payment', 0)
+        # Try both 'term' and 'term_months' for backwards compatibility
+        term_months = offer.get('term', offer.get('term_months', 24))
+        interest_rate = offer.get('interest_rate', 0.12) / 12  # Convert annual to monthly
         
+        logger.info(f"Generating amortization table - Loan: ${loan_amount:,.2f}, Payment: ${monthly_payment:,.2f}, Term: {term_months} months")
+        
+        if loan_amount <= 0 or monthly_payment <= 0 or term_months <= 0:
+            logger.warning(f"Invalid amortization parameters: loan_amount={loan_amount}, monthly_payment={monthly_payment}, term_months={term_months}")
+            return {"table": [], "error": "Invalid loan parameters"}
+        
+        table = []
         balance = loan_amount
+        
         for month in range(1, term_months + 1):
-            interest = balance * 0.01  # 1% monthly for demo
-            principal = monthly_payment - interest
-            balance = max(0, balance - principal)
+            # Calculate interest on remaining balance
+            interest_payment = balance * interest_rate
+            # Principal is the remainder of the payment
+            principal_payment = monthly_payment - interest_payment
+            
+            # Ensure we don't go negative
+            if principal_payment > balance:
+                principal_payment = balance
+                actual_payment = balance + interest_payment
+            else:
+                actual_payment = monthly_payment
+            
+            # Update balance
+            balance = max(0, balance - principal_payment)
             
             table.append({
                 'month': month,
-                'payment': monthly_payment,
-                'principal': principal,
-                'interest': interest,
-                'balance': balance
+                'beginning_balance': balance + principal_payment,
+                'payment': actual_payment,
+                'principal': principal_payment,
+                'interest': interest_payment,
+                'ending_balance': balance
             })
             
+            # Stop if balance reaches zero
             if balance <= 0:
                 break
                 
+        logger.info(f"Generated amortization table with {len(table)} rows")
         return {"table": table}
+        
     except Exception as e:
         logger.exception(f"Error generating amortization table: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to generate amortization table: {str(e)}")
