@@ -646,8 +646,10 @@ def _calculate_forward_payment(
     """
     A precise forward payment calculator that matches the solver's logic.
     """
-    tasa_mensual_sin_iva = interest_rate / 12
-    tasa_mensual_con_iva = tasa_mensual_sin_iva * IVA_RATE
+    monthly_rate = interest_rate / 12
+    # IVA applies only to interest, so we keep a taxed version of the rate
+    # for payment calculations.
+    monthly_rate_with_iva = monthly_rate * IVA_RATE
 
     # Calculate financed amounts
     valor_kt = fees_config.get("kavak_total_amount", 0)
@@ -655,19 +657,19 @@ def _calculate_forward_payment(
     valor_service_fee = car_price * fees_config.get("service_fee_pct", 0)
 
     # We sum up the individual PMT of each financed component
-    total_payment = npf.pmt(tasa_mensual_con_iva, term, -loan_amount)
+    total_payment = npf.pmt(monthly_rate_with_iva, term, -loan_amount)
 
     # Service fee financed over the full loan term
     if valor_service_fee > 0:
-        total_payment += npf.pmt(tasa_mensual_con_iva, term, -valor_service_fee)
+        total_payment += npf.pmt(monthly_rate_with_iva, term, -valor_service_fee)
 
     # Kavak Total financed over the full loan term
     if valor_kt > 0:
-        total_payment += npf.pmt(tasa_mensual_con_iva, term, -valor_kt)
+        total_payment += npf.pmt(monthly_rate_with_iva, term, -valor_kt)
 
     # Insurance financed over 12 months
     if valor_seguro > 0:
-        total_payment += npf.pmt(tasa_mensual_con_iva, 12, -valor_seguro)
+        total_payment += npf.pmt(monthly_rate_with_iva, 12, -valor_seguro)
 
     # Fixed GPS monthly fee (not financed)
     total_payment += fees_config.get(
@@ -687,33 +689,32 @@ def _calculate_manual_payment(
     gps_monthly_fee: float,
 ):
     """Manual monthly payment calculation following the MVP specification."""
-    # Use the nominal (untaxed) monthly rate for principal amortization.
-    # IVA is only applied to the interest portion, not to the principal repayment itself.
-    monthly_rate_interest = interest_rate / 12
-    monthly_rate_principal = interest_rate / 12
+    # Use a single nominal (untaxed) monthly rate. IVA is applied only on
+    # the interest portion, not on the principal repayment itself.
+    monthly_rate = interest_rate / 12
 
     # Component 1: Main loan amount
-    principal_main = abs(npf.ppmt(monthly_rate_principal, 1, term, -loan_amount))
+    principal_main = abs(npf.ppmt(monthly_rate, 1, term, -loan_amount))
     interest_main = (
-        abs(npf.ipmt(monthly_rate_interest, 1, term, -loan_amount)) * IVA_RATE
+        abs(npf.ipmt(monthly_rate, 1, term, -loan_amount)) * IVA_RATE
     )
 
     # Component 2: Financed service fee
-    principal_sf = abs(npf.ppmt(monthly_rate_principal, 1, term, -service_fee_amt))
+    principal_sf = abs(npf.ppmt(monthly_rate, 1, term, -service_fee_amt))
     interest_sf = (
-        abs(npf.ipmt(monthly_rate_interest, 1, term, -service_fee_amt)) * IVA_RATE
+        abs(npf.ipmt(monthly_rate, 1, term, -service_fee_amt)) * IVA_RATE
     )
 
     # Component 3: Financed Kavak Total
-    principal_kt = abs(npf.ppmt(monthly_rate_principal, 1, term, -kavak_total_amt))
+    principal_kt = abs(npf.ppmt(monthly_rate, 1, term, -kavak_total_amt))
     interest_kt = (
-        abs(npf.ipmt(monthly_rate_interest, 1, term, -kavak_total_amt)) * IVA_RATE
+        abs(npf.ipmt(monthly_rate, 1, term, -kavak_total_amt)) * IVA_RATE
     )
 
     # Component 4: Insurance financed over 12 months
-    principal_ins = abs(npf.ppmt(monthly_rate_principal, 1, 12, -insurance_amt))
+    principal_ins = abs(npf.ppmt(monthly_rate, 1, 12, -insurance_amt))
     interest_ins = (
-        abs(npf.ipmt(monthly_rate_interest, 1, 12, -insurance_amt)) * IVA_RATE
+        abs(npf.ipmt(monthly_rate, 1, 12, -insurance_amt)) * IVA_RATE
     )
 
     total_payment = (
