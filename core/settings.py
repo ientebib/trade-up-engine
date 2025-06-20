@@ -17,7 +17,8 @@ class EngineSettings(BaseModel):
     cxa_pct: float = 0.04
     cac_bonus: float = 5000.0
     insurance_amount: float = 10999.0
-    gps_fee: float = 350.0
+    gps_installation_fee: float = 750.0
+    gps_monthly_fee: float = 350.0
 
     service_fee_range: List[float] = [0.0, 5.0]
     cxa_range: List[float] = [0.0, 4.0]
@@ -26,6 +27,9 @@ class EngineSettings(BaseModel):
     cxa_step: float = 0.1
     cac_bonus_step: float = 100.0
     max_offers_per_tier: int = 50
+
+    max_combinations_to_test: int = 1000
+    early_stop_on_offers: int = 100
 
     payment_delta_tiers: PaymentDeltaTiers = PaymentDeltaTiers()
 

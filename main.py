@@ -159,7 +159,8 @@ class ScenarioConfig(BaseModel):
     cxa_pct: float = 0.04
     cac_bonus: float = 5000.0
     insurance_amount: float = 10999.0
-    gps_fee: float = 350.0
+    gps_installation_fee: float = 750.0
+    gps_monthly_fee: float = 350.0
 
     # Range Optimization (only used if use_range_optimization = True)
     service_fee_range: List[float] = [0.0, 5.0]
@@ -169,6 +170,8 @@ class ScenarioConfig(BaseModel):
     cxa_step: float = 0.01  # 1 basis point
     cac_bonus_step: float = 100  # 100 MXN steps
     max_offers_per_tier: int = 50
+    max_combinations_to_test: int = 1000
+    early_stop_on_offers: int = 100
 
     # Payment Delta Thresholds
     payment_delta_tiers: PaymentDeltaTiers = PaymentDeltaTiers(

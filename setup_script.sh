@@ -77,7 +77,8 @@ cat > engine_config.json << 'EOF'
     "cxa_pct": 0.04,
     "cac_bonus": 5000.0,
     "insurance_amount": 10999.0,
-    "gps_fee": 350.0,
+    "gps_installation_fee": 750.0,
+    "gps_monthly_fee": 350.0,
     "service_fee_range": [0.0, 5.0],
     "cxa_range": [0.0, 4.0],
     "cac_bonus_range": [0.0, 10000.0],
@@ -85,6 +86,8 @@ cat > engine_config.json << 'EOF'
     "cxa_step": 0.1,
     "cac_bonus_step": 100.0,
     "max_offers_per_tier": 50,
+    "max_combinations_to_test": 1000,
+    "early_stop_on_offers": 100,
     "payment_delta_tiers": {
         "refresh": [-0.05, 0.05],
         "upgrade": [0.0501, 0.25],

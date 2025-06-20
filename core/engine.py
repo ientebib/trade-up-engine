@@ -7,6 +7,7 @@ from .calculator import calculate_final_npv
 from .config import (
     get_hardcoded_financial_parameters,
     TERM_SEARCH_ORDER,
+    get_term_search_order,
     DEFAULT_FEES,
     MAX_CAC_BONUS,
     PAYMENT_DELTA_TIERS,
@@ -206,6 +207,7 @@ def _run_default_hierarchical_search(
 
     # Extract NPV threshold for filtering
     min_npv_threshold = engine_config.get("min_npv_threshold", 5000.0)
+    term_order = get_term_search_order(engine_config.get("term_priority", "standard"))
 
     # --- PHASE 1: Search with NO Subsidy (Max Profit) ---
     logger.info("PHASE 1: Searching for offers with MAX PROFIT...")
@@ -225,6 +227,7 @@ def _run_default_hierarchical_search(
         phase_1_fees,
         min_npv_threshold,
         payment_delta_tiers,
+        term_order,
     )
 
     if phase_1_offers:
@@ -250,6 +253,7 @@ def _run_default_hierarchical_search(
         fees_level_1,
         min_npv_threshold,
         payment_delta_tiers,
+        term_order,
     )
     if level_1_offers:
         logger.info(f"Level 1 COMPLETE: Found {len(level_1_offers)} offers. Stopping search.")
@@ -268,6 +272,7 @@ def _run_default_hierarchical_search(
         fees_level_2,
         min_npv_threshold,
         payment_delta_tiers,
+        term_order,
     )
     if level_2_offers:
         logger.info(f"Level 2 COMPLETE: Found {len(level_2_offers)} offers. Stopping search.")
@@ -286,6 +291,7 @@ def _run_default_hierarchical_search(
         fees_level_3,
         min_npv_threshold,
         payment_delta_tiers,
+        term_order,
     )
     if level_3_offers:
         logger.info(f"Level 3 COMPLETE: Found {len(level_3_offers)} offers. Stopping search.")
@@ -327,6 +333,7 @@ def _run_range_optimization_search(
 
     # Extract NPV filtering threshold
     min_npv_threshold = engine_config.get("min_npv_threshold", 5000.0)
+    term_order = get_term_search_order(engine_config.get("term_priority", "standard"))
 
     # EARLY STOPPING: Add max combinations limit
     max_combinations_to_test = engine_config.get(
@@ -335,6 +342,11 @@ def _run_range_optimization_search(
     early_stop_on_offers = engine_config.get(
         "early_stop_on_offers", 100
     )  # Stop if we find 100 valid offers
+
+    # Validate ranges
+    _validate_range(service_fee_range, service_fee_step, "service_fee_range")
+    _validate_range(cxa_range, cxa_step, "cxa_range")
+    _validate_range(cac_bonus_range, cac_bonus_step, "cac_bonus_range")
 
     # Generate parameter combinations
     service_fee_values = [
@@ -394,12 +406,23 @@ def _run_range_optimization_search(
             "insurance_amount": engine_config.get(
                 "insurance_amount", DEFAULT_FEES["insurance_amount"]
             ),
-            "fixed_fee": engine_config.get("gps_fee", DEFAULT_FEES["fixed_fee"]),
+            "gps_installation_fee": engine_config.get(
+                "gps_installation_fee", DEFAULT_FEES["gps_installation_fee"]
+            ),
+            "gps_monthly_fee": engine_config.get(
+                "gps_monthly_fee", DEFAULT_FEES["gps_monthly_fee"]
+            ),
         }
 
         # Run search phase with this parameter combination
         combo_offers = _run_search_phase_with_npv_filter(
-            customer, inventory, interest_rate, fees_config, min_npv_threshold, tiers
+            customer,
+            inventory,
+            interest_rate,
+            fees_config,
+            min_npv_threshold,
+            tiers,
+            term_order,
         )
 
         for offer in combo_offers:
@@ -463,11 +486,16 @@ def _run_custom_parameter_search(
             if engine_config.get("include_kavak_total", True)
             else 0
         ),
-        "insurance_amount": engine_config.get(
-            "insurance_amount", DEFAULT_FEES["insurance_amount"]
-        ),
-        "fixed_fee": engine_config.get("gps_fee", DEFAULT_FEES["fixed_fee"]),
-    }
+            "insurance_amount": engine_config.get(
+                "insurance_amount", DEFAULT_FEES["insurance_amount"]
+            ),
+            "gps_installation_fee": engine_config.get(
+                "gps_installation_fee", DEFAULT_FEES["gps_installation_fee"]
+            ),
+            "gps_monthly_fee": engine_config.get(
+                "gps_monthly_fee", DEFAULT_FEES["gps_monthly_fee"]
+            ),
+        }
 
     logger.info(f"🔧 Using custom fees: {custom_fees}")
 
@@ -475,10 +503,17 @@ def _run_custom_parameter_search(
 
     # Extract NPV threshold for filtering
     min_npv_threshold = engine_config.get("min_npv_threshold", 5000.0)
+    term_order = get_term_search_order(engine_config.get("term_priority", "standard"))
 
     # Run single search phase with custom parameters and NPV filtering
     custom_offers = _run_search_phase_with_npv_filter(
-        customer, inventory, interest_rate, custom_fees, min_npv_threshold, tiers
+        customer,
+        inventory,
+        interest_rate,
+        custom_fees,
+        min_npv_threshold,
+        tiers,
+        term_order,
     )
     all_offers.extend(custom_offers)
 
@@ -493,12 +528,12 @@ def _run_custom_parameter_search(
 
 
 def _run_search_phase(
-    customer, inventory, interest_rate, fees_config, payment_delta_tiers
+    customer, inventory, interest_rate, fees_config, payment_delta_tiers, term_order
 ):
     """Helper function to run the search for a given fee configuration."""
     found_offers = []
     for car_index, car in inventory.iterrows():
-        for term in TERM_SEARCH_ORDER:
+        for term in term_order:
             offer = _generate_single_offer(
                 customer, car, term, interest_rate, fees_config, payment_delta_tiers
             )
@@ -518,8 +553,12 @@ def _generate_single_offer(
     # 2. Resolve fees that are deducted from equity but not financed
     cxa_pct = fees_config.get("cxa_pct", 0)
     cac_bonus = fees_config.get("cac_bonus", 0)
-    gps_install_with_iva = GPS_INSTALLATION_FEE * IVA_RATE
-    gps_monthly_with_iva = GPS_MONTHLY_FEE * IVA_RATE
+    gps_install_with_iva = (
+        fees_config.get("gps_installation_fee", GPS_INSTALLATION_FEE) * IVA_RATE
+    )
+    gps_monthly_with_iva = (
+        fees_config.get("gps_monthly_fee", GPS_MONTHLY_FEE) * IVA_RATE
+    )
 
     # 3. CXA is calculated on the new car price and paid upfront
     cxa_amount = car["sales_price"] * cxa_pct
@@ -537,8 +576,11 @@ def _generate_single_offer(
     # 6. Other component amounts
     service_fee_amt = car["sales_price"] * fees_config.get("service_fee_pct", 0)
     kavak_total_amt = fees_config.get("kavak_total_amount", 0)
-    insurance_amt = INSURANCE_TABLE.get(
-        customer["risk_profile_name"], DEFAULT_FEES["insurance_amount"]
+    insurance_amt = fees_config.get(
+        "insurance_amount",
+        INSURANCE_TABLE.get(
+            customer["risk_profile_name"], DEFAULT_FEES["insurance_amount"]
+        ),
     )
 
     # 7. Down payment check using effective equity
@@ -628,7 +670,9 @@ def _calculate_forward_payment(
         total_payment += npf.pmt(tasa_mensual_con_iva, 12, -valor_seguro)
 
     # Fixed GPS monthly fee (not financed)
-    total_payment += GPS_MONTHLY_FEE * IVA_RATE
+    total_payment += fees_config.get(
+        "gps_monthly_fee", GPS_MONTHLY_FEE
+    ) * IVA_RATE
 
     return total_payment
 
@@ -694,6 +738,15 @@ def _generate_range(start, end, step):
     return np.arange(start, end + step, step)
 
 
+def _validate_range(range_tuple, step, name):
+    """Validate range inputs before optimization."""
+    start, end = range_tuple
+    if step <= 0:
+        raise ValueError(f"{name} step must be positive")
+    if end < start:
+        raise ValueError(f"{name} bounds must be in ascending order")
+
+
 def _run_search_phase_with_npv_filter(
     customer,
     inventory,
@@ -701,11 +754,12 @@ def _run_search_phase_with_npv_filter(
     fees_config,
     min_npv_threshold,
     payment_delta_tiers,
+    term_order,
 ):
     """Helper function to run search with NPV filtering applied."""
     found_offers = []
     for car_index, car in inventory.iterrows():
-        for term in TERM_SEARCH_ORDER:
+        for term in term_order:
             offer = _generate_single_offer(
                 customer, car, term, interest_rate, fees_config, payment_delta_tiers
             )
