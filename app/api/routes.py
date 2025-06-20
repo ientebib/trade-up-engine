@@ -14,6 +14,7 @@ from pathlib import Path
 from core.engine import TradeUpEngine
 from core.data_loader_dev import dev_data_loader
 from core.config_manager import ConfigManager
+from core.settings import EngineSettings
 
 # Initialize router
 router = APIRouter()
@@ -117,8 +118,8 @@ async def generate_offers(request: OfferRequest) -> Dict:
         customer_dict = request.customer_data.dict()
         
         # Load current config and merge with request config
-        config = config_manager.load_config()
-        config_dict = {**config, **request.engine_config.dict()}
+        settings: EngineSettings = config_manager.load_config()
+        config_dict = {**settings.model_dump(), **request.engine_config.dict()}
         
         # Update engine with current config
         engine.update_config(config_dict)
@@ -183,7 +184,8 @@ async def amortization_table(offer: Dict):
 async def get_config():
     """Get current engine configuration"""
     try:
-        return {"config": config_manager.load_config()}
+        settings: EngineSettings = config_manager.load_config()
+        return {"config": settings.model_dump()}
     except Exception as e:
         logging.error(f"Error loading config: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -192,7 +194,8 @@ async def get_config():
 async def get_config_status():
     """Returns the current engine configuration status"""
     try:
-        config = config_manager.load_config()
+        settings: EngineSettings = config_manager.load_config()
+        config = settings.model_dump()
         
         return {
             "has_custom_config": config.get("use_custom_params", False) or config.get("use_range_optimization", False),

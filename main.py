@@ -31,6 +31,7 @@ from core.config_manager import (
     save_scenario_results,
     load_latest_scenario_results,
 )
+from core.settings import EngineSettings
 from core import cache_utils
 
 setup_logging(logging.INFO)
@@ -327,8 +328,8 @@ def generate_offers(request: OfferRequest) -> Dict:
         customer_dict = request.customer_data.dict()
 
         # Load saved configuration and merge with request config
-        saved_config = load_engine_config()
-        config_dict = {**saved_config, **request.engine_config.dict()}
+        saved_settings: EngineSettings = load_engine_config()
+        config_dict = {**saved_settings.model_dump(), **request.engine_config.dict()}
 
         if inventory_df_request.empty:
             raise HTTPException(status_code=400, detail="Inventory cannot be empty.")
@@ -407,22 +408,23 @@ def get_inventory():
 def get_config_status():
     """Returns the current engine configuration status."""
     try:
-        config = load_engine_config()
+        settings: EngineSettings = load_engine_config()
+        config_dict = settings.model_dump()
         latest_results = load_latest_scenario_results()
 
         return {
-            "has_custom_config": config.get("use_custom_params", False)
-            or config.get("use_range_optimization", False),
+            "has_custom_config": config_dict.get("use_custom_params", False)
+            or config_dict.get("use_range_optimization", False),
             "mode": (
                 "Range Optimization"
-                if config.get("use_range_optimization")
+                if config_dict.get("use_range_optimization")
                 else (
                     "Custom Parameters"
-                    if config.get("use_custom_params")
+                    if config_dict.get("use_custom_params")
                     else "Default Hierarchical"
                 )
             ),
-            "last_updated": config.get("last_updated", "Never"),
+            "last_updated": config_dict.get("last_updated", "Never"),
             "latest_results": latest_results,
         }
     except Exception as e:
@@ -479,7 +481,8 @@ async def scenario_analysis_stream():
 
     async def event_generator():
         start_time = time.time()
-        config_dict = load_engine_config()
+        settings: EngineSettings = load_engine_config()
+        config_dict = settings.model_dump()
 
         total_customers = len(customers_df) if not customers_df.empty else 0
         processed = 0

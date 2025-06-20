@@ -5,63 +5,48 @@ Handles storage and retrieval of engine configuration settings
 import json
 import os
 from datetime import datetime
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Union
 import logging
 from core.logging_config import setup_logging
+from .settings import EngineSettings
 
 setup_logging(logging.INFO)
 logger = logging.getLogger(__name__)
 
 class ConfigManager:
-    def __init__(self, config_file="engine_config.json"):
+    def __init__(self, config_file: str = "engine_config.json"):
         self.config_file = config_file
-        self._default_config = {
-            'use_custom_params': False,
-            'use_range_optimization': True,
-            'include_kavak_total': True,
-            'service_fee_pct': 0.05,
-            'cxa_pct': 0.04,
-            'cac_bonus': 5000.0,
-            'insurance_amount': 10999.0,
-            'gps_fee': 350.0,
-            'service_fee_range': [0.0, 5.0],
-            'cxa_range': [0.0, 4.0],
-            'cac_bonus_range': [0.0, 10000.0],
-            'service_fee_step': 0.1,
-            'cxa_step': 0.1,
-            'cac_bonus_step': 100.0,
-            'max_offers_per_tier': 50,
-            'payment_delta_tiers': {
-                'refresh': [-0.05, 0.05],
-                'upgrade': [0.0501, 0.25],
-                'max_upgrade': [0.2501, 1.0]
-            },
-            'term_priority': 'standard',
-            'min_npv_threshold': 5000.0
-        }
+        # Default settings using the Pydantic model
+        self._default_settings = EngineSettings()
     
-    def load_config(self) -> Dict[str, Any]:
-        """Load engine configuration from file"""
+    def load_config(self) -> EngineSettings:
+        """Load engine configuration from file and validate it."""
         try:
             if os.path.exists(self.config_file):
-                with open(self.config_file, 'r') as f:
-                    config = json.load(f)
-                    logger.info(f"✅ Loaded engine configuration from {self.config_file}")
-                    return config
+                with open(self.config_file, "r") as f:
+                    data = json.load(f)
+                    logger.info(
+                        f"✅ Loaded engine configuration from {self.config_file}"
+                    )
+                    return EngineSettings.model_validate(data)
         except Exception as e:
             logger.warning(f"⚠️ Could not load config: {e}")
-        
-        # Return default configuration
-        return self._default_config.copy()
+
+        # Return default settings instance
+        return self._default_settings
     
-    def save_config(self, config: Dict[str, Any]) -> bool:
-        """Save engine configuration to file"""
+    def save_config(self, config: Union[Dict[str, Any], EngineSettings]) -> bool:
+        """Save engine configuration to file."""
         try:
-            # Add timestamp
-            config['last_updated'] = datetime.now().isoformat()
-            
-            with open(self.config_file, 'w') as f:
-                json.dump(config, f, indent=2)
+            settings = (
+                config
+                if isinstance(config, EngineSettings)
+                else EngineSettings.model_validate(config)
+            )
+            settings.last_updated = datetime.now().isoformat()
+
+            with open(self.config_file, "w") as f:
+                json.dump(settings.model_dump(), f, indent=2)
 
             logger.info(f"✅ Engine configuration saved to {self.config_file}")
             return True
@@ -70,13 +55,13 @@ class ConfigManager:
             return False
     
     def reset_config(self) -> bool:
-        """Reset configuration to defaults"""
-        return self.save_config(self._default_config.copy())
+        """Reset configuration to defaults."""
+        return self.save_config(self._default_settings)
     
     @property
-    def default_config(self) -> Dict[str, Any]:
-        """Get a copy of the default configuration"""
-        return self._default_config.copy()
+    def default_config(self) -> EngineSettings:
+        """Get the default configuration as ``EngineSettings``."""
+        return self._default_settings
 
 
 # ------------------------------------------------------------------
@@ -87,12 +72,12 @@ _manager = ConfigManager()
 SCENARIO_RESULTS_FILE = "scenario_results.json"
 
 
-def load_engine_config() -> Dict[str, Any]:
+def load_engine_config() -> EngineSettings:
     """Load the engine configuration using the shared manager."""
     return _manager.load_config()
 
 
-def save_engine_config(config: Dict[str, Any]) -> bool:
+def save_engine_config(config: Union[Dict[str, Any], EngineSettings]) -> bool:
     """Save the engine configuration via the shared manager."""
     return _manager.save_config(config)
 
