@@ -146,6 +146,21 @@ The system includes built-in data validation:
 
 ### Fallback Behavior:
 If real data loading fails, the system automatically uses sample data so you can still test and develop. Check the console logs for specific error messages.
+### Common Connection Failures
+
+1. **Missing `.env` or incorrect Redshift credentials**
+   - Ensure the `.env` file is present with valid connection details.
+   - Verify `REDSHIFT_HOST`, `REDSHIFT_USER`, and `REDSHIFT_PASSWORD`.
+   - Re-run the server and check `/health` for connectivity status.
+2. **File permission issues for configuration or scenario result files**
+   - Confirm read/write access to `engine_config.json` and `scenario_results.json`.
+   - Adjust permissions using `chmod` or correct the file ownership.
+   - `/health` will report permission errors if these files are blocked.
+3. **Redis not running or unreachable**
+   - Start the Redis service locally or update the `REDIS_URL` in your `.env`.
+   - When Redis is down, the engine defaults to in-memory caching.
+   - Use `/health` to see if Redis connectivity is active.
+
 
 ## 📞 Support
 
