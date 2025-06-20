@@ -141,14 +141,7 @@
         </div>
     </div>
 
-    <!-- Modal for Amortization Table -->
-    <div id="amortization-modal" class="modal">
-        <div class="modal-content">
-            <span class="close-button" onclick="closeAmortizationModal()">&times;</span>
-            <h3>Amortization Schedule</h3>
-            <div id="amortization-table"></div>
-        </div>
-    </div>
+    {# Amortization modal is created dynamically by main.js to avoid duplicate IDs #}
 {% endblock %}
 {% block extra_js %}
 <script>
