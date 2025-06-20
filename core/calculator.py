@@ -2,33 +2,62 @@ import numpy_financial as npf
 from .config import IVA_RATE
 
 
-def calculate_final_npv(loan_amount, interest_rate, term_months):
+def calculate_final_npv(
+    loan_amount: float,
+    interest_rate: float,
+    term_months: int,
+    service_fee_amount: float = 0.0,
+    insurance_amount: float = 0.0,
+    kavak_total_amount: float = 0.0,
+):
+    """Return the NPV of all interest income from financed components.
+
+    This expands the old behaviour which only considered the main loan
+    amount.  Service fee, insurance and Kavak Total amounts are now also
+    financed and therefore contribute interest that should be included in
+    the NPV calculation.
     """
-    Calculates the Net Present Value of the interest income for the loan,
-    discounted at the loan's own monthly rate. The result represents the
-    present value of the interest cash-flows that Kavak earns over the
-    life of the loan (therefore it should always be ≥ 0).
-    """
-    if loan_amount <= 0:
+
+    total_financed = (
+        loan_amount + service_fee_amount + insurance_amount + kavak_total_amount
+    )
+    if total_financed <= 0:
         return 0.0
 
-    # Generate the cash-flow of interest income for each month.
-    # `numpy_financial.ipmt` returns a POSITIVE value when the present value
-    # (`pv`) is passed in as a negative number (i.e. cash outflow for the
-    # borrower, cash inflow for the lender). Therefore **do not** invert the
-    # sign here; we want positive cash-flows for the lender.
-
-    # Apply the "Kavak Method" for IVA: interest is computed with the base rate
-    # and then taxed, while principal amortization uses the rate with IVA
-    # embedded. This mirrors ``_calculate_manual_payment``.
     monthly_rate_i = interest_rate / 12
     monthly_rate_p = (interest_rate * IVA_RATE) / 12
-    interest_payments = [
-        npf.ipmt(monthly_rate_i, period, term_months, -loan_amount) * IVA_RATE
-        for period in range(1, term_months + 1)
-    ]
 
-    # Calculate NPV using the same monthly rate as the discount rate
+    interest_payments = []
+    months_since_insurance_reset = 1
+    for month in range(1, term_months + 1):
+        interest_main = (
+            npf.ipmt(monthly_rate_i, month, term_months, -loan_amount) * IVA_RATE
+        )
+        interest_sf = (
+            npf.ipmt(monthly_rate_i, month, term_months, -service_fee_amount)
+            * IVA_RATE
+        )
+        interest_kt = (
+            npf.ipmt(monthly_rate_i, month, term_months, -kavak_total_amount)
+            * IVA_RATE
+        )
+
+        if insurance_amount > 0:
+            month_in_cycle = months_since_insurance_reset
+            interest_ins = (
+                npf.ipmt(monthly_rate_i, month_in_cycle, 12, -insurance_amount)
+                * IVA_RATE
+            )
+            months_since_insurance_reset += 1
+            if months_since_insurance_reset > 12:
+                months_since_insurance_reset = 1
+        else:
+            interest_ins = 0.0
+
+        interest_payments.append(
+            interest_main + interest_sf + interest_kt + interest_ins
+        )
+
     npv = npf.npv(monthly_rate_p, [0] + interest_payments)
     return npv
 

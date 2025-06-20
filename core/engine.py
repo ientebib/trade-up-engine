@@ -724,7 +724,14 @@ def _generate_single_offer(
         "insurance_amount": insurance_amt,
         "gps_install_fee": gps_install_with_iva,
         "gps_monthly_fee": gps_monthly_with_iva,
-        "npv": calculate_final_npv(loan_amount_needed, final_rate, term),
+        "npv": calculate_final_npv(
+            loan_amount_needed,
+            final_rate,
+            term,
+            service_fee_amt,
+            insurance_amt,
+            kavak_total_amt,
+        ),
         "fees_applied": fees_config,
         "interest_rate": final_rate,
     }
