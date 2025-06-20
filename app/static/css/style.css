@@ -721,6 +721,7 @@ body {
 
 /* Amortization modal */
 .modal {
+    display: none;
     position: fixed;
     z-index: 1000;
     left: 0;

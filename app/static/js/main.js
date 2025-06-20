@@ -8,7 +8,8 @@
 let currentCustomer = null;
 let allCustomers = [];
 
-document.addEventListener('DOMContentLoaded', function() {
+
+function initDashboard() {
     console.log("🚗 Kavak Dashboard JS Loaded");
     loadCustomersList();
 
@@ -27,7 +28,13 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('amortization-close').addEventListener('click', closeAmortizationModal);
         window.addEventListener('click', function(evt) { if (evt.target === modal) closeAmortizationModal(); });
     }
-});
+}
+
+if (document.readyState !== 'loading') {
+    initDashboard();
+} else {
+    document.addEventListener('DOMContentLoaded', initDashboard);
+}
 
 // Initialize customer view page
 function initializeCustomerView(customerId) {
