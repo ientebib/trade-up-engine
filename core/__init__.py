@@ -8,8 +8,8 @@ from .calculator import calculate_final_npv
 # Attempt to import heavy Redshift-connected loader; gracefully skip if dependencies missing
 try:
     from .data_loader import data_loader
-except ModuleNotFoundError as e:
-    # Common in local/mock environments where redshift_connector isn't installed or supported
+except (ModuleNotFoundError, ImportError):
+    # Gracefully handle missing optional dependencies or circular imports
     data_loader = None
 from .config import *
 
