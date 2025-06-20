@@ -20,6 +20,9 @@ import uvicorn
 import logging
 from core.logging_config import setup_logging
 from core.cache_utils import redis_status
+from core.config_manager import load_latest_scenario_results
+import pandas as pd
+import random
 
 setup_logging(logging.INFO)
 logger = logging.getLogger(__name__)
@@ -59,6 +62,32 @@ config_manager = ConfigManager()
 data_loader = dev_data_loader  # Use development data loader
 engine = TradeUpEngine()
 
+def calculate_demo_metrics() -> dict:
+    """Return mocked portfolio metrics for the dashboard."""
+    customers_df = data_loader.load_customers()
+    inventory_df = data_loader.load_inventory()
+
+    total_customers = len(customers_df)
+    total_offers = total_customers * 3
+
+    metrics = {
+        "total_customers": total_customers,
+        "total_offers": total_offers,
+        "avg_npv": 12000,
+        "avg_offers_per_customer": 3.0,
+        "tier_distribution": {"Refresh": 40, "Upgrade": 45, "Max Upgrade": 15},
+        "top_cars": [],
+    }
+
+    if not inventory_df.empty:
+        sample = inventory_df.head(10)
+        metrics["top_cars"] = [
+            {"Model": row["model"], "Estimated_Matches": random.randint(5, 20)}
+            for _, row in sample.iterrows()
+        ]
+
+    return metrics
+
 # Development mode indicator
 @app.middleware("http")
 async def development_middleware(request: Request, call_next):
@@ -89,9 +118,10 @@ app.include_router(api_router, prefix="/api")
 async def main_dashboard(request: Request):
     """Main dashboard page"""
     try:
+        metrics = calculate_demo_metrics()
         return templates.TemplateResponse(
             "main_dashboard.html",
-            {"request": request},
+            {"request": request, "metrics": metrics, "active_page": "dashboard"},
         )
     except Exception as e:
         logging.error(f"Error rendering main dashboard: {e}")
@@ -126,9 +156,15 @@ async def customer_list(request: Request):
 async def customer_view(request: Request, customer_id: str):
     """Customer view page"""
     try:
+        customers = data_loader.load_customers()
+        customer_row = customers[customers["customer_id"] == customer_id]
+        if customer_row.empty:
+            raise HTTPException(status_code=404, detail="Customer not found")
+
+        customer = customer_row.iloc[0].to_dict()
         return templates.TemplateResponse(
             "customer_view.html",
-            {"request": request, "customer_id": customer_id},
+            {"request": request, "customer": customer, "active_page": "customer"},
         )
     except Exception as e:
         logging.error(f"Error rendering customer view: {e}")
