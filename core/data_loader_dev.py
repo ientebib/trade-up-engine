@@ -7,6 +7,7 @@ import pandas as pd
 import os
 import logging
 from pathlib import Path
+from core import cache_utils
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -146,16 +147,42 @@ class DevelopmentDataLoader:
     # Public helper methods used by API routes
     # ------------------------------------------------------------------
 
-    def load_inventory(self, csv_path='inventory_data.csv'):
-        """Return inventory DataFrame with basic caching."""
-        if self._inventory_cache is None:
-            self._inventory_cache = self.load_inventory_from_csv(csv_path)
+    def load_inventory(self, csv_path='inventory_data.csv', force_refresh=False):
+        """Return inventory DataFrame using TTL-based caching."""
+        if force_refresh:
+            self._inventory_cache = None
+
+        if self._inventory_cache is not None:
+            return self._inventory_cache
+
+        cached = cache_utils.get_cached_inventory()
+        if cached is not None and not force_refresh:
+            logger.info("✅ Loaded inventory from cache (%d rows).", len(cached))
+            self._inventory_cache = cached
+            return cached
+
+        self._inventory_cache = self.load_inventory_from_csv(csv_path)
+        if not self._inventory_cache.empty:
+            cache_utils.set_cached_inventory(self._inventory_cache)
         return self._inventory_cache
 
-    def load_customers(self, csv_path='customer_data.csv'):
-        """Return customer DataFrame with basic caching."""
-        if self._customers_cache is None:
-            self._customers_cache = self.load_customers_from_csv(csv_path)
+    def load_customers(self, csv_path='customer_data.csv', force_refresh=False):
+        """Return customer DataFrame using TTL-based caching."""
+        if force_refresh:
+            self._customers_cache = None
+
+        if self._customers_cache is not None:
+            return self._customers_cache
+
+        cached = cache_utils.get_cached_customers()
+        if cached is not None and not force_refresh:
+            logger.info("✅ Loaded customers from cache (%d rows).", len(cached))
+            self._customers_cache = cached
+            return cached
+
+        self._customers_cache = self.load_customers_from_csv(csv_path)
+        if not self._customers_cache.empty:
+            cache_utils.set_cached_customers(self._customers_cache)
         return self._customers_cache
 
     def transform_simple_customer_data(self, raw_df):
