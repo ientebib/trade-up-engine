@@ -10,6 +10,7 @@ import redshift_connector
 import logging
 from core.logging_config import setup_logging
 from core import cache_utils  # local import to avoid circular
+from core.risk_profiles import RISK_PROFILE_MAPPING
 
 # Load environment variables
 load_dotenv()
@@ -29,14 +30,8 @@ class DataLoader:
             'password': os.getenv('REDSHIFT_PASSWORD')
         }
         
-        # Risk profile mapping to indices
-        self.risk_profile_mapping = {
-            'AAA': 0, 'AA': 1, 'A': 2, 'A1': 3, 'A2': 4, 'B': 5, 
-            'C1': 6, 'C2': 7, 'C3': 8, 'D1': 9, 'D2': 10, 'D3': 11,
-            'E1': 12, 'E2': 13, 'E3': 14, 'E4': 15, 'E5': 16, 
-            'F1': 17, 'F2': 18, 'F3': 19, 'F4': 20,
-            'B_SB': 21, 'C1_SB': 22, 'C2_SB': 23, 'E5_SB': 24, 'Z': 25
-        }
+        # Use shared risk profile mapping
+        self.risk_profile_mapping = RISK_PROFILE_MAPPING
 
         # Caches for repeated access
         self._customers_cache = None
