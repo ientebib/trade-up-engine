@@ -14,7 +14,7 @@ from typing import List, Dict
 import uvicorn
 from contextlib import asynccontextmanager
 import time
-import logging
+from core.logger import get_logger
 import numpy as np
 import json
 from sse_starlette.sse import EventSourceResponse
@@ -36,7 +36,7 @@ customers_df = pd.DataFrame()
 inventory_df = pd.DataFrame()
 
 # Configure logger
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @asynccontextmanager
@@ -44,25 +44,25 @@ async def lifespan(app: FastAPI):
     """Load data on startup"""
     global customers_df, inventory_df
     try:
-        print("🚀 Loading real data from Redshift and CSV...")
+        logger.info("🚀 Loading real data from Redshift and CSV...")
 
         # Try to load real data first
         customers_df, inventory_df = data_loader.load_all_data()
 
         # Handle partial data loading (customer data loaded but inventory failed)
         if customers_df.empty:
-            print("⚠️ Customer data loading failed, falling back to sample data...")
+            logger.warning("⚠️ Customer data loading failed, falling back to sample data...")
             try:
                 customers_df = pd.read_csv("data/sample_customer_data.csv")
-                print("✅ Sample customer data loaded successfully.")
+                logger.info("✅ Sample customer data loaded successfully.")
             except FileNotFoundError as e:
-                print(f"❌ ERROR: Could not load sample customer data: {e.filename}")
+                logger.error("❌ ERROR: Could not load sample customer data: %s", e.filename)
                 customers_df = pd.DataFrame()
         else:
-            print("✅ Real customer data loaded successfully.")
+            logger.info("✅ Real customer data loaded successfully.")
 
         if inventory_df.empty:
-            print("⚠️ Inventory data loading failed, using default inventory...")
+            logger.warning("⚠️ Inventory data loading failed, using default inventory...")
             # Create a minimal inventory for testing
             inventory_df = pd.DataFrame(
                 {
@@ -83,23 +83,25 @@ async def lifespan(app: FastAPI):
                     ],
                 }
             )
-            print("✅ Default inventory data created.")
+            logger.info("✅ Default inventory data created.")
 
-        print(
-            f"📊 Final loaded data: {len(customers_df)} customers and {len(inventory_df)} cars"
+        logger.info(
+            "📊 Final loaded data: %s customers and %s cars",
+            len(customers_df),
+            len(inventory_df),
         )
 
     except Exception as e:
-        print(f"❌ CRITICAL ERROR during data loading: {str(e)}")
+        logger.error("❌ CRITICAL ERROR during data loading: %s", str(e))
         # Try sample data as last resort
         try:
             customers_df = pd.read_csv("data/sample_customer_data.csv")
             inventory_df = pd.read_csv("data/sample_inventory_data.csv")
-            print("✅ Fallback to sample data successful.")
+            logger.info("✅ Fallback to sample data successful.")
         except:
             customers_df = pd.DataFrame()
             inventory_df = pd.DataFrame()
-            print("❌ All data loading methods failed.")
+            logger.error("❌ All data loading methods failed.")
 
     yield
 
@@ -473,14 +475,14 @@ def run_scenario_analysis(config: ScenarioConfig):
             "min_npv_threshold": 5000.0,
         }
 
-        print(f"🎯 Starting REAL scenario analysis with {total_customers} customers...")
-        print(f"Configuration: {config_dict}")
+        logger.info("🎯 Starting REAL scenario analysis with %s customers...", total_customers)
+        logger.info("Configuration: %s", config_dict)
 
         # Sample customers for analysis (process a subset for performance)
         sample_size = min(100, total_customers)  # Process up to 100 customers
         if total_customers > sample_size:
             customer_sample = customers_df.sample(sample_size, random_state=42)
-            print(f"📊 Processing sample of {sample_size} customers for analysis...")
+            logger.info("📊 Processing sample of %s customers for analysis...", sample_size)
         else:
             customer_sample = customers_df
 
@@ -505,8 +507,10 @@ def run_scenario_analysis(config: ScenarioConfig):
                         )
 
             except Exception as e:
-                print(
-                    f"⚠️ Error processing customer {customer.get('customer_id', 'unknown')}: {e}"
+                logger.warning(
+                    "⚠️ Error processing customer %s: %s",
+                    customer.get('customer_id', 'unknown'),
+                    e,
                 )
                 processing_errors += 1
 
@@ -593,7 +597,7 @@ def run_scenario_analysis(config: ScenarioConfig):
         return results
 
     except Exception as e:
-        print(f"❌ Scenario analysis failed: {str(e)}")
+        logger.error("❌ Scenario analysis failed: %s", str(e))
         import traceback
 
         traceback.print_exc()
@@ -669,5 +673,5 @@ async def scenario_analysis_stream():
 
 
 if __name__ == "__main__":
-    print("🚗 Starting Kavak Trade-Up Engine Dashboard...")
+    logger.info("🚗 Starting Kavak Trade-Up Engine Dashboard...")
     uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)

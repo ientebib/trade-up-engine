@@ -7,6 +7,10 @@ import os
 from datetime import datetime
 from typing import Dict, Any, Optional
 
+from .logger import get_logger
+
+logger = get_logger(__name__)
+
 class ConfigManager:
     def __init__(self, config_file="engine_config.json"):
         self.config_file = config_file
@@ -41,10 +45,10 @@ class ConfigManager:
             if os.path.exists(self.config_file):
                 with open(self.config_file, 'r') as f:
                     config = json.load(f)
-                    print(f"✅ Loaded engine configuration from {self.config_file}")
+                    logger.info("✅ Loaded engine configuration from %s", self.config_file)
                     return config
         except Exception as e:
-            print(f"⚠️ Could not load config: {e}")
+            logger.warning("⚠️ Could not load config: %s", e)
         
         # Return default configuration
         return self._default_config.copy()
@@ -58,10 +62,10 @@ class ConfigManager:
             with open(self.config_file, 'w') as f:
                 json.dump(config, f, indent=2)
             
-            print(f"✅ Engine configuration saved to {self.config_file}")
+            logger.info("✅ Engine configuration saved to %s", self.config_file)
             return True
         except Exception as e:
-            print(f"❌ Error saving config: {e}")
+            logger.error("❌ Error saving config: %s", e)
             return False
     
     def reset_config(self) -> bool:
@@ -97,10 +101,10 @@ def save_scenario_results(results: Dict[str, Any]) -> bool:
     try:
         with open(SCENARIO_RESULTS_FILE, "w") as f:
             json.dump(results, f, indent=2)
-        print(f"✅ Scenario results saved to {SCENARIO_RESULTS_FILE}")
+        logger.info("✅ Scenario results saved to %s", SCENARIO_RESULTS_FILE)
         return True
     except Exception as e:
-        print(f"❌ Error saving scenario results: {e}")
+        logger.error("❌ Error saving scenario results: %s", e)
         return False
 
 
@@ -111,5 +115,5 @@ def load_latest_scenario_results() -> Optional[Dict[str, Any]]:
             with open(SCENARIO_RESULTS_FILE, "r") as f:
                 return json.load(f)
     except Exception as e:
-        print(f"⚠️ Could not load scenario results: {e}")
+        logger.warning("⚠️ Could not load scenario results: %s", e)
     return None

@@ -17,13 +17,9 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, JSONResponse
 import uvicorn
-import logging
+from core.logger import get_logger
 
-# Configure logging for development
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+logger = get_logger(__name__)
 
 # Set development environment variables
 os.environ.setdefault('ENVIRONMENT', 'development')
@@ -37,8 +33,8 @@ try:
     from core.config_manager import ConfigManager
     from app.api.routes import router as api_router
 except ImportError as e:
-    print(f"❌ Import error: {e}")
-    print("🔧 Please run the setup script first: ./setup.sh")
+    logger.error("❌ Import error: %s", e)
+    logger.error("🔧 Please run the setup script first: ./setup.sh")
     sys.exit(1)
 
 # Create FastAPI app
@@ -169,14 +165,14 @@ async def development_info():
     }
 
 if __name__ == "__main__":
-    print("🚀 Starting Trade-Up Engine in development mode...")
-    print("🔧 External network calls are disabled")
-    print("📁 Using CSV files and sample data")
-    print("🚫 No Redshift connection required")
-    print("🌐 Server will be available at: http://localhost:8000")
-    print("📊 Health check: http://localhost:8000/health")
-    print("🔍 Dev info: http://localhost:8000/dev-info")
-    print()
+    logger.info("🚀 Starting Trade-Up Engine in development mode...")
+    logger.info("🔧 External network calls are disabled")
+    logger.info("📁 Using CSV files and sample data")
+    logger.info("🚫 No Redshift connection required")
+    logger.info("🌐 Server will be available at: http://localhost:8000")
+    logger.info("📊 Health check: http://localhost:8000/health")
+    logger.info("🔍 Dev info: http://localhost:8000/dev-info")
+    logger.info("")
     
     uvicorn.run(
         "main_dev:app",

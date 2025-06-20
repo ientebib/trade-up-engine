@@ -12,9 +12,12 @@ from .config import (
     INSURANCE_TABLE,
     GPS_MONTHLY_FEE,
 )
+from .logger import get_logger
 
 # Load config tables on import
 INTEREST_RATE_TABLE, DOWN_PAYMENT_TABLE = get_hardcoded_financial_parameters()
+
+logger = get_logger(__name__)
 
 
 class TradeUpEngine:
@@ -42,14 +45,14 @@ def run_engine_for_customer(
     Main orchestrator function. Generates all possible offers for a single customer.
     Supports: default hierarchical search, custom parameter mode, and range-based optimization.
     """
-    print(f"--- Running engine for customer: {customer.get('customer_id')} ---")
+    logger.info("--- Running engine for customer: %s ---", customer.get("customer_id"))
 
     try:
         current_monthly_payment = customer["current_monthly_payment"]
         # Engine is responsible for interest rate lookup from risk profile
         interest_rate = INTEREST_RATE_TABLE.loc[customer["risk_profile_name"]]
     except KeyError as e:
-        print(f"Error: Missing key in customer data or invalid risk profile - {e}")
+        logger.error("Error: Missing key in customer data or invalid risk profile - %s", e)
         return pd.DataFrame()
 
     # Determine payment delta tiers to use
@@ -66,7 +69,7 @@ def run_engine_for_customer(
                 custom_tiers.get("max_upgrade", PAYMENT_DELTA_TIERS["Max Upgrade"])
             ),
         }
-        print(f"🎯 Using custom payment tiers: {payment_delta_tiers}")
+        logger.info("🎯 Using custom payment tiers: %s", payment_delta_tiers)
     else:
         payment_delta_tiers = PAYMENT_DELTA_TIERS
 
@@ -75,7 +78,7 @@ def run_engine_for_customer(
     use_range_optimization = engine_config.get("use_range_optimization", False)
 
     if use_range_optimization:
-        print(
+        logger.info(
             "🎯 RANGE OPTIMIZATION MODE: Using parameter ranges with NPV filtering..."
         )
         return _run_range_optimization_search(
@@ -87,7 +90,7 @@ def run_engine_for_customer(
             payment_delta_tiers,
         )
     elif use_custom_params:
-        print("🔧 CUSTOM PARAMETER MODE: Using user-defined configuration...")
+        logger.info("🔧 CUSTOM PARAMETER MODE: Using user-defined configuration...")
         return _run_custom_parameter_search(
             customer,
             inventory,
@@ -97,7 +100,7 @@ def run_engine_for_customer(
             payment_delta_tiers,
         )
     else:
-        print("⚙️ DEFAULT MODE: Using hierarchical subsidy search...")
+        logger.info("⚙️ DEFAULT MODE: Using hierarchical subsidy search...")
         return _run_default_hierarchical_search(
             customer,
             inventory,
@@ -122,14 +125,17 @@ def _run_default_hierarchical_search(
     min_npv_threshold = engine_config.get("min_npv_threshold", 5000.0)
 
     # --- PHASE 1: Search with NO Subsidy (Max Profit) ---
-    print("PHASE 1: Searching for offers with MAX PROFIT...")
+    logger.info("PHASE 1: Searching for offers with MAX PROFIT...")
     phase_1_fees = DEFAULT_FEES.copy()
     phase_1_fees["cac_bonus"] = 0  # Ensure no bonus in phase 1
     if not engine_config.get("include_kavak_total", True):
         phase_1_fees["kavak_total_amount"] = 0
 
-    print(
-        f"   Using fees: Service={phase_1_fees['service_fee_pct']*100}%, CXA={phase_1_fees['cxa_pct']*100}%, CAC={phase_1_fees['cac_bonus']}"
+    logger.info(
+        "   Using fees: Service=%s%%, CXA=%s%%, CAC=%s",
+        phase_1_fees['service_fee_pct'] * 100,
+        phase_1_fees['cxa_pct'] * 100,
+        phase_1_fees['cac_bonus'],
     )
 
     phase_1_offers = _run_search_phase_with_npv_filter(
@@ -142,16 +148,16 @@ def _run_default_hierarchical_search(
     )
 
     if phase_1_offers:
-        print(f"PHASE 1 COMPLETE: Found {len(phase_1_offers)} offers. Stopping search.")
+        logger.info("PHASE 1 COMPLETE: Found %s offers. Stopping search.", len(phase_1_offers))
         return _finalize_offers_dataframe(
             phase_1_offers, current_monthly_payment, payment_delta_tiers
         )
 
     # --- PHASE 2: Search WITH Subsidy (Concession) - EXHAUSTIVE ---
-    print("PHASE 2: No offers found in Phase 1. Running EXHAUSTIVE subsidy search...")
+    logger.info("PHASE 2: No offers found in Phase 1. Running EXHAUSTIVE subsidy search...")
 
     # Level 1: Service Fee = 0
-    print("Phase 2 - Level 1: Reducing Service Fee to 0...")
+    logger.info("Phase 2 - Level 1: Reducing Service Fee to 0...")
     fees_level_1 = DEFAULT_FEES.copy()
     fees_level_1["service_fee_pct"] = 0
     fees_level_1["cac_bonus"] = 0
@@ -166,13 +172,13 @@ def _run_default_hierarchical_search(
         payment_delta_tiers,
     )
     if level_1_offers:
-        print(f"Level 1 COMPLETE: Found {len(level_1_offers)} offers. Stopping search.")
+        logger.info("Level 1 COMPLETE: Found %s offers. Stopping search.", len(level_1_offers))
         return _finalize_offers_dataframe(
             level_1_offers, current_monthly_payment, payment_delta_tiers
         )
 
     # Level 2: Service Fee = 0 AND CAC Bonus applied
-    print("Phase 2 - Level 2: Adding CAC Bonus...")
+    logger.info("Phase 2 - Level 2: Adding CAC Bonus...")
     fees_level_2 = fees_level_1.copy()
     fees_level_2["cac_bonus"] = MAX_CAC_BONUS
     level_2_offers = _run_search_phase_with_npv_filter(
@@ -184,13 +190,13 @@ def _run_default_hierarchical_search(
         payment_delta_tiers,
     )
     if level_2_offers:
-        print(f"Level 2 COMPLETE: Found {len(level_2_offers)} offers. Stopping search.")
+        logger.info("Level 2 COMPLETE: Found %s offers. Stopping search.", len(level_2_offers))
         return _finalize_offers_dataframe(
             level_2_offers, current_monthly_payment, payment_delta_tiers
         )
 
     # Level 3: All previous subsidies AND CXA = 0
-    print("Phase 2 - Level 3: Reducing CXA to 0...")
+    logger.info("Phase 2 - Level 3: Reducing CXA to 0...")
     fees_level_3 = fees_level_2.copy()
     fees_level_3["cxa_pct"] = 0
     level_3_offers = _run_search_phase_with_npv_filter(
@@ -202,13 +208,13 @@ def _run_default_hierarchical_search(
         payment_delta_tiers,
     )
     if level_3_offers:
-        print(f"Level 3 COMPLETE: Found {len(level_3_offers)} offers. Stopping search.")
+        logger.info("Level 3 COMPLETE: Found %s offers. Stopping search.", len(level_3_offers))
         return _finalize_offers_dataframe(
             level_3_offers, current_monthly_payment, payment_delta_tiers
         )
 
-    print("PHASE 2 COMPLETE: No valid offers found in any subsidy level.")
-    print(f"NPV filtering applied: Min {min_npv_threshold:,.0f} MXN")
+    logger.info("PHASE 2 COMPLETE: No valid offers found in any subsidy level.")
+    logger.info("NPV filtering applied: Min %s MXN", f"{min_npv_threshold:,.0f}")
 
     return pd.DataFrame()
 
@@ -264,22 +270,35 @@ def _run_range_optimization_search(
         range(int(cac_bonus_range[0]), int(cac_bonus_range[1]) + 1, int(cac_bonus_step))
     )
 
-    print(f"🎯 Parameter ranges:")
-    print(
-        f"   Service Fee: {len(service_fee_values)} values from {service_fee_range[0]}% to {service_fee_range[1]}%"
+    logger.info("🎯 Parameter ranges:")
+    logger.info(
+        "   Service Fee: %s values from %s%% to %s%%",
+        len(service_fee_values),
+        service_fee_range[0],
+        service_fee_range[1],
     )
-    print(f"   CXA: {len(cxa_values)} values from {cxa_range[0]}% to {cxa_range[1]}%")
-    print(
-        f"   CAC Bonus: {len(cac_bonus_values)} values from {cac_bonus_range[0]} to {cac_bonus_range[1]} MXN"
+    logger.info(
+        "   CXA: %s values from %s%% to %s%%",
+        len(cxa_values),
+        cxa_range[0],
+        cxa_range[1],
     )
-    print(f"   Min NPV Threshold: {min_npv_threshold:,.0f} MXN")
+    logger.info(
+        "   CAC Bonus: %s values from %s to %s MXN",
+        len(cac_bonus_values),
+        cac_bonus_range[0],
+        cac_bonus_range[1],
+    )
+    logger.info("   Min NPV Threshold: %s MXN", f"{min_npv_threshold:,.0f}")
 
     total_combinations = (
         len(service_fee_values) * len(cxa_values) * len(cac_bonus_values)
     )
-    print(f"   Total parameter combinations: {total_combinations:,}")
-    print(
-        f"   ⚡ EARLY STOPPING: Will test max {max_combinations_to_test} combinations or until {early_stop_on_offers} offers found"
+    logger.info("   Total parameter combinations: %s", f"{total_combinations:,}")
+    logger.info(
+        "   ⚡ EARLY STOPPING: Will test max %s combinations or until %s offers found",
+        max_combinations_to_test,
+        early_stop_on_offers,
     )
 
     # Use provided payment delta tiers
@@ -329,21 +348,28 @@ def _run_range_optimization_search(
 
         # EARLY STOPPING CONDITIONS
         if combinations_tested >= max_combinations_to_test:
-            print(
-                f"   ⚡ Early stopping: Reached max combinations limit ({max_combinations_to_test})"
+            logger.info(
+                "   ⚡ Early stopping: Reached max combinations limit (%s)",
+                max_combinations_to_test,
             )
             break
 
         if valid_offers_count >= early_stop_on_offers:
-            print(
-                f"   ⚡ Early stopping: Found enough offers ({valid_offers_count} >= {early_stop_on_offers})"
+            logger.info(
+                "   ⚡ Early stopping: Found enough offers (%s >= %s)",
+                valid_offers_count,
+                early_stop_on_offers,
             )
             break
 
-    print(f"🎯 RANGE OPTIMIZATION COMPLETE:")
-    print(f"   Combinations tested: {combinations_tested}/{total_combinations}")
-    print(f"   Valid offers found: {valid_offers_count:,}")
-    print(f"   NPV filtering applied: Min {min_npv_threshold:,.0f} MXN")
+    logger.info("🎯 RANGE OPTIMIZATION COMPLETE:")
+    logger.info(
+        "   Combinations tested: %s/%s",
+        combinations_tested,
+        total_combinations,
+    )
+    logger.info("   Valid offers found: %s", f"{valid_offers_count:,}")
+    logger.info("   NPV filtering applied: Min %s MXN", f"{min_npv_threshold:,.0f}")
 
     if all_offers:
         # Remove duplicates and rank by NPV within tiers
@@ -383,7 +409,7 @@ def _run_custom_parameter_search(
         "fixed_fee": engine_config.get("gps_fee", DEFAULT_FEES["fixed_fee"]),
     }
 
-    print(f"🔧 Using custom fees: {custom_fees}")
+    logger.info("🔧 Using custom fees: %s", custom_fees)
 
     tiers = payment_delta_tiers
 
@@ -396,8 +422,9 @@ def _run_custom_parameter_search(
     )
     all_offers.extend(custom_offers)
 
-    print(
-        f"🔧 CUSTOM SEARCH COMPLETE: Found {len(all_offers)} offers with custom parameters."
+    logger.info(
+        "🔧 CUSTOM SEARCH COMPLETE: Found %s offers with custom parameters.",
+        len(all_offers),
     )
 
     if all_offers:
