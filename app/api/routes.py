@@ -284,7 +284,13 @@ async def save_config(config: ScenarioConfig):
 
 @router.post("/scenario-analysis")
 async def run_scenario_analysis(config: ScenarioConfig):
-    """Run scenario analysis - Development version with mock results"""
+    """Development helper that returns mocked scenario analysis results.
+
+    Parameters
+    ----------
+    config : ScenarioConfig
+        Configuration payload provided by the client.
+    """
     try:
         start_time = time.time()
         
