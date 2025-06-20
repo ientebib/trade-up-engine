@@ -6,9 +6,9 @@ Handles loading data from Redshift and CSV files with proper transformations
 import pandas as pd
 import os
 from dotenv import load_dotenv
-import psycopg2
-from sqlalchemy import create_engine
+import redshift_connector
 import logging
+from core import cache_utils  # local import to avoid circular
 
 # Load environment variables
 load_dotenv()
@@ -41,56 +41,50 @@ class DataLoader:
         self._customers_cache = None
         self._inventory_cache = None
 
-    def get_redshift_connection(self):
-        """Create a connection to Redshift"""
-        try:
-            connection_string = f"postgresql://{self.redshift_config['user']}:{self.redshift_config['password']}@{self.redshift_config['host']}:{self.redshift_config['port']}/{self.redshift_config['database']}"
-            # Fix Redshift connection parameters
-            engine = create_engine(
-                connection_string, 
-                connect_args={
-                    "sslmode": "require",
-                    "options": "-c standard_conforming_strings=on"
-                }
-            )
-            logger.info("✅ Successfully connected to Redshift")
-            return engine
-        except Exception as e:
-            logger.error(f"❌ Failed to connect to Redshift: {str(e)}")
-            return None
-
     def load_inventory_from_redshift(self):
-        """Load inventory data from Redshift using the provided SQL query"""
+        """Load inventory data from Redshift using the redshift-connector."""
+        logger.info("🔌 Connecting to Redshift using 'redshift-connector'...")
         
-        # Read the SQL query from file
+        if not all(self.redshift_config.values()):
+            logger.error("❌ Redshift configuration is incomplete.")
+            return pd.DataFrame()
+
         try:
             with open('redshift.sql', 'r') as file:
                 query = file.read()
         except FileNotFoundError:
-            logger.error("❌ redshift.sql file not found")
+            logger.error("❌ redshift.sql file not found.")
             return pd.DataFrame()
-        
-        engine = self.get_redshift_connection()
-        if engine is None:
-            logger.error("❌ Cannot load inventory: Redshift connection failed")
-            return pd.DataFrame()
-        
+
+        conn = None
         try:
-            # Execute query and load data
+            conn = redshift_connector.connect(
+                host=self.redshift_config['host'],
+                database=self.redshift_config['database'],
+                user=self.redshift_config['user'],
+                password=self.redshift_config['password'],
+                port=int(self.redshift_config['port'])
+            )
+            logger.info("✅ Successfully connected to Redshift.")
+            
             logger.info("🔍 Executing Redshift query to load inventory...")
-            df = pd.read_sql_query(query, engine)
-            
-            # Transform data to match expected structure
+            with conn.cursor() as cursor:
+                cursor.execute(query)
+                df = cursor.fetch_dataframe()
+
             inventory_df = self.transform_inventory_data(df)
-            
-            logger.info(f"✅ Loaded {len(inventory_df)} inventory items from Redshift")
+            logger.info(f"✅ Loaded {len(inventory_df)} inventory items from Redshift.")
             return inventory_df
-            
+
         except Exception as e:
-            logger.error(f"❌ Failed to load inventory from Redshift: {str(e)}")
+            import traceback
+            logger.error(f"❌ Failed to load inventory from Redshift: {type(e).__name__}")
+            logger.error(f"Full Traceback:\n{traceback.format_exc()}")
             return pd.DataFrame()
         finally:
-            engine.dispose()
+            if conn:
+                conn.close()
+                logger.info("🔌 Redshift connection closed.")
 
     def transform_inventory_data(self, raw_df):
         """Transform raw Redshift inventory data to expected format"""
@@ -157,10 +151,38 @@ class DataLoader:
     def load_inventory(self, csv_path='inventory_data.csv'):
         """Return inventory data using cache if available"""
         if self._inventory_cache is None:
-            # In production we load from Redshift; fallback to CSV
-            inv_df = self.load_inventory_from_redshift()
-            if inv_df.empty:
-                inv_df = pd.read_csv(csv_path) if os.path.exists(csv_path) else pd.DataFrame()
+            # ------------------------------------------------------------------
+            # Fast path: respect environment flag to disable external calls (VPN)
+            # ------------------------------------------------------------------
+            if os.getenv('DISABLE_EXTERNAL_CALLS', 'false').lower() == 'true':
+                logger.info("🚫 External calls disabled via ENV. Loading inventory from CSV only …")
+                if os.path.exists(csv_path):
+                    try:
+                        inv_df = pd.read_csv(csv_path)
+                        logger.info(f"✅ Loaded {len(inv_df)} inventory items from {csv_path}.")
+                    except Exception as e:
+                        logger.error(f"❌ Failed to read {csv_path}: {e}")
+                        inv_df = pd.DataFrame()
+                else:
+                    logger.warning(f"⚠️ {csv_path} not found. Inventory will be empty.")
+                    inv_df = pd.DataFrame()
+                self._inventory_cache = inv_df
+                return self._inventory_cache
+
+            # Check daily cache first
+            if cache_utils.inventory_cache_exists_today():
+                inv_df = cache_utils.load_inventory_cache()
+                logger.info(f"✅ Loaded inventory from daily cache ({len(inv_df)} rows).")
+            else:
+                # Load from Redshift (heavy)
+                inv_df = self.load_inventory_from_redshift()
+                if inv_df.empty:
+                    inv_df = pd.read_csv(csv_path) if os.path.exists(csv_path) else pd.DataFrame()
+                # Save cache for today
+                if not inv_df.empty:
+                    cache_utils.save_inventory_cache(inv_df)
+                    logger.info("💾 Inventory cached to daily parquet file.")
+
             self._inventory_cache = inv_df
         return self._inventory_cache
 
