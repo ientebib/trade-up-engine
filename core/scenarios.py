@@ -1,5 +1,7 @@
 import time
 from typing import Dict
+import logging
+from core.logging_config import setup_logging
 
 import pandas as pd
 from pandas import DataFrame
@@ -7,6 +9,9 @@ from fastapi import HTTPException
 
 from .engine import run_engine_for_customer
 from .config_manager import save_engine_config, save_scenario_results
+
+setup_logging(logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 def run_scenario_analysis(config: Dict, customers_df: DataFrame, inventory_df: DataFrame) -> Dict:
@@ -33,14 +38,14 @@ def run_scenario_analysis(config: Dict, customers_df: DataFrame, inventory_df: D
             "min_npv_threshold": 5000.0,
         }
 
-        print(f"🎯 Starting REAL scenario analysis with {total_customers} customers...")
-        print(f"Configuration: {config_dict}")
+        logger.info(f"🎯 Starting REAL scenario analysis with {total_customers} customers...")
+        logger.info(f"Configuration: {config_dict}")
 
         # Sample customers for analysis
         sample_size = min(100, total_customers)
         if total_customers > sample_size:
             customer_sample = customers_df.sample(sample_size, random_state=42)
-            print(f"📊 Processing sample of {sample_size} customers for analysis...")
+            logger.info(f"📊 Processing sample of {sample_size} customers for analysis...")
         else:
             customer_sample = customers_df
 
@@ -59,7 +64,7 @@ def run_scenario_analysis(config: Dict, customers_df: DataFrame, inventory_df: D
                         offers_by_tier[tier] += len(offers_df[offers_df["tier"] == tier])
 
             except Exception as e:
-                print(f"⚠️ Error processing customer {customer.get('customer_id', 'unknown')}: {e}")
+                logger.warning(f"⚠️ Error processing customer {customer.get('customer_id', 'unknown')}: {e}")
                 processing_errors += 1
 
         processed_customers = sample_size - processing_errors
@@ -111,7 +116,7 @@ def run_scenario_analysis(config: Dict, customers_df: DataFrame, inventory_df: D
         return results
 
     except Exception as e:
-        print(f"❌ Scenario analysis failed: {str(e)}")
+        logger.error(f"❌ Scenario analysis failed: {str(e)}")
         import traceback
 
         traceback.print_exc()

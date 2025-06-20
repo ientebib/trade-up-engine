@@ -6,11 +6,12 @@ Uses CSV files and dummy data instead of Redshift for virtual agent compatibilit
 import pandas as pd
 import os
 import logging
+from core.logging_config import setup_logging
 from pathlib import Path
 from core import cache_utils
 
 # Set up logging
-logging.basicConfig(level=logging.INFO)
+setup_logging(logging.INFO)
 logger = logging.getLogger(__name__)
 
 class DevelopmentDataLoader:
