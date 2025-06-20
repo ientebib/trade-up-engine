@@ -696,6 +696,54 @@ async function loadDashboardScenarioSummary(){
     }catch(_){ }
 }
 
+// Collect scenario configuration form data
+function getConfigFormData() {
+    const mode = document.querySelector('input[name="engine-mode"]:checked')?.value || 'default';
+    const useCustom = mode === 'custom';
+    const useRange = mode === 'range';
+
+    const refreshMin = parseFloat(document.getElementById('refresh-min')?.value || -5) / 100;
+    const refreshMax = parseFloat(document.getElementById('refresh-max')?.value || 5) / 100;
+    const upgradeMin = parseFloat(document.getElementById('upgrade-min')?.value || 5.01) / 100;
+    const upgradeMax = parseFloat(document.getElementById('upgrade-max')?.value || 25) / 100;
+    const maxUpgradeMin = parseFloat(document.getElementById('max-upgrade-min')?.value || 25.01) / 100;
+    const maxUpgradeMax = parseFloat(document.getElementById('max-upgrade-max')?.value || 100) / 100;
+
+    return {
+        use_custom_params: useCustom,
+        use_range_optimization: useRange,
+        include_kavak_total: document.getElementById('kavak-total-toggle')?.checked ?? true,
+        service_fee_pct: parseFloat(document.getElementById('service-fee')?.value || 5) / 100,
+        cxa_pct: parseFloat(document.getElementById('cxa-fee')?.value || 4) / 100,
+        cac_bonus: parseFloat(document.getElementById('cac-bonus')?.value || 5000),
+        insurance_amount: parseFloat(document.getElementById('insurance-amount')?.value || 10999),
+        gps_fee: parseFloat(document.getElementById('gps-fee')?.value || 350),
+        service_fee_range: [
+            parseFloat(document.getElementById('service-fee-min')?.value || 0),
+            parseFloat(document.getElementById('service-fee-max')?.value || 5)
+        ],
+        cxa_range: [
+            parseFloat(document.getElementById('cxa-min')?.value || 0),
+            parseFloat(document.getElementById('cxa-max')?.value || 4)
+        ],
+        cac_bonus_range: [
+            parseFloat(document.getElementById('cac-bonus-min')?.value || 0),
+            parseFloat(document.getElementById('cac-bonus-max')?.value || 10000)
+        ],
+        service_fee_step: parseFloat(document.getElementById('service-fee-step')?.value || 0.01),
+        cxa_step: parseFloat(document.getElementById('cxa-step')?.value || 0.01),
+        cac_bonus_step: parseFloat(document.getElementById('cac-bonus-step')?.value || 100),
+        max_offers_per_tier: parseInt(document.getElementById('max-offers-per-tier')?.value || 50, 10),
+        payment_delta_tiers: {
+            refresh: [refreshMin, refreshMax],
+            upgrade: [upgradeMin, upgradeMax],
+            max_upgrade: [maxUpgradeMin, maxUpgradeMax]
+        },
+        term_priority: 'standard',
+        min_npv_threshold: parseFloat(document.getElementById('min-npv')?.value || 5000)
+    };
+}
+
 // Run scenario analysis
 async function runScenarioAnalysis() {
     const loadingModal = document.getElementById('loading-modal');
@@ -711,7 +759,6 @@ async function runScenarioAnalysis() {
         configButton.textContent = 'Running...';
     }
 
-    // TODO: collect actual form data for scenario config
     const configData = typeof getConfigFormData === 'function' ? getConfigFormData() : {};
 
     // Attempt to fetch customer count for better progress estimation

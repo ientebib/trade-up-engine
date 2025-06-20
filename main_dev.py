@@ -31,7 +31,8 @@ os.environ.setdefault('USE_MOCK_DATA', 'true')
 # Import core modules
 try:
     from core.engine import TradeUpEngine
-    from core.data_loader_dev import dev_data_loader  # Use development data loader
+    # Use development data loader
+    from core.data_loader_dev import dev_data_loader
     from core.config_manager import ConfigManager
     from app.api.routes import router as api_router
 except ImportError as e:
@@ -86,7 +87,10 @@ app.include_router(api_router, prefix="/api")
 async def main_dashboard(request: Request):
     """Main dashboard page"""
     try:
-        return templates.TemplateResponse("main_dashboard.html", {"request": request})
+        return templates.TemplateResponse(
+            "main_dashboard.html",
+            {"request": request},
+        )
     except Exception as e:
         logging.error(f"Error rendering main dashboard: {e}")
         return HTMLResponse(f"""
@@ -94,7 +98,7 @@ async def main_dashboard(request: Request):
             <head><title>Trade-Up Engine - Development</title></head>
             <body>
                 <h1>Trade-Up Engine - Development Mode</h1>
-                <p>External network calls are disabled for virtual agent compatibility.</p>
+                <p>External network calls are disabled.</p>
                 <p>Using CSV files and sample data instead of Redshift.</p>
                 <p>Error: {e}</p>
                 <p><a href="/health">Health Check</a></p>
@@ -107,7 +111,10 @@ async def main_dashboard(request: Request):
 async def customer_list(request: Request):
     """Customer list page"""
     try:
-        return templates.TemplateResponse("customer_list.html", {"request": request})
+        return templates.TemplateResponse(
+            "customer_list.html",
+            {"request": request},
+        )
     except Exception as e:
         logging.error(f"Error rendering customer list: {e}")
         return HTMLResponse(f"<h1>Customer List</h1><p>Error: {e}</p>")
@@ -117,7 +124,10 @@ async def customer_list(request: Request):
 async def customer_view(request: Request, customer_id: str):
     """Customer view page"""
     try:
-        return templates.TemplateResponse("customer_view.html", {"request": request, "customer_id": customer_id})
+        return templates.TemplateResponse(
+            "customer_view.html",
+            {"request": request, "customer_id": customer_id},
+        )
     except Exception as e:
         logging.error(f"Error rendering customer view: {e}")
         return HTMLResponse(f"<h1>Customer View</h1><p>Error: {e}</p>")
@@ -127,7 +137,10 @@ async def customer_view(request: Request, customer_id: str):
 async def calculations_page(request: Request):
     """Calculations page"""
     try:
-        return templates.TemplateResponse("calculations.html", {"request": request})
+        return templates.TemplateResponse(
+            "calculations.html",
+            {"request": request},
+        )
     except Exception as e:
         logging.error(f"Error rendering calculations: {e}")
         return HTMLResponse(f"<h1>Calculations</h1><p>Error: {e}</p>")
@@ -137,7 +150,10 @@ async def calculations_page(request: Request):
 async def global_config_page(request: Request):
     """Global configuration page"""
     try:
-        return templates.TemplateResponse("global_config.html", {"request": request})
+        return templates.TemplateResponse(
+            "global_config.html",
+            {"request": request},
+        )
     except Exception as e:
         logging.error(f"Error rendering global config: {e}")
         return HTMLResponse(f"<h1>Global Configuration</h1><p>Error: {e}</p>")

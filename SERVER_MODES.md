@@ -93,7 +93,7 @@ Content-Type: application/json
 
 {
   "use_custom_params": false,
-  "use_range_optimization": true,
+  "use_range_optimization": false,
   "include_kavak_total": true,
   "service_fee_pct": 0.05,
   "cxa_pct": 0.04,

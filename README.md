@@ -95,6 +95,27 @@ Key configuration parameters:
 - Inventory data from Redshift with local fallback
 - Payment tiers: Refresh (-5% to 5%), Upgrade (5.01% to 25%), Max Upgrade (25.01% to 100%)
 
+## Running Tests
+
+Install required packages before executing the test suite:
+
+```bash
+pip install -r requirements.txt
+```
+
+Alternatively run the setup step of the helper script which also installs the
+dependencies:
+
+```bash
+./run_local.sh setup
+```
+
+Then execute:
+
+```bash
+pytest
+```
+
 ## Contributing
 
 1. Fork the repository
