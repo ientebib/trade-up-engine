@@ -209,7 +209,7 @@
             <div class="section-card" style="border: 2px solid #3b82f6; background: #eff6ff;">
                 <h3 style="margin-bottom: 20px;">Select Engine Mode</h3>
                 <div class="mode-selector" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
-                    <div class="mode-card" onclick="selectMode('default')" style="background: white; border: 2px solid #e5e7eb; border-radius: 12px; padding: 20px; cursor: pointer; transition: all 0.2s;">
+                    <div class="mode-card" onclick="selectMode('default', event)" style="background: white; border: 2px solid #e5e7eb; border-radius: 12px; padding: 20px; cursor: pointer; transition: all 0.2s;">
                         <input type="radio" id="default-mode" name="engine-mode" value="default" checked style="display: none;">
                         <h4 style="margin: 0 0 8px 0; color: #1f2937;">📊 Default Mode</h4>
                         <p style="font-size: 13px; color: #6b7280; margin: 0;">Hierarchical subsidy search with predefined levels</p>
@@ -220,7 +220,7 @@
                         </div>
                             </div>
                     
-                    <div class="mode-card" onclick="selectMode('custom')" style="background: white; border: 2px solid #e5e7eb; border-radius: 12px; padding: 20px; cursor: pointer; transition: all 0.2s;">
+                    <div class="mode-card" onclick="selectMode('custom', event)" style="background: white; border: 2px solid #e5e7eb; border-radius: 12px; padding: 20px; cursor: pointer; transition: all 0.2s;">
                         <input type="radio" id="custom-mode" name="engine-mode" value="custom" style="display: none;">
                         <h4 style="margin: 0 0 8px 0; color: #1f2937;">🎛️ Custom Mode</h4>
                         <p style="font-size: 13px; color: #6b7280; margin: 0;">Fixed parameters you specify</p>
@@ -231,7 +231,7 @@
                             </div>
                             </div>
                     
-                    <div class="mode-card" onclick="selectMode('range')" style="background: white; border: 2px solid #e5e7eb; border-radius: 12px; padding: 20px; cursor: pointer; transition: all 0.2s; position: relative;">
+                    <div class="mode-card" onclick="selectMode('range', event)" style="background: white; border: 2px solid #e5e7eb; border-radius: 12px; padding: 20px; cursor: pointer; transition: all 0.2s; position: relative;">
                         <input type="radio" id="range-mode" name="engine-mode" value="range" style="display: none;">
                         <span style="position: absolute; top: 10px; right: 10px; background: #10b981; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600;">FEATURED</span>
                         <h4 style="margin: 0 0 8px 0; color: #1f2937;">🎯 Range Optimization</h4>
@@ -511,15 +511,17 @@
     <script src="/static/js/main.js"></script>
     <script>
         // Mode selection handler
-        function selectMode(mode) {
+        function selectMode(mode, event) {
             // Update radio buttons
             document.getElementById(mode + '-mode').checked = true;
-            
+
             // Update visual state of cards
             document.querySelectorAll('.mode-card').forEach(card => {
                 card.classList.remove('active');
             });
-            event.target.closest('.mode-card').classList.add('active');
+            if(event && event.target){
+                event.target.closest('.mode-card').classList.add('active');
+            }
             
             // Show/hide appropriate configuration sections
             document.getElementById('default-config').style.display = mode === 'default' ? 'block' : 'none';

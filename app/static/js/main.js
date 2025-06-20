@@ -11,6 +11,12 @@ let allCustomers = [];
 document.addEventListener('DOMContentLoaded', function() {
     console.log("🚗 Kavak Dashboard JS Loaded");
     loadCustomersList();
+    updateConfigStatusBadge();
+
+    // If dashboard summary container exists, populate scenario results
+    if (document.getElementById('dashboard-scenario-summary')) {
+        loadDashboardScenarioSummary();
+    }
 
     // Create amortization modal if it doesn't exist
     if (!document.getElementById('amortization-modal')) {
@@ -66,6 +72,7 @@ document.addEventListener('DOMContentLoaded', function() {
 // Initialize customer view page
 function initializeCustomerView(customerId) {
     currentCustomer = customerId;
+    updateConfigStatusBadge();
     loadCustomersList().then(() => {
         // Auto-generate offers for the current customer
         generateOffersForCustomer(customerId);
@@ -581,13 +588,8 @@ function initializeConfigPage() {
     // Initialize range summary
     updateRangeSummary();
 
-    // Fetch current config status
-    fetch('/api/config-status').then(r=>r.json()).then(status=>{
-        const badge=document.getElementById('config-status-badge');
-        if(!badge) return;
-        badge.style.display='inline-block';
-        badge.textContent=`${status.mode} • ${status.last_updated}`;
-    }).catch(_=>{});
+    // Show current configuration status
+    updateConfigStatusBadge();
 }
 
 // Toggle engine mode visibility and behavior
@@ -647,6 +649,51 @@ function updateRangeSummary() {
             performanceWarning.style.display = 'none';
         }
     }
+}
+
+// Fetch and display current configuration status
+async function updateConfigStatusBadge(){
+    try{
+        const res = await fetch('/api/config-status');
+        const status = await res.json();
+        const badge = document.getElementById('config-status-badge');
+        if(badge){
+            badge.style.display = 'inline-block';
+            badge.textContent = `${status.mode} • ${status.last_updated}`;
+        }
+    }catch(_){ }
+}
+
+// Load scenario results summary on dashboard
+async function loadDashboardScenarioSummary(){
+    const container = document.getElementById('dashboard-scenario-summary');
+    if(!container) return;
+    try{
+        const result = await fetch('/api/scenario-results').then(r=>r.json());
+        if(result && result.actual_metrics){
+            const m = result.actual_metrics;
+            const mode = result.mode_info?.mode || '';
+            const last = result.scenario_config?.last_updated || '';
+            container.innerHTML = `
+                <div class="kpi-card">
+                    <div class="kpi-value">${mode}</div>
+                    <div class="kpi-label">Mode</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-value">${last}</div>
+                    <div class="kpi-label">Last Run</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-value">${m.total_offers.toLocaleString()}</div>
+                    <div class="kpi-label">Total Offers</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-value">$${Math.round(m.average_npv_per_offer).toLocaleString()}</div>
+                    <div class="kpi-label">Avg. Offer NPV</div>
+                </div>`;
+            container.style.display = 'grid';
+        }
+    }catch(_){ }
 }
 
 // Run scenario analysis
@@ -721,7 +768,7 @@ async function runScenarioAnalysis() {
             console.error('SSE error', e);
             es.close();
             if(configButton){configButton.disabled=false;configButton.textContent=configButton.dataset.originalText||'Run Analysis';}
-            showConfigError(err.message || 'Unknown error');
+            showConfigError(e.message || 'Unknown error');
         });
 
     } catch (err) {
@@ -971,6 +1018,7 @@ function showConfigError(message) {
 async function initializeCustomerListPage() {
     const tbody = document.getElementById('customer-list-body');
     const summaryContainer = document.getElementById('scenario-summary');
+    updateConfigStatusBadge();
     if (!tbody) return;
 
     try {
