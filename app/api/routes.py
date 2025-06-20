@@ -35,14 +35,40 @@ class CustomerData(BaseModel):
     risk_profile_name: str
     risk_profile_index: int = Field(..., ge=0)
 
+    class Config:
+        extra = "allow"  # Future-proofing
+
 class CarData(BaseModel):
-    car_id: int
+    """Inventory item sent from the front-end.
+
+    In development our sample data uses alphanumeric IDs (e.g. "INV001") and
+    includes many extra descriptive columns beyond the three we actually need
+    for the engine.  We therefore:
+
+    1. Accept the car_id as a **string** instead of an int so both numeric and
+       alphanumeric IDs validate.
+    2. Allow any additional/unknown fields instead of rejecting the entire
+       payload.  These are simply ignored by the engine.
+    """
+
+    car_id: str
     model: str
     sales_price: float = Field(..., gt=0)
 
+    class Config:
+        extra = "allow"  # Ignore unexpected columns coming from the UI
+
 class EngineConfig(BaseModel):
+    """Subset of engine configuration parameters that the UI is allowed to
+    override.  We purposefully keep the required fields minimal and accept any
+    others so the front-end can evolve without breaking the API contract.
+    """
+
     include_kavak_total: bool = True
     use_custom_params: bool = False
+
+    class Config:
+        extra = "allow"  # Silently ignore unknown fields from the UI
 
 class PaymentDeltaTiers(BaseModel):
     refresh: List[float]
@@ -85,10 +111,15 @@ class ScenarioConfig(BaseModel):
     term_priority: str = "standard"
     min_npv_threshold: float = 5000.0
 
+# Wrapper object sent by the UI when generating offers.
+# We loosen validation on purpose to avoid 422 errors if the UI adds new keys.
 class OfferRequest(BaseModel):
     customer_data: CustomerData
     inventory: List[CarData]
     engine_config: EngineConfig
+
+    class Config:
+        extra = "allow"
 
 # --- API Endpoints ---
 @router.get("/customers")
