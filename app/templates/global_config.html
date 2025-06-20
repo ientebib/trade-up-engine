@@ -457,11 +457,10 @@
                     </div>
                 </details>
                 
-                <div class="form-actions" style="margin-top: 25px;">
-                    <button type="button" id="run-scenario" class="btn-primary" style="padding: 12px 24px; font-size: 16px;">
-                        🚀 Run Analysis
-                    </button>
-                    <button type="button" id="reset-config" class="btn-secondary">Reset</button>
+                <div class="button-row" style="margin-top: 24px; align-items:center; display:flex; gap:12px;">
+                    <button id="run-scenario" class="btn-primary">🚀 Run Analysis</button>
+                    <button class="btn-secondary" onclick="resetConfiguration()">Reset</button>
+                    <span id="config-status-badge" class="status-badge" style="display:none;"></span>
                 </div>
             </div>
             
@@ -495,6 +494,18 @@
                 <p>Running scenario analysis across all customers...</p>
             </div>
         </main>
+    </div>
+
+    <!-- Loading Modal -->
+    <div id="loading-modal" class="loading-modal" style="display: none;">
+        <div class="loading-content">
+            <h3>Running Scenario Analysis...</h3>
+            <p>This may take a minute. Please wait.</p>
+            <div class="progress-bar-container">
+                <div class="progress-bar"></div>
+            </div>
+            <p id="loading-status">Initializing...</p>
+        </div>
     </div>
 
     <script src="/static/js/main.js"></script>

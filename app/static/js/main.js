@@ -8,8 +8,7 @@
 let currentCustomer = null;
 let allCustomers = [];
 
-
-function initDashboard() {
+document.addEventListener('DOMContentLoaded', function() {
     console.log("🚗 Kavak Dashboard JS Loaded");
     loadCustomersList();
 
@@ -28,13 +27,41 @@ function initDashboard() {
         document.getElementById('amortization-close').addEventListener('click', closeAmortizationModal);
         window.addEventListener('click', function(evt) { if (evt.target === modal) closeAmortizationModal(); });
     }
-}
 
-if (document.readyState !== 'loading') {
-    initDashboard();
-} else {
-    document.addEventListener('DOMContentLoaded', initDashboard);
-}
+    // Create financed balance breakdown modal if it doesn't exist
+    if (!document.getElementById('balance-breakdown-modal')) {
+        const modal = document.createElement('div');
+        modal.id = 'balance-breakdown-modal';
+        modal.className = 'modal';
+        modal.style.display = 'none';
+        modal.innerHTML = `
+            <div class="modal-content">
+                <span class="modal-close" id="balance-breakdown-close">&times;</span>
+                <h3>Financed Balance Breakdown</h3>
+                <div id="balance-breakdown-table"></div>
+            </div>`;
+        document.body.appendChild(modal);
+        document.getElementById('balance-breakdown-close').addEventListener('click', () => modal.style.display = 'none');
+        window.addEventListener('click', evt => { if (evt.target === modal) modal.style.display = 'none'; });
+    }
+
+    // Create equity breakdown modal
+    if (!document.getElementById('equity-breakdown-modal')) {
+        const modal = document.createElement('div');
+        modal.id = 'equity-breakdown-modal';
+        modal.className = 'modal';
+        modal.style.display = 'none';
+        modal.innerHTML = `
+            <div class="modal-content">
+                <span class="modal-close" id="equity-breakdown-close">&times;</span>
+                <h3>Vehicle Equity Breakdown</h3>
+                <div id="equity-breakdown-table"></div>
+            </div>`;
+        document.body.appendChild(modal);
+        document.getElementById('equity-breakdown-close').addEventListener('click', ()=> modal.style.display='none');
+        window.addEventListener('click', evt=>{ if(evt.target===modal) modal.style.display='none';});
+    }
+});
 
 // Initialize customer view page
 function initializeCustomerView(customerId) {
@@ -102,9 +129,7 @@ async function generateOffersForCustomer(customerId) {
                 risk_profile_index: customer.risk_profile_index
             },
             inventory: await loadInventory(),
-            engine_config: {
-                include_kavak_total: true
-            }
+            engine_config: buildEngineConfigForRequest()
         };
         
         const response = await fetch('/api/generate-offers', {
@@ -284,6 +309,8 @@ function createTierSection(tierName, offers) {
     
     offers.forEach(offer => {
         const offerCard = createOfferCard(offer);
+        // Store offer JSON for later breakdown click
+        offerCard.dataset.offer = JSON.stringify(offer);
         offersGrid.appendChild(offerCard);
     });
     
@@ -325,12 +352,45 @@ function createOfferCard(offer) {
                 <span class="detail-value">${offer.term} months</span>
             </div>
             <div class="detail-row">
-                <span class="detail-label">Loan Amount</span>
-                <span class="detail-value">$${Math.round(offer.loan_amount).toLocaleString()}</span>
+                <span class="detail-label">Financed Balance</span>
+                <span class="detail-value clickable financed-balance">$${calculateFinancedBalance(offer).total.toLocaleString()}</span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">Vehicle Equity</span>
+                <span class="detail-value clickable vehicle-equity">$${Math.round(offer.effective_equity || 0).toLocaleString()}</span>
             </div>
             <div class="detail-row">
                 <span class="detail-label">NPV</span>
                 <span class="detail-value success">$${Math.round(offer.npv || 0).toLocaleString()}</span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">Interest Rate (APR)</span>
+                <span class="detail-value">${(offer.interest_rate*100).toFixed(2)} %</span>
+            </div>
+            <hr class="offer-divider">
+            <div class="fee-components">
+                ${renderFeeComponent('Service Fee',
+                    offer.fees_applied?.service_fee_pct ?? 0,
+                    true)}
+                ${renderFeeComponent('CXA Fee',
+                    offer.fees_applied?.cxa_pct ?? 0,
+                    true)}
+                ${renderFeeComponent('CAC Bonus',
+                    offer.fees_applied?.cac_bonus ?? 0,
+                    false,
+                    true)}
+                ${renderFeeComponent('Insurance',
+                    offer.insurance_amount ?? 0,
+                    false)}
+                ${renderFeeComponent('Kavak Total',
+                    offer.kavak_total_amount ?? 0,
+                    false)}
+                ${renderFeeComponent('GPS Instalación',
+                    offer.gps_install_fee ?? 0,
+                    false)}
+                ${renderFeeComponent('GPS Mensual',
+                    offer.gps_monthly_fee ?? 0,
+                    false)}
             </div>
         </div>
     `;
@@ -345,6 +405,25 @@ function createOfferCard(offer) {
     card.appendChild(amortBtn);
 
     return card;
+}
+
+// Helper: Render a single fee component row with checkmark / cross
+function renderFeeComponent(label, rawValue, isPercent=false, treatZeroAsCross=false) {
+    const isApplied = rawValue && rawValue !== 0;
+    const checkSymbol = isApplied ? '✅' : '❌';
+
+    if (!isApplied && treatZeroAsCross) {
+        return `<div class="fee-row"><span>${checkSymbol} ${label}</span><span>$0</span></div>`;
+    }
+
+    let displayValue;
+    if (isPercent) {
+        displayValue = `${(rawValue * 100).toFixed(1)} %`;
+    } else {
+        displayValue = `$${Math.round(rawValue).toLocaleString()}`;
+    }
+
+    return `<div class="fee-row"><span>${checkSymbol} ${label}</span><span>${displayValue}</span></div>`;
 }
 
 // Fetch amortization table and display in modal
@@ -501,6 +580,14 @@ function initializeConfigPage() {
     toggleEngineMode('default');
     // Initialize range summary
     updateRangeSummary();
+
+    // Fetch current config status
+    fetch('/api/config-status').then(r=>r.json()).then(status=>{
+        const badge=document.getElementById('config-status-badge');
+        if(!badge) return;
+        badge.style.display='inline-block';
+        badge.textContent=`${status.mode} • ${status.last_updated}`;
+    }).catch(_=>{});
 }
 
 // Toggle engine mode visibility and behavior
@@ -564,150 +651,84 @@ function updateRangeSummary() {
 
 // Run scenario analysis
 async function runScenarioAnalysis() {
-    showConfigLoading();
-    
-    try {
-        // Collect form data
-        const formData = getConfigFormData();
-        
-        // First save the configuration
-        const saveResponse = await fetch('/api/save-config', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(formData)
-        });
-        
-        if (!saveResponse.ok) {
-            throw new Error('Failed to save configuration');
-        }
-        
-        // Show progress message
-        const loadingDiv = document.getElementById('config-loading');
-        if (loadingDiv) {
-            loadingDiv.innerHTML = `
-                <div class="loading-animation"></div>
-                <h3>🎯 Running Real Engine Analysis...</h3>
-                <p>Processing customers with ${formData.use_range_optimization ? 'Range Optimization' : (formData.use_custom_params ? 'Custom Parameters' : 'Default Hierarchical')} mode...</p>
-                <p><small>This may take a moment as we're actually running the engine for each customer.</small></p>
-            `;
-        }
-        
-        // Call scenario analysis API
-        const response = await fetch('/api/scenario-analysis', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(formData)
-        });
-        
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.detail || 'Scenario analysis failed');
-        }
-        
-        const result = await response.json();
-        displayScenarioResults(result);
-        
-    } catch (error) {
-        console.error('Error running scenario analysis:', error);
-        showConfigError(error.message);
-    } finally {
-        hideConfigLoading();
-    }
-}
+    const loadingModal = document.getElementById('loading-modal');
+    const progressBar = document.getElementById('progress-bar') || document.querySelector('#loading-modal .progress-bar');
+    const status = document.getElementById('loading-status') || document.getElementById('status');
+    const configButton = document.getElementById('run-scenario');
 
-// Get configuration form data
-function getConfigFormData() {
-    const engineMode = document.querySelector('input[name="engine-mode"]:checked')?.value || 'default';
-    
-    const baseConfig = {
-        use_custom_params: engineMode === 'custom',
-        use_range_optimization: engineMode === 'range',
-        include_kavak_total: document.getElementById('kavak-total-toggle')?.checked !== false,
-        min_npv_threshold: parseFloat(document.getElementById('min-npv')?.value || 5000)
-    };
-    
-    // If using range optimization mode
-    if (engineMode === 'range') {
-        return {
-            ...baseConfig,
-            // Range parameters
-            service_fee_range: [
-                parseFloat(document.getElementById('service-fee-min')?.value || 0),
-                parseFloat(document.getElementById('service-fee-max')?.value || 5)
-            ],
-            service_fee_step: parseFloat(document.getElementById('service-fee-step')?.value || 0.01),
-            cxa_range: [
-                parseFloat(document.getElementById('cxa-min')?.value || 0),
-                parseFloat(document.getElementById('cxa-max')?.value || 4)
-            ],
-            cxa_step: parseFloat(document.getElementById('cxa-step')?.value || 0.01),
-            cac_bonus_range: [
-                parseFloat(document.getElementById('cac-bonus-min')?.value || 0),
-                parseFloat(document.getElementById('cac-bonus-max')?.value || 10000)
-            ],
-            cac_bonus_step: parseFloat(document.getElementById('cac-bonus-step')?.value || 100),
-            max_offers_per_tier: parseFloat(document.getElementById('max-offers-per-tier')?.value || 50),
-            
-            // Include other configuration if needed
-            insurance_amount: parseFloat(document.getElementById('insurance-amount')?.value || 10999),
-            gps_fee: parseFloat(document.getElementById('gps-fee')?.value || 350),
-            
-            // Payment Delta Thresholds
-            payment_delta_tiers: {
-                refresh: [
-                    parseFloat(document.getElementById('refresh-min')?.value || -5) / 100,
-                    parseFloat(document.getElementById('refresh-max')?.value || 5) / 100
-                ],
-                upgrade: [
-                    parseFloat(document.getElementById('upgrade-min')?.value || 5.01) / 100,
-                    parseFloat(document.getElementById('upgrade-max')?.value || 25) / 100
-                ],
-                max_upgrade: [
-                    parseFloat(document.getElementById('max-upgrade-min')?.value || 25.01) / 100,
-                    parseFloat(document.getElementById('max-upgrade-max')?.value || 100) / 100
-                ]
+    if (loadingModal) loadingModal.style.display = 'block';
+    if (status) status.textContent = 'Initializing analysis...';
+    if (configButton){
+        configButton.disabled = true;
+        configButton.dataset.originalText = configButton.textContent;
+        configButton.textContent = 'Running...';
+    }
+
+    // TODO: collect actual form data for scenario config
+    const configData = typeof getConfigFormData === 'function' ? getConfigFormData() : {};
+
+    // Attempt to fetch customer count for better progress estimation
+    let totalCustomers = 0;
+    try {
+        const allCustomers = await fetch('/api/customers').then(res => res.json());
+        totalCustomers = Array.isArray(allCustomers) ? allCustomers.length : 0;
+    } catch (_) {
+        totalCustomers = 0;
+    }
+
+    let processedTicks = 0;
+    const estimatedDuration = totalCustomers > 0 ? Math.min(totalCustomers * 150, 60000) : 30000; // fallback 30s
+    const interval = setInterval(() => {
+        processedTicks += 100;
+        const percentage = Math.min(Math.round((processedTicks / estimatedDuration) * 100), 95);
+        if (progressBar) progressBar.style.width = percentage + '%';
+        if (status) status.textContent = `Processing... ${percentage}%`;
+    }, 100);
+
+    try {
+        // First save config so backend knows what to run
+        await fetch('/api/save-config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(configData)
+        });
+
+        const es = new EventSource('/api/scenario-analysis-stream');
+        clearInterval(interval);
+
+        es.addEventListener('progress', (e) => {
+            const data = JSON.parse(e.data);
+            const percent = data.percent || 0;
+            if (progressBar) progressBar.style.width = `${percent}%`;
+            if (status) status.textContent = `Processing ${data.processed} of ${data.total} customers... (${percent}%)`;
+        });
+
+        es.addEventListener('finished', (e) => {
+            const data = JSON.parse(e.data);
+            if (progressBar) progressBar.style.width = '100%';
+            if (status) status.textContent = 'Analysis complete!';
+            es.close();
+            if(configButton){
+                configButton.disabled=false;
+                configButton.textContent=configButton.dataset.originalText||'Run Analysis';
             }
-        };
+            setTimeout(() => {
+                window.location.href = '/customers';
+            }, 1000);
+        });
+
+        es.addEventListener('error', (e) => {
+            console.error('SSE error', e);
+            es.close();
+            if(configButton){configButton.disabled=false;configButton.textContent=configButton.dataset.originalText||'Run Analysis';}
+            showConfigError(err.message || 'Unknown error');
+        });
+
+    } catch (err) {
+        showConfigError(err.message || 'Unknown error');
+    } finally {
+        if (loadingModal) loadingModal.style.display = 'none';
     }
-    
-    // If using custom parameters mode
-    if (engineMode === 'custom') {
-        return {
-            ...baseConfig,
-            // Fee Structure
-            service_fee_pct: parseFloat(document.getElementById('service-fee')?.value || 5) / 100,
-            cxa_pct: parseFloat(document.getElementById('cxa-fee')?.value || 4) / 100,
-            cac_bonus: parseFloat(document.getElementById('cac-bonus')?.value || 5000),
-            insurance_amount: parseFloat(document.getElementById('insurance-amount')?.value || 10999),
-            gps_fee: parseFloat(document.getElementById('gps-fee')?.value || 350),
-            
-            // Payment Delta Thresholds
-            payment_delta_tiers: {
-                refresh: [
-                    parseFloat(document.getElementById('refresh-min')?.value || -5) / 100,
-                    parseFloat(document.getElementById('refresh-max')?.value || 5) / 100
-                ],
-                upgrade: [
-                    parseFloat(document.getElementById('upgrade-min')?.value || 5.01) / 100,
-                    parseFloat(document.getElementById('upgrade-max')?.value || 25) / 100
-                ],
-                max_upgrade: [
-                    parseFloat(document.getElementById('max-upgrade-min')?.value || 25.01) / 100,
-                    parseFloat(document.getElementById('max-upgrade-max')?.value || 100) / 100
-                ]
-            },
-            
-            // Engine Behavior
-            term_priority: document.getElementById('term-priority')?.value || 'standard'
-        };
-    }
-    
-    // If using default mode, only return basic config
-    return baseConfig;
 }
 
 // Display scenario results
@@ -941,4 +962,178 @@ function showConfigError(message) {
             </div>
         `;
     }
+}
+
+// ---------------------
+// Customer List Page
+// ---------------------
+
+async function initializeCustomerListPage() {
+    const tbody = document.getElementById('customer-list-body');
+    const summaryContainer = document.getElementById('scenario-summary');
+    if (!tbody) return;
+
+    try {
+        const [customers, scenarioResults] = await Promise.all([
+            fetch('/api/customers').then(r => r.json()),
+            fetch('/api/scenario-results').then(r => r.json()).catch(() => ({}))
+        ]);
+
+        // Populate summary if available
+        if (summaryContainer && scenarioResults && scenarioResults.actual_metrics) {
+            const metrics = scenarioResults.actual_metrics;
+            summaryContainer.innerHTML = `
+                <div class="kpi-card">
+                    <div class="kpi-value">${metrics.total_offers.toLocaleString()}</div>
+                    <div class="kpi-label">Total Offers</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-value">$${Math.round(metrics.average_npv_per_offer).toLocaleString()}</div>
+                    <div class="kpi-label">Avg. Offer NPV</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-value">${metrics.offers_per_customer}</div>
+                    <div class="kpi-label">Offers / Customer</div>
+                </div>`;
+            summaryContainer.style.display = 'grid';
+        }
+
+        // Clear body
+        tbody.innerHTML = '';
+        customers.slice(0, 200).forEach(cust => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td><a href="/customer/${cust.customer_id}" class="id-link">${cust.customer_id}</a></td>
+                <td>${cust.current_car_model || 'Unknown'}</td>
+                <td><span class="risk-badge risk-${cust.risk_profile_name || 'default'}">${cust.risk_profile_name || 'N/A'}</span></td>
+                <td>N/A</td>
+                <td>N/A</td>
+                <td><a href="/customer/${cust.customer_id}" class="view-btn">Generate Offers →</a></td>`;
+            tbody.appendChild(tr);
+        });
+
+    } catch (err) {
+        console.error('Failed to load customer list page', err);
+        if (tbody) {
+            tbody.innerHTML = '<tr><td colspan="6" style="padding:20px; text-align:center; color:#ef4444;">Failed to load customer data</td></tr>';
+        }
+    }
+}
+
+// Tier filter logic (customer view)
+document.addEventListener('DOMContentLoaded', () => {
+  const tierSelect = document.getElementById('tier-select');
+  if (tierSelect) {
+      tierSelect.addEventListener('change', () => {
+          const selected = tierSelect.value;
+          document.querySelectorAll('.offers-section').forEach(sec => {
+              if (selected === 'all') {
+                  sec.style.display = 'block';
+              } else {
+                  if (sec.querySelector('h4')?.textContent?.startsWith(selected)) {
+                      sec.style.display = 'block';
+                  } else {
+                      sec.style.display = 'none';
+                  }
+              }
+          });
+      });
+  }
+});
+
+function buildEngineConfigForRequest(){
+    const modeSel=document.getElementById('mode-select');
+    const mode=modeSel?modeSel.value:'current';
+    if(mode==='current') return {}; // rely on saved config
+    if(mode==='default') return {use_custom_params:false,use_range_optimization:false,include_kavak_total:true};
+    if(mode==='custom'){
+        // For demo we pull values from the global config form if present else defaults
+        return {
+            use_custom_params:true,
+            use_range_optimization:false,
+            include_kavak_total:true,
+            service_fee_pct:parseFloat(document.getElementById('service-fee')?.value||5)/100,
+            cxa_pct:parseFloat(document.getElementById('cxa-fee')?.value||4)/100,
+            cac_bonus:parseFloat(document.getElementById('cac-bonus')?.value||5000),
+            insurance_amount:parseFloat(document.getElementById('insurance-amount')?.value||10999),
+            gps_fee:parseFloat(document.getElementById('gps-fee')?.value||350)
+        };
+    }
+    if(mode==='range'){
+        return {use_custom_params:false,use_range_optimization:true,include_kavak_total:true};
+    }
+    return {};
+}
+
+// calculateFinancedBalance moved above with breakdown capability
+function calculateFinancedBalance(offer){
+    const breakdown = {
+        "Loan Amount": offer.loan_amount || 0,
+        "Service Fee": offer.service_fee_amount || 0,
+        "Kavak Total": offer.kavak_total_amount || 0,
+        "Insurance (first cycle)": offer.insurance_amount || 0,
+        // GPS installation is paid upfront, not financed
+    };
+    const total = Object.values(breakdown).reduce((a,b)=>a+b,0);
+    return {total, breakdown};
+}
+
+// calculateEquityBreakdown moved above with breakdown capability
+function calculateEquityBreakdown(offer){
+    // Reverse-engineer the original vehicle equity:
+    // effective_equity = vehicle_equity + CAC - CXA - GPS_install
+    const startingEquity = (offer.effective_equity || 0)
+        - (offer.fees_applied?.cac_bonus || 0)
+        + (offer.cxa_amount || 0)
+        + (offer.gps_install_fee || 0);
+    const breakdown = {
+        "Starting Vehicle Equity": startingEquity,
+        "+ CAC Bonus": offer.fees_applied?.cac_bonus || 0,
+        "- CXA Fee": -(offer.cxa_amount || 0),
+        "- GPS Installation": -(offer.gps_install_fee || 0)
+    };
+    const total = offer.effective_equity || 0;
+    return {total, breakdown};
+}
+
+// Attach delegated click listener once
+document.addEventListener('click', function(evt){
+    const target = evt.target;
+    if(target && target.classList.contains('financed-balance')){
+        const card = target.closest('.offer-card');
+        if(!card) return;
+        const offerStr = card.dataset.offer;
+        if(!offerStr) return;
+        const offer = JSON.parse(offerStr);
+        const {total, breakdown} = calculateFinancedBalance(offer);
+        showBalanceBreakdownModal(total, breakdown);
+    }
+    if(target && target.classList.contains('vehicle-equity')){
+        const card = target.closest('.offer-card');
+        if(!card) return;
+        const offerStr = card.dataset.offer;
+        if(!offerStr) return;
+        const offer = JSON.parse(offerStr);
+        const {total, breakdown} = calculateEquityBreakdown(offer);
+        showGenericBreakdownModal('equity', total, breakdown);
+    }
+});
+
+function showBalanceBreakdownModal(total, breakdown){
+    showGenericBreakdownModal('balance', total, breakdown);
+}
+
+function showGenericBreakdownModal(type, total, breakdown){
+    const modalId = type==='equity' ? 'equity-breakdown-modal' : 'balance-breakdown-modal';
+    const tableId = type==='equity' ? 'equity-breakdown-table' : 'balance-breakdown-table';
+    const modal = document.getElementById(modalId);
+    const container = document.getElementById(tableId);
+    if(!modal||!container) return;
+    let html='<table class="amort-table"><tr><th>Component</th><th>Amount</th></tr>';
+    for(const [label, val] of Object.entries(breakdown)){
+        html += `<tr><td>${label}</td><td>$${Math.round(val).toLocaleString()}</td></tr>`;
+    }
+    html += `<tr><th>Total</th><th>$${Math.round(total).toLocaleString()}</th></tr></table>`;
+    container.innerHTML = html;
+    modal.style.display = 'block';
 } 

@@ -40,24 +40,24 @@
     },
     "term_priority": "standard",
     "min_npv_threshold": 5000.0,
-    "last_updated": "2025-06-19T15:19:40.445336"
+    "last_updated": "2025-06-19T15:42:26.178039"
   },
   "execution_details": {
     "sample_size": 100,
     "total_customers": 4829,
     "processed_customers": 100,
     "processing_errors": 0,
-    "execution_time_seconds": 1.26
+    "execution_time_seconds": 557.44
   },
   "actual_metrics": {
-    "total_offers": 47227,
-    "average_npv_per_offer": 57604,
-    "total_portfolio_npv": 2720475273,
-    "offers_per_customer": 9.8,
+    "total_offers": 23874286,
+    "average_npv_per_offer": 47897,
+    "total_portfolio_npv": 1143527583568,
+    "offers_per_customer": 4943.9,
     "tier_distribution": {
-      "Refresh": 97,
-      "Upgrade": 187,
-      "Max Upgrade": 694
+      "Refresh": 60218,
+      "Upgrade": 117598,
+      "Max Upgrade": 316578
     }
   },
   "mode_info": {

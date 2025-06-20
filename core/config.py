@@ -74,6 +74,9 @@ IVA_RATE = 1.16 # 16% IVA tax
 # GPS installation fee applied upfront (subject to IVA)
 GPS_INSTALLATION_FEE = 750.0
 
+# Fixed monthly GPS monitoring fee (before IVA)
+GPS_MONTHLY_FEE = 350.0
+
 # Insurance amount lookup by risk profile. Placeholder values use the default
 # insurance amount for all profiles but allow future customization.
 INSURANCE_TABLE = {

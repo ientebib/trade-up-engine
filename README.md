@@ -1,194 +1,112 @@
-# 🚗 Kavak Trade-Up Engine Dashboard
+# Trade-Up Engine
 
-A comprehensive web-based dashboard for analyzing vehicle trade-up opportunities and generating personalized offers for customers.
+A sophisticated trade-up calculation engine for automotive customer upgrades with web interface.
 
-## 🏗️ Project Structure
+## Overview
 
-```
-Trade-Up-Engine/
-├── main.py                    # Main application entry point
-├── requirements.txt           # Python dependencies
-├── README.md                 # This file
-├── core/                     # Core business logic
-│   ├── engine.py            # Main trade-up engine
-│   ├── calculator.py        # Financial calculations
-│   ├── config.py           # Configuration constants
-│   └── test_complete_system.py # System tests
-├── app/                     # Web application
-│   ├── templates/          # HTML templates
-│   │   ├── main_dashboard.html
-│   │   ├── customer_view.html
-│   │   └── global_config.html
-│   └── static/            # Static assets
-│       ├── css/style.css  # Styling
-│       └── js/main.js     # JavaScript functionality
-├── customer_data.csv        # Customer dataset
-├── inventory_data.csv       # Vehicle dataset
-├── data/ (optional)        # Alternate location for data files
-├── docs/                   # Documentation
-│   ├── project-charter.md
-│   └── fee_configuration_review.md
-└── venv/                   # Virtual environment
-```
+The Trade-Up Engine is a FastAPI-based application that calculates optimal trade-up offers for automotive customers. It features:
 
-## ✨ Features
+- Real-time customer data processing (4,829 customers supported)
+- Fallback inventory system with 5 default vehicles
+- Configurable fee structures and optimization parameters
+- Web interface for customer management and offer generation
+- Redshift integration capability (with local fallback)
 
-### 📊 Main Dashboard
-- **Portfolio Overview**: 30,000-foot view with key performance indicators
-- **Interactive Charts**: Tier distribution and top performing vehicles
-- **Real-time Metrics**: Live data from 150+ customers and 350+ vehicles
-- **Beautiful Visualizations**: Chart.js powered interactive charts
+## Prerequisites
 
-### 👤 Customer Deep Dive
-- **Individual Analysis**: Detailed customer profiles and financial data
-- **Dynamic Selection**: Dropdown to browse all customers
-- **Real-time Offer Generation**: Generate personalized offers on-demand
-- **Tier-based Results**: Organized by Refresh, Upgrade, and Max Upgrade tiers
-- **Interactive Cards**: Hover effects and detailed financial breakdowns
+- Python 3.8+
+- Virtual environment management tool (venv recommended)
+- Node.js and npm (for frontend assets)
+- Access to Redshift database (optional)
 
-### ⚙️ Global Configuration
-- **Scenario Analysis**: "What if" testing for business rule changes
-- **Interactive Controls**: Sliders, toggles, and form inputs
-- **Impact Comparison**: Before/after metrics visualization
-- **Portfolio-wide Simulation**: Test configuration changes across all customers
+## Installation
 
-## 🚀 Quick Start
-
-### Prerequisites
-- Python 3.12+
-- Virtual environment (recommended)
-
-### Installation
-
-1. **Clone and setup**:
+1. Clone the repository:
 ```bash
+git clone https://github.com/YOUR_USERNAME/Trade-Up-Engine.git
 cd Trade-Up-Engine
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
 ```
 
-2. **Install dependencies**:
+2. Create and activate a virtual environment:
+```bash
+python -m venv venv
+source venv/bin/activate  # On Windows use: venv\Scripts\activate
+```
+
+3. Install dependencies:
 ```bash
 pip install -r requirements.txt
 ```
 
-3. **Start the dashboard**:
+4. Set up environment variables:
 ```bash
-python main.py
+cp env_variables.txt .env
+# Edit .env with your configuration
 ```
 
-4. **Open your browser**:
-Navigate to `http://localhost:8000`
+## Running the Application
 
-## 📱 Usage
-
-### Main Dashboard
-- View portfolio-wide KPIs and metrics
-- Explore tier distribution charts
-- Analyze top performing vehicles
-
-### Customer Analysis
-1. Click "Customer Deep Dive" in the sidebar
-2. Select any customer from the dropdown (1001-1150)
-3. Click "🔄 Generate Offers" to see personalized results
-4. Browse offers organized by tier with detailed financial data
-
-### Configuration Testing
-1. Navigate to "Global Config"
-2. Adjust engine parameters using the form controls
-3. Click "🧪 Run Scenario Analysis"
-4. Review the impact comparison metrics
-
-## 🔧 Technical Details
-
-### Backend
-- **FastAPI**: Modern, fast web framework
-- **Pandas**: Data manipulation and analysis
-- **NumPy Financial**: Financial calculations
-- **SciPy**: Optimization algorithms
-- **Jinja2**: Template rendering
-- **Cached Data Loaders**: Reuse loaded CSV/Redshift data across API calls
-
-### Frontend
-- **Pure HTML/CSS/JavaScript**: No framework dependencies
-- **Chart.js**: Interactive data visualizations
-- **Modern CSS**: Responsive design with CSS Grid/Flexbox
-- **Inter Font**: Clean, professional typography
-
-### Data
-- **150 Customers**: Realistic risk profiles and financial data
-- **350 Vehicles**: 4 categories with market-appropriate pricing
-- **Risk Profiles**: AAA through E1 with realistic distributions
-- **Current Car Models**: Upgrade path visualization
-
-## 🎯 API Endpoints
-
-### Web Pages
-- `GET /` - Main dashboard
-- `GET /customer/{id}` - Customer analysis page
-- `GET /config` - Configuration page
-
-### API Endpoints
-- `GET /api/customers` - List all customers
-- `GET /api/inventory` - List all vehicles
-- `POST /api/generate-offers` - Generate offers for a customer
-- `POST /api/scenario-analysis` - Run configuration impact analysis
-
-## 🧪 Testing
-
-Run the comprehensive system test:
+1. Start the development server:
 ```bash
-python core/test_complete_system.py
+uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-This validates:
-- All web pages load correctly
-- API endpoints function properly
-- Data integration works
-- Offer generation operates as expected
+2. Access the web interface at: http://localhost:8000
 
-## 📊 Data Schema
+## Development Mode
 
-### Customer Data
-- `customer_id`: Unique identifier
-- `current_monthly_payment`: Current loan payment
-- `vehicle_equity`: Current vehicle value minus outstanding loan
-- `current_car_price`: Market value of current vehicle
-- `current_car_model`: Make/model for upgrade path visualization
-- `risk_profile_name`: Credit risk category (AAA, A1, A2, B1, B2, C1, C2, D1, E1)
-- `risk_profile_index`: Numeric risk index
+For development without external dependencies:
 
-### Inventory Data
-- `car_id`: Unique vehicle identifier
-- `model`: Vehicle make and model with year
-- `sales_price`: Market price
+1. Set environment variables:
+```bash
+export DISABLE_EXTERNAL_CALLS=true
+export USE_MOCK_DATA=true
+```
 
-## 🎨 Design Philosophy
+2. Run the development version:
+```bash
+uvicorn main_dev:app --host 0.0.0.0 --port 8000 --reload
+```
 
-The dashboard prioritizes:
-- **Clean, Modern Aesthetics**: Professional appearance suitable for business use
-- **Responsive Design**: Works seamlessly on desktop, tablet, and mobile
-- **User Experience**: Intuitive navigation and clear information hierarchy
-- **Performance**: Fast loading and smooth interactions
-- **Accessibility**: Proper contrast ratios and semantic HTML
+## Configuration
 
-## 🔄 Development
+The engine can be configured through:
+- `engine_config.json` - Core engine parameters
+- `.env` - Environment variables
+- Web interface at `/config`
 
-### Adding New Features
-1. Core logic goes in `core/`
-2. Web templates in `app/templates/`
-3. Styling in `app/static/css/`
-4. JavaScript in `app/static/js/`
+Key configuration parameters:
+- Service Fee Range: 0-5%
+- CXA Range: 0-4%
+- CAC Bonus Range: 0-10,000 MXN
+- Minimum NPV Threshold: 5,000 MXN
 
-### Data Updates
-- Replace `customer_data.csv`, `inventory_data.csv`, and other CSVs in the repository root (or in a `data/` folder if you move them)
-- Ensure column names match expected schema
-- Restart the application to reload data
+## API Endpoints
 
-## 📝 License
+- `/api/customers` - List all customers
+- `/api/generate-offers` - Generate trade-up offers
+- `/api/save-config` - Save engine configuration
+- `/customer/{customer_id}` - View customer details
 
-This project is part of the Kavak Trade-Up Engine system.
+## Data Structure
 
----
+- Customer IDs are VIN numbers (e.g., "TMCJ33A32GJ053451")
+- Customer data is loaded from CSV (4,829 records)
+- Inventory data from Redshift with local fallback
+- Payment tiers: Refresh (-5% to 5%), Upgrade (5.01% to 25%), Max Upgrade (25.01% to 100%)
 
-**Built with ❤️ for automotive finance innovation** 
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Commit your changes
+4. Push to the branch
+5. Create a Pull Request
+
+## License
+
+[Your chosen license]
+
+## Support
+
+For support, please open an issue in the GitHub repository. 

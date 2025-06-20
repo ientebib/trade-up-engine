@@ -215,7 +215,13 @@
                         <option value="{{ customer.customer_id }}" selected>Customer {{ customer.customer_id }}</option>
                     </select>
                 </div>
-                <button id="generate-offers-btn" class="btn-primary">🔄 Generate Offers</button>
+                <select id="mode-select" style="margin-right:10px;">
+                    <option value="current">Current Mode</option>
+                    <option value="default">Default</option>
+                    <option value="custom">Custom</option>
+                    <option value="range">Range Optimization</option>
+                </select>
+                <button id="generate-offers-btn" class="btn-primary">Generate Offers</button>
             </div>
 
             <!-- Filters Section -->
@@ -279,9 +285,16 @@
                     </p>
                 </div>
 
-                <div id="offers-by-tier">
-                    <!-- Will be populated by JavaScript with enhanced offer cards -->
+                <div style="display:flex; justify-content:flex-end; margin-bottom:10px;">
+                    <label for="tier-select" style="margin-right:8px;">Filter Tier:</label>
+                    <select id="tier-select">
+                        <option value="all">All</option>
+                        <option value="Refresh">Refresh</option>
+                        <option value="Upgrade">Upgrade</option>
+                        <option value="Max Upgrade">Max Upgrade</option>
+                    </select>
                 </div>
+                <div id="offers-by-tier"></div>
             </div>
 
             <!-- No Results State -->
@@ -300,275 +313,25 @@
         </main>
     </div>
 
+    <!-- Modal for Amortization Table -->
+    <div id="amortization-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-button" onclick="closeAmortizationModal()">&times;</span>
+            <h3>Amortization Schedule</h3>
+            <div id="amortization-table"></div>
+        </div>
+    </div>
+
     <script src="/static/js/main.js"></script>
     <script>
-        // Enhanced customer view initialization
-        let allOffers = [];
-        let customerData = {{ customer | tojson }};
-        
         document.addEventListener('DOMContentLoaded', function() {
-            initializeEnhancedCustomerView({{ customer.customer_id }});
+            // Get customerId from the URL path
+            const pathParts = window.location.pathname.split('/');
+            const customerId = pathParts[pathParts.length - 1];
+            if (customerId) {
+                initializeCustomerView(customerId);
+            }
         });
-        
-        function initializeEnhancedCustomerView(customerId) {
-            initializeCustomerView(customerId);
-            
-            // Add filter event listeners
-            document.getElementById('term-filter').addEventListener('change', applyFilters);
-            document.getElementById('tier-filter').addEventListener('change', applyFilters);
-            document.getElementById('npv-filter').addEventListener('input', applyFilters);
-        }
-        
-        function applyFilters() {
-            const termFilter = document.getElementById('term-filter').value;
-            const tierFilter = document.getElementById('tier-filter').value;
-            const npvFilter = parseFloat(document.getElementById('npv-filter').value) || 0;
-            
-            const filteredOffers = allOffers.filter(offer => {
-                if (termFilter !== 'all' && offer.term != termFilter) return false;
-                if (tierFilter !== 'all' && offer.tier !== tierFilter) return false;
-                if (offer.npv < npvFilter) return false;
-                return true;
-            });
-            
-            displayEnhancedOffers(filteredOffers);
-        }
-        
-        // Override the original displayOffers function with enhanced version
-        window.displayOffers = function(offersByTier) {
-            // Check if offers exist
-            if (!offersByTier || Object.keys(offersByTier).length === 0) {
-                document.getElementById('filters-section').style.display = 'none';
-                document.getElementById('search-explanation').style.display = 'none';
-                document.getElementById('results-container').style.display = 'none';
-                document.getElementById('no-results').style.display = 'block';
-                return;
-            }
-            
-            // Show results
-            document.getElementById('results-container').style.display = 'block';
-            document.getElementById('no-results').style.display = 'none';
-            
-            // Flatten the offers from the tier structure
-            allOffers = [];
-            Object.keys(offersByTier).forEach(tier => {
-                if (Array.isArray(offersByTier[tier])) {
-                    offersByTier[tier].forEach(offer => {
-                        offer.tier = tier; // Add tier to each offer
-                        allOffers.push(offer);
-                    });
-                }
-            });
-            
-            document.getElementById('filters-section').style.display = 'flex';
-            document.getElementById('search-explanation').style.display = 'block';
-            displayEnhancedOffers(allOffers);
-        }
-        
-        function displayEnhancedOffers(offers) {
-            const container = document.getElementById('offers-by-tier');
-            container.innerHTML = '';
-            
-            // Update offers summary
-            updateOffersSummary(offers);
-            
-            // Group by tier
-            const tiers = {};
-            offers.forEach(offer => {
-                if (!tiers[offer.tier]) tiers[offer.tier] = [];
-                tiers[offer.tier].push(offer);
-            });
-            
-            // Display each tier
-            Object.entries(tiers).forEach(([tier, tierOffers]) => {
-                const tierSection = document.createElement('div');
-                tierSection.className = 'section-card';
-                tierSection.innerHTML = '<h3>' + tier + ' Offers (' + tierOffers.length + ')</h3>' +
-                    '<div id="' + tier.toLowerCase().replace(' ', '-') + '-offers">' +
-                        tierOffers.map(offer => createEnhancedOfferCard(offer)).join('') +
-                    '</div>';
-                container.appendChild(tierSection);
-            });
-        }
-        
-        function updateOffersSummary(offers) {
-            const summaryContainer = document.getElementById('offers-summary');
-            if (!summaryContainer) return;
-            
-            const totalOffers = offers.length;
-            const tiers = [...new Set(offers.map(o => o.tier))];
-            const tierCount = tiers.length;
-            
-            // Calculate average NPV
-            const totalNPV = offers.reduce((sum, offer) => sum + (offer.npv || 0), 0);
-            const avgNPV = totalOffers > 0 ? totalNPV / totalOffers : 0;
-            
-            // Get best offer (highest NPV)
-            const bestOffer = offers.reduce((best, offer) => 
-                (!best || (offer.npv || 0) > (best.npv || 0)) ? offer : best, null);
-            
-            summaryContainer.innerHTML = `
-                <div class="kpi-card">
-                    <div class="kpi-value">${totalOffers}</div>
-                    <div class="kpi-label">Total Offers</div>
-                </div>
-                <div class="kpi-card">
-                    <div class="kpi-value">${tierCount}</div>
-                    <div class="kpi-label">Available Tiers</div>
-                </div>
-                <div class="kpi-card">
-                    <div class="kpi-value">$${Math.round(avgNPV).toLocaleString()}</div>
-                    <div class="kpi-label">Average NPV</div>
-                </div>
-                <div class="kpi-card">
-                    <div class="kpi-value">${bestOffer ? '$' + Math.round(bestOffer.monthly_payment).toLocaleString() : 'N/A'}</div>
-                    <div class="kpi-label">Best Payment</div>
-                </div>
-            `;
-        }
-        
-        function createEnhancedOfferCard(offer) {
-            const subsidyLevel = getSubsidyLevel(offer.fees_applied);
-            const tierClass = 'tier-' + offer.tier.toLowerCase().replace(' ', '-');
-            const encoded = encodeURIComponent(JSON.stringify(offer));
-            
-            return `
-                <div class="offer-card-enhanced" onclick="toggleOfferDetails(this)">
-                    <div class="offer-header">
-                        <div>
-                            <h4>${offer.car_model}</h4>
-                            <span class="tier-label ${tierClass}">${offer.tier}</span>
-                            <span class="subsidy-badge ${subsidyLevel.class}">${subsidyLevel.label}</span>
-                        </div>
-                        <span class="expand-icon">▼</span>
-                    </div>
-                    
-                    <div class="offer-summary" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
-                        <div>
-                            <div style="font-size: 14px; color: #6b7280; margin-bottom: 4px;">New Payment</div>
-                            <div style="font-size: 24px; font-weight: 600;">$${offer.monthly_payment.toLocaleString('en-US', {maximumFractionDigits: 0})}</div>
-                            <div style="font-size: 14px; color: ${offer.payment_delta >= 0 ? '#059669' : '#dc2626'}; font-weight: 600;">
-                                ${(offer.payment_delta >= 0 ? '+' : '')}${(offer.payment_delta * 100).toFixed(1)}%
-                            </div>
-                        </div>
-                        <div style="text-align: right;">
-                            <div style="font-size: 14px; color: #6b7280; margin-bottom: 4px;">Term</div>
-                            <div style="font-size: 20px; font-weight: 600;">${offer.term} mo</div>
-                        </div>
-                    </div>
-                    <div class="offer-stats" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-                        <div>
-                            <div style="font-size: 12px; color: #6b7280;">NPV</div>
-                            <div style="font-size: 16px; font-weight: 600;">$${offer.npv.toLocaleString('en-US', {maximumFractionDigits: 0})}</div>
-                        </div>
-                        <div>
-                            <div style="font-size: 12px; color: #6b7280;">Car Price</div>
-                            <div style="font-size: 16px; font-weight: 600;">$${offer.new_car_price.toLocaleString('en-US', {maximumFractionDigits: 0})}</div>
-                        </div>
-                    </div>
-                    <div style="margin:10px 0;text-align:right;">
-                        <button class="btn-secondary" data-offer="${encoded}" onclick="event.stopPropagation(); openAmortization(this)">View Amortization</button>
-                    </div>
-                    
-                    <div class="offer-details" style="display: none;">
-                        <div class="fee-breakdown-card">
-                            <h5>📊 Fee Structure Applied</h5>
-                            <div class="fee-grid">
-                                <div class="fee-item">
-                                    <div class="fee-label">Service Fee</div>
-                                    <div class="fee-value">${(offer.fees_applied.service_fee_pct * 100).toFixed(1)}%</div>
-                                    <div class="fee-detail">$${(offer.new_car_price * offer.fees_applied.service_fee_pct).toLocaleString('en-US', {maximumFractionDigits: 0})}</div>
-                                </div>
-                                <div class="fee-item">
-                                    <div class="fee-label">CXA (Opening Fee)</div>
-                                    <div class="fee-value">${(offer.fees_applied.cxa_pct * 100).toFixed(1)}%</div>
-                                    <div class="fee-detail">$${offer.cxa_amount.toLocaleString('en-US', {maximumFractionDigits: 0})}</div>
-                                </div>
-                                <div class="fee-item">
-                                    <div class="fee-label">CAC Bonus</div>
-                                    <div class="fee-value">$${offer.fees_applied.cac_bonus.toLocaleString('en-US', {maximumFractionDigits: 0})}</div>
-                                    <div class="fee-detail">${offer.fees_applied.cac_bonus > 0 ? 'Applied' : 'Not Applied'}</div>
-                                </div>
-                                <div class="fee-item">
-                                    <div class="fee-label">Kavak Total</div>
-                                    <div class="fee-value">${offer.fees_applied.kavak_total_amount > 0 ? '$25,000' : 'Not Included'}</div>
-                                    <div class="fee-detail">Insurance + GPS</div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="calculation-details">
-                            <h5>💰 Financial Calculation Details</h5>
-                            <div class="calc-row" style="background: #f3f4f6; padding: 8px; margin-bottom: 10px;">
-                                <span><strong>Current Monthly Payment:</strong></span>
-                                <span><strong>$${customerData.current_monthly_payment.toLocaleString('en-US', {maximumFractionDigits: 0})}</strong></span>
-                            </div>
-                            <div class="calc-row" style="background: #f3f4f6; padding: 8px; margin-bottom: 10px;">
-                                <span><strong>New Monthly Payment:</strong></span>
-                                <span><strong>$${offer.monthly_payment.toLocaleString('en-US', {maximumFractionDigits: 0})}</strong></span>
-                            </div>
-                            <div class="calc-row" style="background: #fef3c7; padding: 8px; margin-bottom: 10px;">
-                                <span><strong>Payment Change (${offer.payment_delta >= 0 ? 'Increase' : 'Decrease'}):</strong></span>
-                                <span><strong>${(offer.payment_delta >= 0 ? '+' : '')}${(offer.payment_delta * 100).toFixed(2)}%</strong></span>
-                            </div>
-                            <div class="calc-row">
-                                <span>Vehicle Sale Price:</span>
-                                <span>$${offer.new_car_price.toLocaleString('en-US', {maximumFractionDigits: 0})}</span>
-                            </div>
-                            <div class="calc-row">
-                                <span>Vehicle Equity:</span>
-                                <span>$${customerData.vehicle_equity.toLocaleString('en-US', {maximumFractionDigits: 0})}</span>
-                            </div>
-                            <div class="calc-row">
-                                <span>CAC Bonus Applied:</span>
-                                <span>+ $${offer.fees_applied.cac_bonus.toLocaleString('en-US', {maximumFractionDigits: 0})}</span>
-                            </div>
-                            <div class="calc-row">
-                                <span>CXA Fee:</span>
-                                <span>- $${offer.cxa_amount.toLocaleString('en-US', {maximumFractionDigits: 0})}</span>
-                            </div>
-                            <div class="calc-row">
-                                <span>Effective Equity:</span>
-                                <span>$${offer.effective_equity.toLocaleString('en-US', {maximumFractionDigits: 0})}</span>
-                            </div>
-                            <div class="calc-row">
-                                <span>Loan Amount:</span>
-                                <span>$${offer.loan_amount.toLocaleString('en-US', {maximumFractionDigits: 0})}</span>
-                            </div>
-                            <div class="calc-row">
-                                <span>Interest Rate (APR):</span>
-                                <span>${(offer.interest_rate * 100).toFixed(1)}%</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `;
-        }
-        
-        function getSubsidyLevel(fees) {
-            if (fees.service_fee_pct === 0.05 && fees.cxa_pct === 0.04 && fees.cac_bonus === 0) {
-                return { label: 'Phase 1 - Max Profit', class: 'subsidy-phase1' };
-            } else if (fees.service_fee_pct === 0 && fees.cxa_pct === 0.04 && fees.cac_bonus === 0) {
-                return { label: 'Level 1 - No Service Fee', class: 'subsidy-level1' };
-            } else if (fees.service_fee_pct === 0 && fees.cxa_pct === 0.04 && fees.cac_bonus > 0) {
-                return { label: 'Level 2 - With CAC', class: 'subsidy-level2' };
-            } else if (fees.service_fee_pct === 0 && fees.cxa_pct === 0 && fees.cac_bonus > 0) {
-                return { label: 'Level 3 - Max Subsidy', class: 'subsidy-level3' };
-            }
-            return { label: 'Custom', class: 'subsidy-phase1' };
-        }
-
-        function openAmortization(button) {
-            const offer = JSON.parse(decodeURIComponent(button.dataset.offer));
-            viewAmortizationTable(offer);
-        }
-
-        function toggleOfferDetails(card) {
-            const details = card.querySelector('.offer-details');
-            const isExpanded = details.style.display === 'block';
-            details.style.display = isExpanded ? 'none' : 'block';
-            card.classList.toggle('expanded');
-        }
     </script>
 </body>
 </html> 

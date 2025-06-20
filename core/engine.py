@@ -10,6 +10,7 @@ from .config import (
     IVA_RATE,
     GPS_INSTALLATION_FEE,
     INSURANCE_TABLE,
+    GPS_MONTHLY_FEE,
 )
 
 # Load config tables on import
@@ -428,49 +429,54 @@ def _generate_single_offer(
     if car["sales_price"] <= customer["current_car_price"]:
         return None
 
-    # 2. Resolve CXA circular dependency
+    # 2. Resolve CXA circular dependency including GPS installation fee
     cxa_pct = fees_config.get("cxa_pct", 0)
     cac_bonus = fees_config.get("cac_bonus", 0)
     gps_install_with_iva = GPS_INSTALLATION_FEE * IVA_RATE
+    gps_monthly_with_iva = GPS_MONTHLY_FEE * IVA_RATE
 
-    denominator = 1 - cxa_pct
-    if denominator <= 0:
-        return None
+    # 3. Component amounts (CXA first, because it feeds into starting equity)
+    cxa_amount = car["sales_price"] * cxa_pct
 
-    loan_amount_needed = (
-        car["sales_price"] - customer["vehicle_equity"] - cac_bonus
-    ) / denominator
+    # 4. Determine the *starting* vehicle equity before fees/bonuses
+    starting_equity = (
+        customer["vehicle_equity"]  # effective equity currently stored in data
+        + cxa_amount                 # CXA will be deducted later, so add back
+        + gps_install_with_iva       # GPS install deducted later, so add back
+        - cac_bonus                  # CAC increases equity later, so remove
+    )
+
+    # 5. Loan amount needed equals price minus starting equity
+    loan_amount_needed = car["sales_price"] - starting_equity
 
     if loan_amount_needed <= 0:
         return None
 
-    # 3. Component amounts
-    cxa_amount = loan_amount_needed * cxa_pct
+    # 6. Other component amounts
     service_fee_amt = car["sales_price"] * fees_config.get("service_fee_pct", 0)
     kavak_total_amt = fees_config.get("kavak_total_amount", 0)
     insurance_amt = INSURANCE_TABLE.get(
         customer["risk_profile_name"], DEFAULT_FEES["insurance_amount"]
     )
 
-    # 4. Effective equity calculation (GPS and CXA reduce available equity)
+    # 7. Effective equity calculation
     effective_equity = (
         customer["vehicle_equity"] + cac_bonus - cxa_amount - gps_install_with_iva
     )
 
-    # 5. Down payment check
+    # 8. Down payment check
     required_dp_pct = DOWN_PAYMENT_TABLE.loc[customer["risk_profile_index"], term]
     if effective_equity < car["sales_price"] * required_dp_pct:
         return None
 
-    # 6. Determine interest rate with term premium
+    # 9. Determine interest rate with term premium
     final_rate = interest_rate
     if term == 60:
         final_rate += 0.01
     elif term == 72:
         final_rate += 0.015
 
-    # 7. Manual monthly payment calculation
-    gps_monthly_fee = fees_config.get("fixed_fee", 0) * IVA_RATE
+    # 10. Manual monthly payment calculation
     actual_monthly_payment = _calculate_manual_payment(
         loan_amount_needed,
         final_rate,
@@ -478,10 +484,10 @@ def _generate_single_offer(
         service_fee_amt,
         kavak_total_amt,
         insurance_amt,
-        gps_monthly_fee,
+        gps_monthly_with_iva,
     )
 
-    # 8. Validate payment delta
+    # 11. Validate payment delta
     payment_delta = (actual_monthly_payment / customer["current_monthly_payment"]) - 1
     valid_tier = False
     for tier, (min_d, max_d) in payment_delta_tiers.items():
@@ -506,6 +512,8 @@ def _generate_single_offer(
         "service_fee_amount": service_fee_amt,
         "kavak_total_amount": kavak_total_amt,
         "insurance_amount": insurance_amt,
+        "gps_install_fee": gps_install_with_iva,
+        "gps_monthly_fee": gps_monthly_with_iva,
         "npv": calculate_final_npv(loan_amount_needed, final_rate, term),
         "fees_applied": fees_config,
         "interest_rate": final_rate,
@@ -542,8 +550,8 @@ def _calculate_forward_payment(
     if valor_seguro > 0:
         total_payment += npf.pmt(tasa_mensual_con_iva, 12, -valor_seguro)
 
-    # Fixed fee (GPS) with IVA, spread over term
-    total_payment += (fees_config.get("fixed_fee", 0) * IVA_RATE) / term
+    # Fixed GPS monthly fee (not financed)
+    total_payment += GPS_MONTHLY_FEE * IVA_RATE
 
     return total_payment
 
@@ -558,8 +566,10 @@ def _calculate_manual_payment(
     gps_monthly_fee: float,
 ):
     """Manual monthly payment calculation following the MVP specification."""
+    # Use the nominal (untaxed) monthly rate for principal amortization.
+    # IVA is only applied to the interest portion, not to the principal repayment itself.
     monthly_rate_interest = interest_rate / 12
-    monthly_rate_principal = (interest_rate * IVA_RATE) / 12
+    monthly_rate_principal = interest_rate / 12
 
     # Component 1: Main loan amount
     principal_main = abs(npf.ppmt(monthly_rate_principal, 1, term, -loan_amount))
@@ -680,7 +690,10 @@ def _finalize_offers_dataframe(
     if not offers_list:
         return pd.DataFrame()
 
-    df = pd.DataFrame(offers_list)
+    # This is the key fix: ensure all columns are preserved when creating the DataFrame
+    df = pd.DataFrame.from_records(offers_list)
+    
+    # Calculate payment_delta and assign tiers
     df["payment_delta"] = (df["monthly_payment"] / current_monthly_payment) - 1
 
     def assign_tier(delta):
@@ -690,6 +703,9 @@ def _finalize_offers_dataframe(
         return "N/A"
 
     df["tier"] = df["payment_delta"].apply(assign_tier)
+    
     # Filter out any offers that might have fallen out of bounds after precise calculation
     df = df[df["tier"] != "N/A"]
+    
+    # Ensure all original columns are present
     return df

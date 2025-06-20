@@ -108,12 +108,16 @@
 
         <main class="content">
             <header class="main-header">
-                <h2>👥 Customer List</h2>
-                <p>Browse all customers in the portfolio</p>
+                <h2>👥 Customer Portfolio</h2>
+                <p>Browse all customers or search for a specific one.</p>
             </header>
 
+            <div id="scenario-summary" class="kpi-grid" style="display: none; margin-bottom: 2rem;">
+                <!-- Populated by JavaScript if scenario results are available -->
+            </div>
+
             <div class="search-box">
-                <input type="text" id="customerSearch" placeholder="Search by Customer ID, Risk Profile, or Monthly Payment...">
+                <input type="text" id="customerSearch" placeholder="Search by Customer ID, Model, or Risk Profile...">
             </div>
 
             <div class="customer-table">
@@ -121,88 +125,30 @@
                     <thead>
                         <tr>
                             <th>Customer ID</th>
-                            <th>Monthly Payment</th>
-                            <th>Vehicle Equity</th>
-                            <th>Current Car Price</th>
+                            <th>Current Car Model</th>
                             <th>Risk Profile</th>
+                            <th>Potential Offers</th>
+                            <th>Avg. Offer NPV</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
-                    <tbody id="customerTableBody">
-                        <!-- Will be populated by JavaScript -->
+                    <tbody id="customer-list-body">
+                        <!-- Customer rows will be dynamically inserted here by main.js -->
                     </tbody>
                 </table>
             </div>
         </main>
     </div>
 
+    <script src="/static/js/main.js"></script>
     <script>
-        let customersData = [];
-
-        // Load customers on page load
-        async function loadCustomers() {
-            try {
-                const response = await fetch('/api/customers');
-                customersData = await response.json();
-                renderCustomerTable(customersData);
-            } catch (error) {
-                console.error('Error loading customers:', error);
+        // This script is intentionally simple to avoid template syntax errors.
+        // Full functionality is in /static/js/main.js
+        document.addEventListener('DOMContentLoaded', function() {
+            if (typeof initializeCustomerListPage === 'function') {
+                initializeCustomerListPage();
             }
-        }
-
-        // Render customer table
-        function renderCustomerTable(customers) {
-            const tbody = document.getElementById('customerTableBody');
-            tbody.innerHTML = '';
-
-            // Show first 100 customers by default
-            const displayCustomers = customers.slice(0, 100);
-
-            displayCustomers.forEach(customer => {
-                const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td style="font-family: monospace; font-size: 12px;">${customer.customer_id}</td>
-                    <td>$${customer.current_monthly_payment.toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 0})}</td>
-                    <td>$${customer.vehicle_equity.toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 0})}</td>
-                    <td>$${customer.current_car_price.toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 0})}</td>
-                    <td><span class="risk-badge risk-${customer.risk_profile_name}">${customer.risk_profile_name}</span></td>
-                    <td><a href="/customer/${customer.customer_id}" class="view-btn">View Offers →</a></td>
-                `;
-                tbody.appendChild(row);
-            });
-
-            // Add note about showing limited results
-            if (customers.length > 100) {
-                const noteRow = document.createElement('tr');
-                noteRow.innerHTML = `
-                    <td colspan="6" style="text-align: center; padding: 20px; color: #6B7280;">
-                        Showing first 100 of ${customers.length} customers. Use search to find specific customers.
-                    </td>
-                `;
-                tbody.appendChild(noteRow);
-            }
-        }
-
-        // Search functionality
-        document.getElementById('customerSearch').addEventListener('input', (e) => {
-            const searchTerm = e.target.value.toLowerCase();
-            
-            if (searchTerm.length < 2) {
-                renderCustomerTable(customersData);
-                return;
-            }
-
-            const filtered = customersData.filter(customer => 
-                customer.customer_id.toLowerCase().includes(searchTerm) ||
-                customer.risk_profile_name.toLowerCase().includes(searchTerm) ||
-                customer.current_monthly_payment.toString().includes(searchTerm)
-            );
-
-            renderCustomerTable(filtered);
         });
-
-        // Load customers when page loads
-        loadCustomers();
     </script>
 </body>
 </html> 

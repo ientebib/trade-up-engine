@@ -5,7 +5,7 @@ Main application entry point
 """
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
@@ -14,6 +14,10 @@ from typing import List, Dict
 import uvicorn
 from contextlib import asynccontextmanager
 import time
+import logging
+import numpy as np
+import json
+from sse_starlette.sse import EventSourceResponse
 
 # Import core modules
 from core.engine import run_engine_for_customer
@@ -25,10 +29,14 @@ from core.config_manager import (
     save_scenario_results,
     load_latest_scenario_results,
 )
+from core import cache_utils
 
 # Global variables for data
 customers_df = pd.DataFrame()
 inventory_df = pd.DataFrame()
+
+# Configure logger
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -289,8 +297,21 @@ async def serve_calculations_page(request: Request):
 
 @app.get("/customers", response_class=HTMLResponse)
 async def serve_customers_page(request: Request):
-    """Serves the customer list page."""
-    return templates.TemplateResponse("customer_list.html", {"request": request})
+    """Serves the customer list page with enriched scenario data."""
+    try:
+        scenario_results = load_latest_scenario_results().get("actual_metrics", {})
+        if scenario_results:
+            # Create a summary DataFrame from the scenario results if they exist
+            # This part needs to be adapted based on the actual structure of your results
+            # For now, let's assume we have a simple dictionary we can pass
+            pass
+    except Exception:
+        scenario_results = {}
+
+    return templates.TemplateResponse(
+        "customer_list.html", 
+        {"request": request, "scenario_results": json.dumps(scenario_results)}
+    )
 
 
 # --- API Endpoints ---
@@ -308,11 +329,22 @@ def generate_offers(request: OfferRequest) -> Dict:
         if inventory_df_request.empty:
             raise HTTPException(status_code=400, detail="Inventory cannot be empty.")
 
-        all_offers_df = run_engine_for_customer(
-            customer_dict, inventory_df_request, config_dict
-        )
+        logger.info(f"--- Running engine for customer: {customer_dict.get('customer_id')} ---")
+        # Caching logic
+        config_hash = cache_utils.compute_config_hash(config_dict)
+        cached_df = cache_utils.get_cached_offers(customer_dict['customer_id'], config_hash)
+        if cached_df is not None and not cached_df.empty:
+            logger.info("♻️ Using cached offers for customer %s", customer_dict['customer_id'])
+            all_offers_df = cached_df
+        else:
+            all_offers_df = run_engine_for_customer(
+                customer_dict, inventory_df_request, config_dict
+            )
+            # Save to cache
+            cache_utils.set_cached_offers(customer_dict['customer_id'], config_hash, all_offers_df)
 
         if all_offers_df.empty:
+            logger.warning(f"No valid offers found for customer {customer_dict.get('customer_id')}.")
             return {"message": "No valid offers found for this customer.", "offers": {}}
 
         offers_by_tier = {
@@ -353,10 +385,18 @@ def get_all_customers():
 
 @app.get("/api/inventory", tags=["Inventory"])
 def get_inventory():
-    """Returns the full inventory list."""
+    """Returns the full inventory list, ensuring JSON compatibility."""
     if inventory_df.empty:
         return []
-    return inventory_df.to_dict("records")
+    
+    # Create a copy to handle NaN values for JSON conversion
+    df_copy = inventory_df.copy()
+    
+    # Replace NaN with None (which becomes 'null' in JSON)
+    # This is more robust than trying to convert types
+    df_copy = df_copy.replace({np.nan: None})
+
+    return df_copy.to_dict("records")
 
 
 @app.get("/api/config-status", tags=["Configuration"])
@@ -560,6 +600,72 @@ def run_scenario_analysis(config: ScenarioConfig):
         raise HTTPException(
             status_code=500, detail=f"Scenario analysis failed: {str(e)}"
         )
+
+
+@app.get("/api/scenario-results", response_class=JSONResponse)
+async def api_get_scenario_results():
+    """Return the latest scenario analysis results if available."""
+    try:
+        latest_results = load_latest_scenario_results()
+        if latest_results is None:
+            return {}
+        return latest_results
+    except Exception as e:
+        logger.error(f"Error loading scenario results: {e}")
+        return {}
+
+
+# Real-time scenario analysis with SSE
+
+@app.get("/api/scenario-analysis-stream")
+async def scenario_analysis_stream():
+    """Run scenario analysis and stream progress using Server-Sent Events based on the latest saved configuration."""
+
+    async def event_generator():
+        start_time = time.time()
+        config_dict = load_engine_config()
+
+        total_customers = len(customers_df) if not customers_df.empty else 0
+        processed = 0
+        offers_accum = 0
+
+        # Iterate through customers and stream progress
+        for _, row in customers_df.iterrows():
+            customer_dict = row.to_dict()
+
+            # Use cached offers if available
+            config_hash = cache_utils.compute_config_hash(config_dict)
+            cached_df = cache_utils.get_cached_offers(customer_dict['customer_id'], config_hash)
+            if cached_df is not None and not cached_df.empty:
+                offers_df = cached_df
+            else:
+                offers_df = run_engine_for_customer(customer_dict, inventory_df, config_dict)
+                cache_utils.set_cached_offers(customer_dict['customer_id'], config_hash, offers_df)
+
+            offers_accum += len(offers_df)
+            processed += 1
+
+            progress_payload = {
+                "processed": processed,
+                "total": total_customers,
+                "offers_so_far": offers_accum,
+                "percent": round((processed / total_customers) * 100, 2)
+            }
+            yield {
+                "event": "progress",
+                "data": json.dumps(progress_payload)
+            }
+
+        # When done compute metrics (simple example)
+        execution_details = {
+            "processed_customers": processed,
+            "execution_time_seconds": round(time.time() - start_time, 2)
+        }
+
+        final_payload = {"status": "finished", "execution_details": execution_details}
+        yield {"event": "finished", "data": json.dumps(final_payload)}
+
+    return EventSourceResponse(event_generator())
 
 
 if __name__ == "__main__":
