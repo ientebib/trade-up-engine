@@ -435,19 +435,11 @@ def _generate_single_offer(
     gps_install_with_iva = GPS_INSTALLATION_FEE * IVA_RATE
     gps_monthly_with_iva = GPS_MONTHLY_FEE * IVA_RATE
 
-    # 3. Component amounts (CXA first, because it feeds into starting equity)
-    cxa_amount = car["sales_price"] * cxa_pct
-
-    # 4. Determine the *starting* vehicle equity before fees/bonuses
-    starting_equity = (
-        customer["vehicle_equity"]  # effective equity currently stored in data
-        + cxa_amount                 # CXA will be deducted later, so add back
-        + gps_install_with_iva       # GPS install deducted later, so add back
-        - cac_bonus                  # CAC increases equity later, so remove
-    )
-
-    # 5. Loan amount needed equals price minus starting equity
-    loan_amount_needed = car["sales_price"] - starting_equity
+    # 3. Solve for loan amount treating CXA as percentage of loan amount
+    base_equity = customer["vehicle_equity"] - cac_bonus
+    loan_amount_needed = (car["sales_price"] - base_equity) / (1 - cxa_pct)
+    cxa_amount = loan_amount_needed * cxa_pct
+    starting_equity = customer["vehicle_equity"] + cxa_amount + gps_install_with_iva - cac_bonus
 
     if loan_amount_needed <= 0:
         return None
@@ -569,7 +561,7 @@ def _calculate_manual_payment(
     # Use the nominal (untaxed) monthly rate for principal amortization.
     # IVA is only applied to the interest portion, not to the principal repayment itself.
     monthly_rate_interest = interest_rate / 12
-    monthly_rate_principal = interest_rate / 12
+    monthly_rate_principal = (interest_rate / IVA_RATE) / 12
 
     # Component 1: Main loan amount
     principal_main = abs(npf.ppmt(monthly_rate_principal, 1, term, -loan_amount))

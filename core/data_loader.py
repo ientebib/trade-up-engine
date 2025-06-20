@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 import redshift_connector
 import logging
 from core import cache_utils  # local import to avoid circular
+from datetime import datetime
 
 # Load environment variables
 load_dotenv()
@@ -40,6 +41,15 @@ class DataLoader:
         # Caches for repeated access
         self._customers_cache = None
         self._inventory_cache = None
+        self._customers_cache_time = None
+        self._inventory_cache_time = None
+        self.customers_cache_ttl = cache_utils.CUSTOMER_CACHE_TTL
+        self.inventory_cache_ttl = cache_utils.INVENTORY_CACHE_TTL
+
+    def _cache_valid(self, cache_time: datetime, ttl: int) -> bool:
+        if cache_time is None:
+            return False
+        return (datetime.utcnow() - cache_time).total_seconds() < ttl
 
     def load_inventory_from_redshift(self):
         """Load inventory data from Redshift using the redshift-connector."""
@@ -148,49 +158,74 @@ class DataLoader:
     # Public helper methods
     # ------------------------------------------------------------------
 
-    def load_inventory(self, csv_path='inventory_data.csv'):
-        """Return inventory data using cache if available"""
-        if self._inventory_cache is None:
-            # ------------------------------------------------------------------
-            # Fast path: respect environment flag to disable external calls (VPN)
-            # ------------------------------------------------------------------
-            if os.getenv('DISABLE_EXTERNAL_CALLS', 'false').lower() == 'true':
-                logger.info("🚫 External calls disabled via ENV. Loading inventory from CSV only …")
-                if os.path.exists(csv_path):
-                    try:
-                        inv_df = pd.read_csv(csv_path)
-                        logger.info(f"✅ Loaded {len(inv_df)} inventory items from {csv_path}.")
-                    except Exception as e:
-                        logger.error(f"❌ Failed to read {csv_path}: {e}")
-                        inv_df = pd.DataFrame()
-                else:
-                    logger.warning(f"⚠️ {csv_path} not found. Inventory will be empty.")
+    def load_inventory(self, csv_path='inventory_data.csv', force_refresh: bool = False):
+        """Return inventory data using TTL-based cache."""
+        if force_refresh:
+            self._inventory_cache = None
+            self._inventory_cache_time = None
+            cache_utils.invalidate_cache('inventory_data')
+
+        if self._inventory_cache is not None and self._cache_valid(self._inventory_cache_time, self.inventory_cache_ttl):
+            return self._inventory_cache
+
+        cached_df = cache_utils.get_cache('inventory_data')
+        if isinstance(cached_df, pd.DataFrame):
+            self._inventory_cache = cached_df
+            self._inventory_cache_time = datetime.utcnow()
+            return self._inventory_cache
+
+        if os.getenv('DISABLE_EXTERNAL_CALLS', 'false').lower() == 'true':
+            logger.info("🚫 External calls disabled via ENV. Loading inventory from CSV only …")
+            if os.path.exists(csv_path):
+                try:
+                    inv_df = pd.read_csv(csv_path)
+                    logger.info(f"✅ Loaded {len(inv_df)} inventory items from {csv_path}.")
+                except Exception as e:
+                    logger.error(f"❌ Failed to read {csv_path}: {e}")
                     inv_df = pd.DataFrame()
-                self._inventory_cache = inv_df
-                return self._inventory_cache
-
-            # Check daily cache first
-            if cache_utils.inventory_cache_exists_today():
-                inv_df = cache_utils.load_inventory_cache()
-                logger.info(f"✅ Loaded inventory from daily cache ({len(inv_df)} rows).")
             else:
-                # Load from Redshift (heavy)
-                inv_df = self.load_inventory_from_redshift()
-                if inv_df.empty:
-                    inv_df = pd.read_csv(csv_path) if os.path.exists(csv_path) else pd.DataFrame()
-                # Save cache for today
-                if not inv_df.empty:
-                    cache_utils.save_inventory_cache(inv_df)
-                    logger.info("💾 Inventory cached to daily parquet file.")
+                logger.warning(f"⚠️ {csv_path} not found. Inventory will be empty.")
+                inv_df = pd.DataFrame()
+        else:
+            inv_df = self.load_inventory_from_redshift()
+            if inv_df.empty:
+                inv_df = pd.read_csv(csv_path) if os.path.exists(csv_path) else pd.DataFrame()
 
-            self._inventory_cache = inv_df
+        self._inventory_cache = inv_df
+        self._inventory_cache_time = datetime.utcnow()
+        if not inv_df.empty:
+            cache_utils.set_cache('inventory_data', inv_df, self.inventory_cache_ttl)
         return self._inventory_cache
 
-    def load_customers(self, csv_path='customer_data.csv'):
-        """Return customer data using cache if available"""
-        if self._customers_cache is None:
-            self._customers_cache = self.load_customers_from_csv(csv_path)
+    def load_customers(self, csv_path='customer_data.csv', force_refresh: bool = False):
+        """Return customer data using TTL-based cache."""
+        if force_refresh:
+            self._customers_cache = None
+            self._customers_cache_time = None
+            cache_utils.invalidate_cache('customer_data')
+
+        if self._customers_cache is not None and self._cache_valid(self._customers_cache_time, self.customers_cache_ttl):
+            return self._customers_cache
+
+        cached_df = cache_utils.get_cache('customer_data')
+        if isinstance(cached_df, pd.DataFrame):
+            self._customers_cache = cached_df
+            self._customers_cache_time = datetime.utcnow()
+            return self._customers_cache
+
+        self._customers_cache = self.load_customers_from_csv(csv_path)
+        self._customers_cache_time = datetime.utcnow()
+        if not self._customers_cache.empty:
+            cache_utils.set_cache('customer_data', self._customers_cache, self.customers_cache_ttl)
         return self._customers_cache
+
+    def refresh_inventory_cache(self, csv_path='inventory_data.csv'):
+        """Force refresh the inventory data cache."""
+        return self.load_inventory(csv_path, force_refresh=True)
+
+    def refresh_customer_cache(self, csv_path='customer_data.csv'):
+        """Force refresh the customer data cache."""
+        return self.load_customers(csv_path, force_refresh=True)
 
     def transform_customer_data(self, raw_df):
         """Transform raw customer CSV data to expected format"""
@@ -247,16 +282,14 @@ class DataLoader:
         
         return customers_df
 
-    def load_all_data(self):
+    def load_all_data(self, force_refresh: bool = False):
         """Load and integrate all data sources"""
         
         logger.info("🚀 Starting comprehensive data loading process...")
         
-        # Load inventory from Redshift
-        inventory_df = self.load_inventory_from_redshift()
-        
-        # Load customers from CSV
-        customers_df = self.load_customers_from_csv()
+        # Load inventory and customers using caching rules
+        inventory_df = self.load_inventory(force_refresh=force_refresh)
+        customers_df = self.load_customers(force_refresh=force_refresh)
         
         # Enrich customer data with car models
         if not customers_df.empty and not inventory_df.empty:
