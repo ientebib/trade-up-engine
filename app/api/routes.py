@@ -187,8 +187,9 @@ async def save_config(config: EngineSettings):
         config.last_updated = time.strftime("%Y-%m-%d %H:%M:%S")
 
         config_manager.save_config(config)
-        engine.update_config(config.dict())
-        
+        config_dict = config.dict()
+        engine.update_config(config_dict)
+
         return {
             "message": "Configuration saved successfully",
             "config": config_dict
