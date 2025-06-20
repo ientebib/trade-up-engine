@@ -29,6 +29,7 @@ from core.config_manager import (
     save_scenario_results,
     load_latest_scenario_results,
 )
+from core.schemas import EngineSettings
 from core import cache_utils
 
 # Global variables for data
@@ -137,42 +138,6 @@ class EngineConfig(BaseModel):
     use_custom_params: bool = False
 
 
-class PaymentDeltaTiers(BaseModel):
-    refresh: List[float]
-    upgrade: List[float]
-    max_upgrade: List[float]
-
-
-class ScenarioConfig(BaseModel):
-    # Engine Mode
-    use_custom_params: bool = False
-    use_range_optimization: bool = False
-    include_kavak_total: bool = True
-
-    # Fee Structure (only used if use_custom_params = True)
-    service_fee_pct: float = 0.05
-    cxa_pct: float = 0.04
-    cac_bonus: float = 5000.0
-    insurance_amount: float = 10999.0
-    gps_fee: float = 350.0
-
-    # Range Optimization (only used if use_range_optimization = True)
-    service_fee_range: List[float] = [0.0, 5.0]
-    cxa_range: List[float] = [0.0, 4.0]
-    cac_bonus_range: List[float] = [0.0, 10000.0]
-    service_fee_step: float = 0.01  # 1 basis point
-    cxa_step: float = 0.01  # 1 basis point
-    cac_bonus_step: float = 100  # 100 MXN steps
-    max_offers_per_tier: int = 50
-
-    # Payment Delta Thresholds
-    payment_delta_tiers: PaymentDeltaTiers = PaymentDeltaTiers(
-        refresh=[-0.05, 0.05], upgrade=[0.0501, 0.25], max_upgrade=[0.2501, 1.00]
-    )
-
-    # Engine Behavior
-    term_priority: str = "standard"
-    min_npv_threshold: float = 5000.0
 
 
 class OfferRequest(BaseModel):
@@ -324,7 +289,7 @@ def generate_offers(request: OfferRequest) -> Dict:
 
         # Load saved configuration and merge with request config
         saved_config = load_engine_config()
-        config_dict = {**saved_config, **request.engine_config.dict()}
+        config_dict = {**saved_config.dict(), **request.engine_config.dict()}
 
         if inventory_df_request.empty:
             raise HTTPException(status_code=400, detail="Inventory cannot be empty.")
@@ -404,21 +369,22 @@ def get_config_status():
     """Returns the current engine configuration status."""
     try:
         config = load_engine_config()
+        config_dict = config.dict()
         latest_results = load_latest_scenario_results()
 
         return {
-            "has_custom_config": config.get("use_custom_params", False)
-            or config.get("use_range_optimization", False),
+            "has_custom_config": config_dict.get("use_custom_params", False)
+            or config_dict.get("use_range_optimization", False),
             "mode": (
                 "Range Optimization"
-                if config.get("use_range_optimization")
+                if config_dict.get("use_range_optimization")
                 else (
                     "Custom Parameters"
-                    if config.get("use_custom_params")
+                    if config_dict.get("use_custom_params")
                     else "Default Hierarchical"
                 )
             ),
-            "last_updated": config.get("last_updated", "Never"),
+            "last_updated": config_dict.get("last_updated", "Never"),
             "latest_results": latest_results,
         }
     except Exception as e:
@@ -431,11 +397,11 @@ def get_config_status():
 
 
 @app.post("/api/save-config", tags=["Configuration"])
-def save_configuration(config: ScenarioConfig):
+def save_configuration(config: EngineSettings):
     """Save the engine configuration to file."""
     try:
-        config_dict = config.dict()
-        if save_engine_config(config_dict):
+        if save_engine_config(config):
+            config_dict = config.dict()
             return {
                 "message": "Configuration saved successfully",
                 "config": config_dict,
@@ -449,14 +415,14 @@ def save_configuration(config: ScenarioConfig):
 
 
 @app.post("/api/scenario-analysis", tags=["Configuration"])
-def run_scenario_analysis(config: ScenarioConfig):
+def run_scenario_analysis(config: EngineSettings):
     """Run a REAL scenario analysis by actually executing the engine with given configuration."""
     try:
         start_time = time.time()
 
         # Save configuration first
         config_dict = config.dict()
-        save_engine_config(config_dict)
+        save_engine_config(config)
 
         # Initialize metrics
         total_customers = len(customers_df) if not customers_df.empty else 0
@@ -623,7 +589,7 @@ async def scenario_analysis_stream():
 
     async def event_generator():
         start_time = time.time()
-        config_dict = load_engine_config()
+        config_dict = load_engine_config().dict()
 
         total_customers = len(customers_df) if not customers_df.empty else 0
         processed = 0

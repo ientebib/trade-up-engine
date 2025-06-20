@@ -14,6 +14,7 @@ from pathlib import Path
 from core.engine import TradeUpEngine
 from core.data_loader_dev import dev_data_loader
 from core.config_manager import ConfigManager
+from core.schemas import EngineSettings
 
 # Initialize router
 router = APIRouter()
@@ -41,41 +42,6 @@ class EngineConfig(BaseModel):
     include_kavak_total: bool = True
     use_custom_params: bool = False
 
-class PaymentDeltaTiers(BaseModel):
-    refresh: List[float]
-    upgrade: List[float]
-    max_upgrade: List[float]
-
-class ScenarioConfig(BaseModel):
-    # Engine Mode
-    use_custom_params: bool = False
-    use_range_optimization: bool = False
-    include_kavak_total: bool = True
-
-    # Fee Structure (only used if use_custom_params = True)
-    service_fee_pct: float = 0.05
-    cxa_pct: float = 0.04
-    cac_bonus: float = 5000.0
-    insurance_amount: float = 10999.0
-    gps_fee: float = 350.0
-
-    # Range Optimization (only used if use_range_optimization = True)
-    service_fee_range: List[float] = [0.0, 5.0]
-    cxa_range: List[float] = [0.0, 4.0]
-    cac_bonus_range: List[float] = [0.0, 10000.0]
-    service_fee_step: float = 0.01
-    cxa_step: float = 0.01
-    cac_bonus_step: float = 100
-    max_offers_per_tier: int = 50
-
-    # Payment Delta Thresholds
-    payment_delta_tiers: PaymentDeltaTiers = PaymentDeltaTiers(
-        refresh=[-0.05, 0.05], upgrade=[0.0501, 0.25], max_upgrade=[0.2501, 1.00]
-    )
-
-    # Engine Behavior
-    term_priority: str = "standard"
-    min_npv_threshold: float = 5000.0
 
 class OfferRequest(BaseModel):
     customer_data: CustomerData
@@ -118,7 +84,7 @@ async def generate_offers(request: OfferRequest) -> Dict:
         
         # Load current config and merge with request config
         config = config_manager.load_config()
-        config_dict = {**config, **request.engine_config.dict()}
+        config_dict = {**config.dict(), **request.engine_config.dict()}
         
         # Update engine with current config
         engine.update_config(config_dict)
@@ -193,15 +159,16 @@ async def get_config_status():
     """Returns the current engine configuration status"""
     try:
         config = config_manager.load_config()
-        
+        config_dict = config.dict()
+
         return {
-            "has_custom_config": config.get("use_custom_params", False) or config.get("use_range_optimization", False),
+            "has_custom_config": config_dict.get("use_custom_params", False) or config_dict.get("use_range_optimization", False),
             "mode": (
-                "Range Optimization" if config.get("use_range_optimization")
-                else ("Custom Parameters" if config.get("use_custom_params") 
+                "Range Optimization" if config_dict.get("use_range_optimization")
+                else ("Custom Parameters" if config_dict.get("use_custom_params")
                       else "Default Hierarchical")
             ),
-            "last_updated": config.get("last_updated", "Never"),
+            "last_updated": config_dict.get("last_updated", "Never"),
             "latest_results": None  # Mock for development
         }
     except Exception as e:
@@ -214,14 +181,13 @@ async def get_config_status():
         }
 
 @router.post("/save-config")
-async def save_config(config: ScenarioConfig):
+async def save_config(config: EngineSettings):
     """Save engine configuration"""
     try:
-        config_dict = config.dict()
-        config_dict["last_updated"] = time.strftime("%Y-%m-%d %H:%M:%S")
-        
-        config_manager.save_config(config_dict)
-        engine.update_config(config_dict)
+        config.last_updated = time.strftime("%Y-%m-%d %H:%M:%S")
+
+        config_manager.save_config(config)
+        engine.update_config(config.dict())
         
         return {
             "message": "Configuration saved successfully",
@@ -232,15 +198,15 @@ async def save_config(config: ScenarioConfig):
         raise HTTPException(status_code=500, detail=f"Error saving configuration: {str(e)}")
 
 @router.post("/scenario-analysis")
-async def run_scenario_analysis(config: ScenarioConfig):
+async def run_scenario_analysis(config: EngineSettings):
     """Run scenario analysis - Development version with mock results"""
     try:
         start_time = time.time()
         
         # Save configuration first
+        config.last_updated = time.strftime("%Y-%m-%d %H:%M:%S")
+        config_manager.save_config(config)
         config_dict = config.dict()
-        config_dict["last_updated"] = time.strftime("%Y-%m-%d %H:%M:%S")
-        config_manager.save_config(config_dict)
         
         # Load customer data for metrics
         customers_df = data_loader.load_customers()
