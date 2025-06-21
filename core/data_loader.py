@@ -59,15 +59,17 @@ class DataLoader:
             logger.error("❌ redshift.sql file not found.")
             return pd.DataFrame()
 
-        chaos = os.getenv("CHAOS_MODE")
-        if chaos:
-            if chaos == "network" and random.random() < 0.3:
-                logger.warning("💥 Chaos mode: simulating network drop")
-                raise ConnectionError("simulated network drop")
-            if chaos == "stall" and random.random() < 0.3:
-                delay = random.uniform(5, 10)
-                logger.warning(f"💥 Chaos mode: stalling for {delay:.1f}s")
-                time.sleep(delay)
+        # Chaos testing mode (only runs in non-production environments)
+        if os.getenv("ENV") != "production":
+            chaos = os.getenv("CHAOS_MODE")
+            if chaos:
+                if chaos == "network" and random.random() < 0.3:
+                    logger.warning("💥 Chaos mode: simulating network drop")
+                    raise redshift_connector.OperationalError("Simulated network error")
+                if chaos == "stall" and random.random() < 0.3:
+                    delay = random.uniform(2, 5)
+                    logger.warning(f"💥 Chaos mode: stalling for {delay:.1f}s")
+                    time.sleep(delay)
 
         conn = None
         try:
@@ -342,10 +344,10 @@ class DataLoader:
         if not customers_df.empty and not inventory_df.empty:
             customers_df = self.enrich_customer_models(customers_df, inventory_df)
 
-        logger.info("✅ Data loading complete!")
-        logger.info(f"📊 Final data summary:")
-        logger.info(f"   - Customers: {len(customers_df)}")
-        logger.info(f"   - Inventory: {len(inventory_df)}")
+        logger.info("✅ Data loading and enrichment complete!")
+        logger.info("📊 Final data summary:")
+        logger.info("   - Customers: %d", len(customers_df))
+        logger.info("   - Inventory: %d", len(inventory_df))
 
         return customers_df, inventory_df
 
