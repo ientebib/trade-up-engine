@@ -12,7 +12,7 @@ requests==2.32.4
 
 # Database and Redshift connection
 redshift-connector==2.1.7
-sqlalchemy==2.0.32  # Keep for other potential uses, but not for Redshift connection
+sqlalchemy==2.0.32  # Keep for other potential uses (ORM, connection pooling, query building), but not for Redshift connection. Redshift uses redshift-connector for native connectivity.
 python-dotenv==1.1.0
 
 # Data processing
