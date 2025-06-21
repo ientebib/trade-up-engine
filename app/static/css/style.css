@@ -1543,6 +1543,7 @@ h1, h2, h3, h4, h5, h6 {
 .fee-row {
     display: flex;
     justify-content: space-between;
+    align-items: center;
     padding: 0.5rem 0;
     border-bottom: 1px solid var(--border-light);
 }
@@ -1551,4 +1552,264 @@ h1, h2, h3, h4, h5, h6 {
     height: 1px;
     background: var(--border-light);
     margin: 1rem 0;
+}
+
+/* Configuration Page Styles */
+.config-status-banner {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem 1.5rem;
+    border-radius: var(--radius-lg);
+    margin-bottom: 1.5rem;
+    background: var(--bg-secondary);
+    border-left: 4px solid var(--primary-color);
+}
+
+.config-status-banner .status-icon {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background-color: var(--primary-color);
+    flex-shrink: 0;
+}
+
+.config-status-banner h4 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.config-status-banner p {
+    margin: 0;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+}
+
+.range-summary-banner {
+    text-align: center;
+    padding: 1rem;
+    margin-top: 1.5rem;
+    border-radius: var(--radius-md);
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.05), rgba(139, 92, 246, 0.05));
+    border: 1px solid var(--border-light);
+    color: var(--text-secondary);
+}
+
+.range-summary-banner strong {
+    color: var(--primary-color);
+    font-weight: 700;
+}
+
+#performance-warning {
+    margin-top: 0.5rem;
+    font-size: 0.875rem;
+    color: var(--warning-color);
+    font-weight: 500;
+}
+
+/* Configuration Page: Mode Selection */
+.config-mode-selection {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1rem;
+}
+
+.config-mode-card {
+    display: block;
+    cursor: pointer;
+    position: relative;
+}
+
+.config-mode-card input[type="radio"] {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.config-mode-card .mode-content {
+    padding: 1.5rem;
+    border: 2px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    background: var(--bg-primary);
+    transition: all 0.2s ease;
+    height: 100%;
+}
+
+.config-mode-card:hover .mode-content {
+    border-color: var(--primary-light);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.config-mode-card input[type="radio"]:checked + .mode-content {
+    border-color: var(--primary-color);
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.05) 0%, rgba(139, 92, 246, 0.05) 100%);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1), var(--shadow-md);
+}
+
+.config-mode-card .mode-content h4 {
+    margin: 0 0 0.5rem 0;
+    color: var(--text-primary);
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+.config-mode-card .mode-content p {
+    margin: 0 0 0.75rem 0;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+
+.config-mode-card .mode-content small {
+    color: var(--text-tertiary);
+    font-size: 0.8rem;
+}
+
+/* Configuration Page: Sections and Forms */
+.config-section {
+    margin-top: 1.5rem;
+    animation: fadeIn 0.5s ease-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.form-grid-three {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1.5rem;
+}
+
+.form-grid-three-condensed {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.75rem;
+}
+
+.form-divider {
+    height: 1px;
+    background: var(--border-light);
+    margin: 1.5rem 0;
+}
+
+.range-param-card {
+    padding: 1.25rem;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-light);
+}
+
+.range-param-card h4 {
+    margin: 0 0 1rem 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.range-count-display {
+    text-align: center;
+    margin-top: 0.75rem;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+}
+
+.range-count-display span {
+    font-weight: 600;
+    color: var(--primary-color);
+}
+
+/* Configuration Page: Form Controls */
+.range-slider {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.range-slider input[type="range"] {
+    flex: 1;
+}
+
+.range-slider .range-slider-value {
+    min-width: 4.5rem;
+    text-align: right;
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: 0.9rem;
+    background: var(--bg-secondary);
+    padding: 0.25rem 0.5rem;
+    border-radius: var(--radius-sm);
+}
+
+/* Configuration Page: Action Buttons */
+.config-actions {
+    display: flex;
+    gap: 1rem;
+    margin-top: 2rem;
+    flex-wrap: wrap;
+}
+
+.btn-tertiary {
+    background: transparent;
+    color: var(--text-secondary);
+    border: none;
+    text-decoration: underline;
+}
+
+.btn-tertiary:hover {
+    color: var(--text-primary);
+}
+
+/* Configuration Page: Loading Modal */
+.loading-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    backdrop-filter: blur(4px);
+}
+
+.loading-modal-content {
+    background: var(--bg-primary);
+    padding: 2.5rem;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-xl);
+    text-align: center;
+    max-width: 400px;
+}
+
+.loading-modal-content .spinner {
+    width: 32px;
+    height: 32px;
+    border: 4px solid var(--border-light);
+    border-top-color: var(--primary-color);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 1.5rem;
+}
+
+.loading-modal-content h3 {
+    margin: 0 0 0.5rem 0;
+    font-size: 1.25rem;
+}
+
+.loading-modal-content p {
+    margin: 0;
+    color: var(--text-secondary);
+}
+
+/* Remove old/unused styles */
+.config-mode-card, .form-input, .btn-primary, .btn-secondary, .modal, .modal-content {
+    /* These styles were refactored or are already defined elsewhere */
+    /* This empty rule block is to explicitly show they were considered */
 }

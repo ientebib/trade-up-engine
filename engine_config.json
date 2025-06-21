@@ -1,6 +1,6 @@
 {
   "use_custom_params": false,
-  "use_range_optimization": false,
+  "use_range_optimization": true,
   "include_kavak_total": true,
   "service_fee_pct": 0.05,
   "cxa_pct": 0.04,
@@ -20,9 +20,9 @@
     0.0,
     10000.0
   ],
-  "service_fee_step": 0.01,
-  "cxa_step": 0.01,
-  "cac_bonus_step": 100,
+  "service_fee_step": 0.5,
+  "cxa_step": 0.5,
+  "cac_bonus_step": 1000.0,
   "max_offers_per_tier": 50,
   "max_combinations_to_test": 1000,
   "early_stop_on_offers": 100,
@@ -42,5 +42,5 @@
   },
   "term_priority": "standard",
   "min_npv_threshold": 5000.0,
-  "last_updated": "2025-06-19T16:57:11.982167"
+  "last_updated": "2025-06-21T12:29:38.260837"
 }

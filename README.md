@@ -1,16 +1,54 @@
-# Trade-Up Engine
+# Kavak Trade-Up Engine
 
-A sophisticated trade-up calculation engine for automotive customer upgrades with web interface.
+This project contains the backend services and frontend UI for the Kavak Trade-Up Engine, a tool for calculating optimal trade-up offers for customers.
 
 ## Overview
 
-The Trade-Up Engine is a FastAPI-based application that calculates optimal trade-up offers for automotive customers. It features:
+The system is built with FastAPI and provides a web interface for running simulations, configuring engine parameters, and viewing results.
 
-- Real-time customer data processing (4,829 customers supported)
-- Fallback inventory system with 5 default vehicles
-- Configurable fee structures and optimization parameters
-- Web interface for customer management and offer generation
-- Redshift integration capability (with local fallback)
+## Key Features
+
+- **Offer Generation**: Calculates trade-up offers based on customer data and vehicle inventory.
+- **Financial Projections**: Includes NPV, profit, and payment schedule calculations.
+- **Configurable Engine**: Tune engine parameters like fees and subsidies through a web UI.
+- **Scenario Analysis**: Run batch analyses to test different configurations.
+- **Dual-Mode Operation**: Supports both a `development` mode (with mock data) and a `production` mode (with live data).
+
+## Getting Started
+
+### Installation
+
+The project uses a simple shell script to manage setup and execution. To prepare the environment (install dependencies into a virtual environment), run:
+
+```bash
+./run_local.sh setup
+```
+
+### Running the Application
+
+The application can be run in two modes: `dev` and `prod`.
+
+- **Development**: Uses local CSV files for data and disables external network calls. This is the default mode.
+  ```bash
+  ./run_local.sh
+  ```
+
+- **Production**: Connects to live data sources like Redshift.
+  ```bash
+  ./run_local.sh prod
+  ```
+
+For detailed instructions on server modes, configuration, and troubleshooting, please see the **[Execution Guide](EXECUTION_GUIDE.md)**.
+
+## Project Structure
+
+- `app/`: Contains the FastAPI web application, including API routes, static files (CSS, JS), and HTML templates.
+- `core/`: Houses the main business logic for the trade-up engine, including the calculator, data loaders, and configuration management.
+- `data/`: Holds local data files, such as `customer_data.csv`.
+- `docs/`: Project documentation.
+- `main.py`: The entry point for the production server.
+- `main_dev.py`: The entry point for the development server.
+- `run_local.sh`: The main script for setting up and running the application.
 
 ## Prerequisites
 

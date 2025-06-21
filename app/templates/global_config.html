@@ -2,63 +2,159 @@
 {% block title %}Kavak Trade-Up - Engine Configuration{% endblock %}
 {% block content %}
     <header class="main-header">
-        <h2>🚀 Trade-Up Engine Configuration</h2>
-        <p>Optimize fee structures and analyze elasticity with Range Optimization</p>
+        <h2>⚙️ Engine Configuration</h2>
+        <p>Select a mode, tune parameters, and run analysis.</p>
     </header>
 
-    <!-- Engine Mode Selection - Redesigned -->
-    <div class="section-card" style="border: 2px solid #3b82f6; background: #eff6ff;">
-        <h3 style="margin-bottom: 20px;">Select Engine Mode</h3>
-        <div class="mode-selector" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
-            <div class="mode-card" onclick="selectMode('default', event)" style="background: white; border: 2px solid #e5e7eb; border-radius: 12px; padding: 20px; cursor: pointer; transition: all 0.2s;">
-                <input type="radio" id="default-mode" name="engine-mode" value="default" checked style="display: none;">
-                <h4 style="margin: 0 0 8px 0; color: #1f2937;">📊 Default Mode</h4>
-                <p style="font-size: 13px; color: #6b7280; margin: 0;">Hierarchical subsidy search with predefined levels</p>
-                <div style="margin-top: 10px; font-size: 12px; color: #9ca3af;">
-                    • Service Fee: 5% or 0%<br>
-                    • CXA: 4% or 0%<br>
-                    • CAC: $0 or $5,000
+    <!-- Current Status Banner -->
+    <div id="config-status-banner" class="config-status-banner">
+        <div class="status-icon"></div>
+        <div>
+            <h4 id="config-status-title">Loading Status...</h4>
+            <p id="config-status-message">Fetching current engine configuration.</p>
+        </div>
+    </div>
+
+    <!-- Engine Mode Selection -->
+    <div class="section-card">
+        <h3>Engine Mode</h3>
+        <div class="config-mode-selection">
+            <label class="config-mode-card" for="mode-default">
+                <input type="radio" id="mode-default" name="engine-mode" value="default" checked>
+                <div class="mode-content">
+                    <h4>📊 Default Mode</h4>
+                    <p>Hierarchical search using predefined fee levels.</p>
+                    <small>Fees: Service (5%/0%), CXA (4%/0%), CAC ($0/$5k)</small>
+                </div>
+            </label>
+            <label class="config-mode-card" for="mode-custom">
+                <input type="radio" id="mode-custom" name="engine-mode" value="custom">
+                <div class="mode-content">
+                    <h4>🎛️ Custom Parameters</h4>
+                    <p>Set specific, fixed fee values for all calculations.</p>
+                    <small>Ideal for testing a known configuration.</small>
+                </div>
+            </label>
+            <label class="config-mode-card" for="mode-range">
+                <input type="radio" id="mode-range" name="engine-mode" value="range">
+                <div class="mode-content">
+                    <h4>🎯 Range Optimization</h4>
+                    <p>Test all parameter combinations within a defined range.</p>
+                    <small>Discover optimal fee structures via brute-force.</small>
+                </div>
+            </label>
+        </div>
+    </div>
+
+    <!-- Custom Parameters Section -->
+    <div id="custom-config-section" class="config-section" style="display: none;">
+        <div class="section-card">
+            <h3>Custom Fee Structure</h3>
+            <div class="form-grid-three">
+                <div class="form-group">
+                    <label class="form-label" for="custom-service-fee">Service Fee (%)</label>
+                    <div class="range-slider">
+                        <input type="range" id="custom-service-fee" min="0" max="5" step="0.1" value="5">
+                        <span class="range-slider-value">5.0%</span>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="custom-cxa-fee">CXA Fee (%)</label>
+                    <div class="range-slider">
+                        <input type="range" id="custom-cxa-fee" min="0" max="4" step="0.1" value="4">
+                        <span class="range-slider-value">4.0%</span>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="custom-cac-bonus">CAC Bonus (MXN)</label>
+                    <div class="range-slider">
+                        <input type="range" id="custom-cac-bonus" min="0" max="10000" step="500" value="5000">
+                        <span class="range-slider-value">$5,000</span>
+                    </div>
                 </div>
             </div>
-
-            <div class="mode-card" onclick="selectMode('custom', event)" style="background: white; border: 2px solid #e5e7eb; border-radius: 12px; padding: 20px; cursor: pointer; transition: all 0.2s;">
-                <input type="radio" id="custom-mode" name="engine-mode" value="custom" style="display: none;">
-                <h4 style="margin: 0 0 8px 0; color: #1f2937;">🎛️ Custom Mode</h4>
-                <p style="font-size: 13px; color: #6b7280; margin: 0;">Fixed parameters you specify</p>
-                <div style="margin-top: 10px; font-size: 12px; color: #9ca3af;">
-                    • Set exact fee values<br>
-                    • Single configuration<br>
-                    • Quick testing
+            <div class="form-divider"></div>
+            <div class="form-grid-three">
+                <div class="form-group">
+                    <label class="form-label" for="custom-insurance">Insurance (MXN)</label>
+                    <input type="number" id="custom-insurance" class="form-input" value="10999" step="100">
                 </div>
-            </div>
-
-            <div class="mode-card" onclick="selectMode('range', event)" style="background: white; border: 2px solid #e5e7eb; border-radius: 12px; padding: 20px; cursor: pointer; transition: all 0.2s; position: relative;">
-                <input type="radio" id="range-mode" name="engine-mode" value="range" style="display: none;">
-                <span style="position: absolute; top: 10px; right: 10px; background: #10b981; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600;">FEATURED</span>
-                <h4 style="margin: 0 0 8px 0; color: #1f2937;">🎯 Range Optimization</h4>
-                <p style="font-size: 13px; color: #6b7280; margin: 0;"><strong>Maximum flexibility & elasticity testing</strong></p>
-                <div style="margin-top: 10px; font-size: 12px; color: #9ca3af;">
-                    • Test ALL combinations<br>
-                    • Basis point precision<br>
-                    • Find optimal parameters
+                <div class="form-group">
+                    <label class="form-label" for="custom-gps-install">GPS Install (MXN)</label>
+                    <input type="number" id="custom-gps-install" class="form-input" value="750" step="50">
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="custom-gps-monthly">GPS Monthly (MXN)</label>
+                    <input type="number" id="custom-gps-monthly" class="form-input" value="350" step="10">
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Range Optimization Configuration -->
-    <div id="range-config" class="section-card" style="display: none; border: 2px solid #10b981;">
-        <h3>🎯 Range Optimization Settings</h3>
-        <div class="alert alert-success" style="background: #d1fae5; border: 1px solid #10b981; padding: 15px; border-radius: 8px;">
-            <strong>Maximum Flexibility Mode:</strong> Test EVERY parameter combination within your ranges with basis point precision. Perfect for elasticity analysis and finding optimal fee structures.
+    <!-- Range Optimization Section -->
+    <div id="range-config-section" class="config-section" style="display: none;">
+        <div class="section-card">
+            <h3>Range Optimization Parameters</h3>
+            <div class="form-grid-three">
+                <div class="range-param-card">
+                    <h4>Service Fee (%)</h4>
+                    <div class="form-grid-three-condensed">
+                        <input type="number" id="range-service-fee-min" class="form-input" value="0" step="0.1" placeholder="Min">
+                        <input type="number" id="range-service-fee-max" class="form-input" value="5" step="0.1" placeholder="Max">
+                        <input type="number" id="range-service-fee-step" class="form-input" value="0.5" step="0.01" placeholder="Step">
+                    </div>
+                    <div class="range-count-display"><span id="service-fee-count">11</span> values</div>
+                </div>
+                <div class="range-param-card">
+                    <h4>CXA Fee (%)</h4>
+                    <div class="form-grid-three-condensed">
+                        <input type="number" id="range-cxa-fee-min" class="form-input" value="0" step="0.1" placeholder="Min">
+                        <input type="number" id="range-cxa-fee-max" class="form-input" value="4" step="0.1" placeholder="Max">
+                        <input type="number" id="range-cxa-fee-step" class="form-input" value="0.5" step="0.01" placeholder="Step">
+                    </div>
+                    <div class="range-count-display"><span id="cxa-fee-count">9</span> values</div>
+                </div>
+                <div class="range-param-card">
+                    <h4>CAC Bonus (MXN)</h4>
+                    <div class="form-grid-three-condensed">
+                        <input type="number" id="range-cac-bonus-min" class="form-input" value="0" step="500" placeholder="Min">
+                        <input type="number" id="range-cac-bonus-max" class="form-input" value="10000" step="500" placeholder="Max">
+                        <input type="number" id="range-cac-bonus-step" class="form-input" value="1000" step="100" placeholder="Step">
+                    </div>
+                    <div class="range-count-display"><span id="cac-bonus-count">11</span> values</div>
+                </div>
+            </div>
+            <div id="range-summary-banner" class="range-summary-banner">
+                Total Combinations: <strong id="total-combinations">1,089</strong>
+                <div id="performance-warning" style="display: none;"></div>
+            </div>
         </div>
-        <!-- form inputs truncated for brevity -->
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="config-actions">
+        <button id="save-config-btn" class="btn-primary">Save Configuration</button>
+        <button id="run-analysis-btn" class="btn-secondary">Run Full Analysis</button>
+        <button id="reset-config-btn" class="btn-tertiary">Reset to Defaults</button>
+    </div>
+
+    <!-- Simple Loading Modal for blocking actions -->
+    <div id="config-loading-modal" class="loading-modal" style="display: none;">
+        <div class="loading-modal-content">
+            <div class="spinner"></div>
+            <h3 id="loading-modal-title">Processing...</h3>
+            <p id="loading-modal-message">Please wait.</p>
+        </div>
     </div>
 {% endblock %}
 {% block extra_js %}
 <script>
+    // This script block should only contain the initialization call
+    // All substantive logic will be moved to /static/js/main.js
     document.addEventListener('DOMContentLoaded', function() {
-        initializeConfigPage();
+        if (typeof initializeConfigPage === 'function') {
+            initializeConfigPage();
+        }
     });
 </script>
 {% endblock %}
