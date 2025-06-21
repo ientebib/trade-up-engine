@@ -8,20 +8,15 @@ import os
 import sys
 from pathlib import Path
 
-# Add the project root to Python path
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
-from fastapi import FastAPI, Request, HTTPException
-from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi import Request, HTTPException
+from fastapi.responses import HTMLResponse
 import uvicorn
 import logging
 from core.logging_config import setup_logging
 from core.cache_utils import redis_status
-from core.config_manager import load_latest_scenario_results
-import pandas as pd
 import random
 
 setup_logging(logging.INFO)
@@ -35,31 +30,22 @@ os.environ.setdefault('USE_MOCK_DATA', 'true')
 # Import core modules
 try:
     from core.engine import TradeUpEngine
-    # Use development data loader
-    from core.data_loader_dev import dev_data_loader
     from core.config_manager import ConfigManager
-    from app.api.routes import router as api_router
+    from app.app_factory import create_app
 except ImportError as e:
     logger.error(f"❌ Import error: {e}")
     logger.error("🔧 Please run the setup script first: ./setup.sh")
     sys.exit(1)
 
-# Create FastAPI app
-app = FastAPI(
-    title="Trade-Up Engine - Development",
-    description="Development version optimized for virtual agents",
-    version="1.0.0-dev"
-)
+# Create FastAPI app via the shared factory
+app = create_app("dev")
 
-# Mount static files
-app.mount("/static", StaticFiles(directory="app/static"), name="static")
-
-# Templates
-templates = Jinja2Templates(directory="app/templates")
+# Access shared components
+templates = app.state.templates
+data_loader = app.state.data_loader
 
 # Initialize core components
 config_manager = ConfigManager()
-data_loader = dev_data_loader  # Use development data loader
 engine = TradeUpEngine()
 
 def calculate_demo_metrics() -> dict:
@@ -109,9 +95,6 @@ async def health_check():
         "data_sources": "CSV and sample data only",
         "redis_connected": redis_status(),
     }
-
-# Include API routes
-app.include_router(api_router, prefix="/api")
 
 # Main dashboard
 @app.get("/", response_class=HTMLResponse)
