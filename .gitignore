@@ -41,6 +41,7 @@ env/
 htmlcov/
 .pytest_cache/
 .mypy_cache/
+.hypothesis/
 
 # Database
 *.db
