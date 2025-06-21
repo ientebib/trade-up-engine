@@ -74,14 +74,17 @@ def run_scenario_analysis(
             customer_sample = customers_df
 
         # Ensure each customer is processed only once
-        if "customer_id" in customer_sample.columns:
-            before_dedup = len(customer_sample)
-            customer_sample = customer_sample.drop_duplicates(subset="customer_id")
-            after_dedup = len(customer_sample)
-            if after_dedup < before_dedup:
-                logger.debug(
-                    f"Removed {before_dedup - after_dedup} duplicate customers before processing"
-                )
+        before_dedup = len(customer_sample)
+        # Separate customers with and without valid customer_id
+        valid_id_mask = customer_sample["customer_id"].notna()
+        customers_with_id = customer_sample[valid_id_mask].drop_duplicates(subset="customer_id")
+        customers_without_id = customer_sample[~valid_id_mask]
+        customer_sample = pd.concat([customers_with_id, customers_without_id], ignore_index=True)
+        after_dedup = len(customer_sample)
+        if after_dedup < before_dedup:
+            logger.debug(
+                f"Removed {before_dedup - after_dedup} duplicate customers before processing"
+            )
 
         # Run engine for each customer
         for _, customer in customer_sample.iterrows():
