@@ -1,7 +1,9 @@
 import numpy_financial as npf
+from functools import lru_cache
 from .config import IVA_RATE
 
 
+@lru_cache(maxsize=256)
 def calculate_final_npv(loan_amount, interest_rate, term_months):
     """
     Calculates the Net Present Value of the interest income for the loan,
@@ -77,31 +79,46 @@ def generate_amortization_table(offer_details: dict) -> list[dict]:
 
         # --- Main loan bucket ---
         principal_main = abs(npf.ppmt(monthly_rate_p, month, term, -financed_main))
-        interest_main = abs(npf.ipmt(monthly_rate_i, month, term, -financed_main)) * IVA_RATE
+        interest_main = (
+            abs(npf.ipmt(monthly_rate_i, month, term, -financed_main)) * IVA_RATE
+        )
 
         # --- Service Fee bucket ---
         principal_sf = abs(npf.ppmt(monthly_rate_p, month, term, -financed_sf))
-        interest_sf = abs(npf.ipmt(monthly_rate_i, month, term, -financed_sf)) * IVA_RATE
+        interest_sf = (
+            abs(npf.ipmt(monthly_rate_i, month, term, -financed_sf)) * IVA_RATE
+        )
 
         # --- Kavak Total bucket ---
         principal_kt = abs(npf.ppmt(monthly_rate_p, month, term, -financed_kt))
-        interest_kt = abs(npf.ipmt(monthly_rate_i, month, term, -financed_kt)) * IVA_RATE
+        interest_kt = (
+            abs(npf.ipmt(monthly_rate_i, month, term, -financed_kt)) * IVA_RATE
+        )
 
         # --- Insurance bucket (recurring every 12 months) ---
         if insurance_amt > 0:
             month_in_cycle = months_since_insurance_reset
-            principal_ins = abs(npf.ppmt(monthly_rate_p, month_in_cycle, 12, -insurance_amt))
-            interest_ins = abs(npf.ipmt(monthly_rate_i, month_in_cycle, 12, -insurance_amt)) * IVA_RATE
+            principal_ins = abs(
+                npf.ppmt(monthly_rate_p, month_in_cycle, 12, -insurance_amt)
+            )
+            interest_ins = (
+                abs(npf.ipmt(monthly_rate_i, month_in_cycle, 12, -insurance_amt))
+                * IVA_RATE
+            )
         else:
             principal_ins = interest_ins = 0.0
 
         # --- Aggregate payment ---
         payment = (
-            principal_main + interest_main +
-            principal_sf + interest_sf +
-            principal_kt + interest_kt +
-            principal_ins + interest_ins +
-            gps_monthly_fee
+            principal_main
+            + interest_main
+            + principal_sf
+            + interest_sf
+            + principal_kt
+            + interest_kt
+            + principal_ins
+            + interest_ins
+            + gps_monthly_fee
         )
 
         # --- Update balances ---
@@ -138,17 +155,29 @@ def generate_amortization_table(offer_details: dict) -> list[dict]:
                 "gps_fee": gps_monthly_fee,
                 "payment_total": payment,
                 # --- Legacy aggregate fields for UI backward-compatibility ---
-                "beginning_balance": beginning_balance_main + beginning_balance_sf + beginning_balance_kt + beginning_balance_ins,
+                "beginning_balance": beginning_balance_main
+                + beginning_balance_sf
+                + beginning_balance_kt
+                + beginning_balance_ins,
                 "payment": payment,
-                "principal": principal_main + principal_sf + principal_kt + principal_ins,
+                "principal": principal_main
+                + principal_sf
+                + principal_kt
+                + principal_ins,
                 "interest": interest_main + interest_sf + interest_kt + interest_ins,
-                "ending_balance": ending_balance_main + ending_balance_sf + ending_balance_kt + ending_balance_ins,
+                "ending_balance": ending_balance_main
+                + ending_balance_sf
+                + ending_balance_kt
+                + ending_balance_ins,
                 # Ending balances
                 "end_balance_main": ending_balance_main,
                 "end_balance_service_fee": ending_balance_sf,
                 "end_balance_kavak_total": ending_balance_kt,
                 "end_balance_insurance": ending_balance_ins,
-                "end_balance_total": ending_balance_main + ending_balance_sf + ending_balance_kt + ending_balance_ins,
+                "end_balance_total": ending_balance_main
+                + ending_balance_sf
+                + ending_balance_kt
+                + ending_balance_ins,
             }
         )
 

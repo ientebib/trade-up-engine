@@ -3,6 +3,7 @@ import numpy_financial as npf
 from abc import ABC, abstractmethod
 import logging
 from scipy.optimize import differential_evolution
+from functools import lru_cache
 from core.logging_config import setup_logging
 from .calculator import calculate_final_npv
 from .config import (
@@ -40,9 +41,7 @@ class SearchStrategy(ABC):
                     custom_tiers.get("upgrade", PAYMENT_DELTA_TIERS["Upgrade"])
                 ),
                 "Max Upgrade": tuple(
-                    custom_tiers.get(
-                        "max_upgrade", PAYMENT_DELTA_TIERS["Max Upgrade"]
-                    )
+                    custom_tiers.get("max_upgrade", PAYMENT_DELTA_TIERS["Max Upgrade"])
                 ),
             }
             logger.info(f"🎯 Using custom payment tiers: {tiers}")
@@ -149,7 +148,9 @@ class TradeUpEngine:
         try:
             interest_rate = INTEREST_RATE_TABLE.loc[customer["risk_profile_name"]]
         except KeyError as e:
-            logger.error(f"Error: Missing key in customer data or invalid risk profile - {e}")
+            logger.error(
+                f"Error: Missing key in customer data or invalid risk profile - {e}"
+            )
             return pd.DataFrame()
 
         if self.config.get("use_range_optimization", False):
@@ -183,7 +184,9 @@ def run_engine_for_customer(
     try:
         interest_rate = INTEREST_RATE_TABLE.loc[customer["risk_profile_name"]]
     except KeyError as e:
-        logger.error(f"Error: Missing key in customer data or invalid risk profile - {e}")
+        logger.error(
+            f"Error: Missing key in customer data or invalid risk profile - {e}"
+        )
         return pd.DataFrame()
 
     if engine_config.get("use_range_optimization", False):
@@ -262,13 +265,17 @@ def _run_default_hierarchical_search(
     )
 
     if phase_1_offers:
-        logger.info(f"PHASE 1 COMPLETE: Found {len(phase_1_offers)} offers. Stopping search.")
+        logger.info(
+            f"PHASE 1 COMPLETE: Found {len(phase_1_offers)} offers. Stopping search."
+        )
         return _finalize_offers_dataframe(
             phase_1_offers, current_monthly_payment, payment_delta_tiers
         )
 
     # --- PHASE 2: Search WITH Subsidy (Concession) - EXHAUSTIVE ---
-    logger.info("PHASE 2: No offers found in Phase 1. Running EXHAUSTIVE subsidy search...")
+    logger.info(
+        "PHASE 2: No offers found in Phase 1. Running EXHAUSTIVE subsidy search..."
+    )
 
     # Level 1: Service Fee = 0
     logger.info("Phase 2 - Level 1: Reducing Service Fee to 0...")
@@ -287,7 +294,9 @@ def _run_default_hierarchical_search(
         term_order,
     )
     if level_1_offers:
-        logger.info(f"Level 1 COMPLETE: Found {len(level_1_offers)} offers. Stopping search.")
+        logger.info(
+            f"Level 1 COMPLETE: Found {len(level_1_offers)} offers. Stopping search."
+        )
         return _finalize_offers_dataframe(
             level_1_offers, current_monthly_payment, payment_delta_tiers
         )
@@ -306,7 +315,9 @@ def _run_default_hierarchical_search(
         term_order,
     )
     if level_2_offers:
-        logger.info(f"Level 2 COMPLETE: Found {len(level_2_offers)} offers. Stopping search.")
+        logger.info(
+            f"Level 2 COMPLETE: Found {len(level_2_offers)} offers. Stopping search."
+        )
         return _finalize_offers_dataframe(
             level_2_offers, current_monthly_payment, payment_delta_tiers
         )
@@ -325,7 +336,9 @@ def _run_default_hierarchical_search(
         term_order,
     )
     if level_3_offers:
-        logger.info(f"Level 3 COMPLETE: Found {len(level_3_offers)} offers. Stopping search.")
+        logger.info(
+            f"Level 3 COMPLETE: Found {len(level_3_offers)} offers. Stopping search."
+        )
         return _finalize_offers_dataframe(
             level_3_offers, current_monthly_payment, payment_delta_tiers
         )
@@ -434,7 +447,9 @@ def _run_range_optimization_search(
     logger.info(
         f"   Service Fee: {len(service_fee_values)} values from {service_fee_range[0]}% to {service_fee_range[1]}%"
     )
-    logger.info(f"   CXA: {len(cxa_values)} values from {cxa_range[0]}% to {cxa_range[1]}%")
+    logger.info(
+        f"   CXA: {len(cxa_values)} values from {cxa_range[0]}% to {cxa_range[1]}%"
+    )
     logger.info(
         f"   CAC Bonus: {len(cac_bonus_values)} values from {cac_bonus_range[0]} to {cac_bonus_range[1]} MXN"
     )
@@ -599,6 +614,7 @@ def _run_smart_range_search(
     step_cac = engine_config.get("cac_bonus_step", 100)
 
     import numpy as np
+
     best_service = np.round(best_service / step_s) * step_s
     best_cxa = np.round(best_cxa / step_cxa) * step_cxa
     best_cac = int(np.round(best_cac / step_cac) * step_cac)
@@ -675,16 +691,16 @@ def _run_custom_parameter_search(
             if engine_config.get("include_kavak_total", True)
             else 0
         ),
-            "insurance_amount": engine_config.get(
-                "insurance_amount", DEFAULT_FEES["insurance_amount"]
-            ),
-            "gps_installation_fee": engine_config.get(
-                "gps_installation_fee", DEFAULT_FEES["gps_installation_fee"]
-            ),
-            "gps_monthly_fee": engine_config.get(
-                "gps_monthly_fee", DEFAULT_FEES["gps_monthly_fee"]
-            ),
-        }
+        "insurance_amount": engine_config.get(
+            "insurance_amount", DEFAULT_FEES["insurance_amount"]
+        ),
+        "gps_installation_fee": engine_config.get(
+            "gps_installation_fee", DEFAULT_FEES["gps_installation_fee"]
+        ),
+        "gps_monthly_fee": engine_config.get(
+            "gps_monthly_fee", DEFAULT_FEES["gps_monthly_fee"]
+        ),
+    }
 
     logger.info(f"🔧 Using custom fees: {custom_fees}")
 
@@ -721,10 +737,16 @@ def _run_search_phase(
 ):
     """Helper function to run the search for a given fee configuration."""
     found_offers = []
-    for car_index, car in inventory.iterrows():
+    for car in inventory.itertuples(index=False):
         for term in term_order:
+            car_dict = car._asdict()
             offer = _generate_single_offer(
-                customer, car, term, interest_rate, fees_config, payment_delta_tiers
+                customer,
+                car_dict,
+                term,
+                interest_rate,
+                fees_config,
+                payment_delta_tiers,
             )
             if offer:
                 found_offers.append(offer)
@@ -868,6 +890,8 @@ def _generate_single_offer(
     }
     return offer_data
 
+
+@lru_cache(maxsize=512)
 def _calculate_manual_payment(
     loan_amount: float,
     interest_rate: float,
@@ -925,6 +949,7 @@ def _calculate_manual_payment(
     return total_payment
 
 
+@lru_cache(maxsize=128)
 def _generate_range(start, end, step):
     """Generate a range of values with specified step size, handling floating point precision."""
     import numpy as np
@@ -952,10 +977,15 @@ def _run_search_phase_with_npv_filter(
 ):
     """Helper function to run search with NPV filtering applied."""
     found_offers = []
-    for car_index, car in inventory.iterrows():
+    for car in inventory.itertuples(index=False):
         for term in term_order:
             offer = _generate_single_offer(
-                customer, car, term, interest_rate, fees_config, payment_delta_tiers
+                customer,
+                car._asdict(),
+                term,
+                interest_rate,
+                fees_config,
+                payment_delta_tiers,
             )
             if offer and offer["npv"] >= min_npv_threshold:  # Apply NPV filter
                 found_offers.append(offer)
@@ -1017,7 +1047,7 @@ def _finalize_offers_dataframe(
 
     # This is the key fix: ensure all columns are preserved when creating the DataFrame
     df = pd.DataFrame.from_records(offers_list)
-    
+
     # Calculate payment_delta and assign tiers
     df["payment_delta"] = (df["monthly_payment"] / current_monthly_payment) - 1
 
@@ -1028,9 +1058,9 @@ def _finalize_offers_dataframe(
         return "N/A"
 
     df["tier"] = df["payment_delta"].apply(assign_tier)
-    
+
     # Filter out any offers that might have fallen out of bounds after precise calculation
     df = df[df["tier"] != "N/A"]
-    
+
     # Ensure all original columns are present
     return df
