@@ -6,8 +6,6 @@ Main application entry point
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
-from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 import pandas as pd
 from typing import List, Dict
@@ -17,7 +15,6 @@ from contextlib import asynccontextmanager
 import time
 import logging
 from pathlib import Path
-import os
 from core.logging_config import setup_logging
 import numpy as np
 import json
@@ -27,7 +24,7 @@ from sse_starlette.sse import EventSourceResponse
 # Import core modules
 from core.engine import run_engine_for_customer
 from core.calculator import generate_amortization_table
-from core.data_loader import data_loader
+from app.app_factory import create_app
 from core.scenarios import run_scenario_analysis as core_run_scenario_analysis
 from core.config_manager import (
     save_engine_config,
@@ -106,7 +103,7 @@ async def lifespan(app: FastAPI):
         logger.info("🚀 Loading real data from Redshift and CSV...")
 
         # Try to load real data first
-        customers_df, inventory_df = data_loader.load_all_data()
+        customers_df, inventory_df = app.state.data_loader.load_all_data()
 
         # Handle partial data loading (customer data loaded but inventory failed)
         if customers_df.empty:
@@ -170,15 +167,10 @@ async def lifespan(app: FastAPI):
 
 
 # --- App Initialization ---
-app = FastAPI(
-    title="Kavak Trade-Up Engine",
-    description="API and Web Dashboard for generating vehicle upgrade offers.",
-    lifespan=lifespan,
-)
+app = create_app("prod", lifespan=lifespan)
 
-# --- Mount Static Files & Templates ---
-app.mount("/static", StaticFiles(directory="app/static"), name="static")
-templates = Jinja2Templates(directory="app/templates")
+# Shared components
+templates = app.state.templates
 
 
 # --- Pydantic Models for API ---
