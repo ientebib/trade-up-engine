@@ -80,6 +80,8 @@ pip install -r requirements.txt
 ```bash
 cp env_variables.txt .env
 # Edit .env with your configuration
+# Be sure to set `REDSHIFT_DATABASE` with your database name
+# (`REDSHIFT_DB` is also supported for legacy setups)
 ```
 
 ## Running the Application
@@ -166,7 +168,8 @@ pytest
 
 1. **Missing `.env` or incorrect Redshift credentials**
    - Ensure the `.env` file exists in the project root.
-   - Double-check `REDSHIFT_HOST`, `REDSHIFT_USER`, `REDSHIFT_PASSWORD`, and related values.
+   - Double-check `REDSHIFT_HOST`, `REDSHIFT_DATABASE` (or `REDSHIFT_DB`),
+     `REDSHIFT_USER`, `REDSHIFT_PASSWORD`, and related values.
    - Restart the application and visit `/health` to verify a successful connection.
 2. **File permission issues for configuration or scenario result files**
    - Verify read/write permissions on `engine_config.json` and `scenario_results.json`.

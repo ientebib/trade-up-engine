@@ -25,7 +25,7 @@ class DataLoader:
         self.redshift_config = {
             'host': os.getenv('REDSHIFT_HOST'),
             'port': os.getenv('REDSHIFT_PORT', 5439),
-            'database': os.getenv('REDSHIFT_DATABASE'),  # Fixed: was REDSHIFT_DB
+            'database': os.getenv('REDSHIFT_DATABASE') or os.getenv('REDSHIFT_DB'),  # fallback for older env vars
             'user': os.getenv('REDSHIFT_USER'),
             'password': os.getenv('REDSHIFT_PASSWORD')
         }
