@@ -16,7 +16,7 @@ from fastapi.responses import HTMLResponse
 import uvicorn
 import logging
 from core.logging_config import setup_logging
-from core.cache_utils import redis_status
+from core.cache_utils import get_redis_status
 import random
 
 setup_logging(logging.INFO)
@@ -93,7 +93,7 @@ async def health_check():
         "external_calls": "disabled",
         "mock_data": "enabled",
         "data_sources": "CSV and sample data only",
-        "redis_connected": redis_status(),
+        "redis_connected": get_redis_status(),
     }
 
 # Main dashboard

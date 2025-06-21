@@ -37,17 +37,6 @@ CUSTOMER_CACHE_TTL = int(os.getenv("CUSTOMER_CACHE_TTL", 86400))
 INVENTORY_CACHE_TTL = int(os.getenv("INVENTORY_CACHE_TTL", 86400))
 
 
-def redis_status() -> bool:
-    """Return True if Redis is connected."""
-    if _redis_client is None:
-        return False
-    try:
-        _redis_client.ping()
-        return True
-    except Exception:
-        return False
-
-
 def compute_config_hash(config: dict) -> str:
     """Create a stable hash for a config dictionary."""
     try:
@@ -132,7 +121,7 @@ def set_cached_customers(df):
     _set("customers", df, CUSTOMER_CACHE_TTL)
 
 
-def redis_status() -> str:
+def get_redis_status() -> str:
     """Return a simple status string for the Redis connection."""
     if not REDIS_AVAILABLE:
         return "redis library missing"
