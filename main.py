@@ -90,7 +90,7 @@ async def lifespan(app: FastAPI):
         "inventory_data.csv": csv_readable(Path("inventory_data.csv")),
     }
 
-    checks["redis"] = cache_utils.redis_status()
+    checks["redis"] = cache_utils.get_redis_status()
     logger.info("🔌 Redis status: %s", checks["redis"])
 
     # Persist checks for the /health endpoint
@@ -403,7 +403,7 @@ async def health_check():
             "customer_data.csv": Path("customer_data.csv").exists(),
             "inventory_data.csv": Path("inventory_data.csv").exists(),
         },
-        "redis": cache_utils.redis_status(),
+        "redis": cache_utils.get_redis_status(),
         "startup": getattr(app.state, "startup_checks", {}),
     }
 
