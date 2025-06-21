@@ -9,15 +9,16 @@ from fastapi.templating import Jinja2Templates
 
 from core.logging_config import setup_logging
 
+setup_logging(logging.INFO)
 
 def create_app(
     mode: Literal["prod", "dev"] = "prod",
     *,
     lifespan: Optional[Callable] = None,
+    static_dir: str = "app/static",
+    templates_dir: str = "app/templates",
 ) -> FastAPI:
     """Application factory returning a configured :class:`FastAPI` instance."""
-
-    setup_logging(logging.INFO)
 
     if mode == "dev":
         title = "Trade-Up Engine - Development"
@@ -33,8 +34,8 @@ def create_app(
     app = FastAPI(title=title, description=description, version=version, lifespan=lifespan)
 
     # Static files and templates used by both modes
-    app.mount("/static", StaticFiles(directory="app/static"), name="static")
-    templates = Jinja2Templates(directory="app/templates")
+    app.mount("/static", StaticFiles(directory=static_dir), name="static")
+    templates = Jinja2Templates(directory=templates_dir)
     app.state.templates = templates
 
     # Store the selected data loader for use elsewhere
