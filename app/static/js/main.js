@@ -431,7 +431,8 @@ function initializeConfigPage() {
             cacBonus: { min: document.getElementById('range-cac-bonus-min'), max: document.getElementById('range-cac-bonus-max'), step: document.getElementById('range-cac-bonus-step'), count: document.getElementById('cac-bonus-count') },
             total: document.getElementById('total-combinations'),
             warning: document.getElementById('performance-warning')
-        }
+        },
+        searchMethod: document.getElementById('range-search-method')
     };
 
     // --- State & Logic ---
@@ -473,6 +474,7 @@ function initializeConfigPage() {
             data.service_fee_step = parseFloat(elements.rangeSummary.serviceFee.step.value);
             data.cxa_step = parseFloat(elements.rangeSummary.cxaFee.step.value);
             data.cac_bonus_step = parseFloat(elements.rangeSummary.cacBonus.step.value);
+            data.range_search_method = elements.searchMethod.value;
         }
         return data;
     };
@@ -537,6 +539,7 @@ function initializeConfigPage() {
         elements.rangeSummary.cacBonus.min.value = 0;
         elements.rangeSummary.cacBonus.max.value = 10000;
         elements.rangeSummary.cacBonus.step.value = 1000;
+        elements.searchMethod.value = 'exhaustive';
         updateAllRangeCounts();
     };
 

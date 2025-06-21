@@ -66,6 +66,7 @@ class EngineConfig(BaseModel):
 
     include_kavak_total: bool = True
     use_custom_params: bool = False
+    range_search_method: str = "exhaustive"
 
     class Config:
         extra = "allow"  # Silently ignore unknown fields from the UI
@@ -99,6 +100,8 @@ class ScenarioConfig(BaseModel):
     max_offers_per_tier: int = 50
     max_combinations_to_test: int = 1000
     early_stop_on_offers: int = 100
+    range_search_method: str = "exhaustive"
+    smart_max_iter: int = 30
 
     # Payment Delta Thresholds
     payment_delta_tiers: PaymentDeltaTiers = PaymentDeltaTiers(

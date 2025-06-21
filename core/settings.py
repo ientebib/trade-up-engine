@@ -31,6 +31,10 @@ class EngineSettings(BaseModel):
     max_combinations_to_test: int = 1000
     early_stop_on_offers: int = 100
 
+    # Range optimization method: 'exhaustive' or 'smart'
+    range_search_method: str = "exhaustive"
+    smart_max_iter: int = 30
+
     payment_delta_tiers: PaymentDeltaTiers = PaymentDeltaTiers()
 
     term_priority: str = "standard"

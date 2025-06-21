@@ -121,8 +121,15 @@
                         <input type="number" id="range-cac-bonus-max" class="form-input" value="10000" step="500" placeholder="Max">
                         <input type="number" id="range-cac-bonus-step" class="form-input" value="1000" step="100" placeholder="Step">
                     </div>
-                    <div class="range-count-display"><span id="cac-bonus-count">11</span> values</div>
+                <div class="range-count-display"><span id="cac-bonus-count">11</span> values</div>
                 </div>
+            </div>
+            <div class="form-group" style="margin-top: 1rem;">
+                <label class="form-label" for="range-search-method">Search Method</label>
+                <select id="range-search-method" class="form-input">
+                    <option value="exhaustive">Exhaustive Search</option>
+                    <option value="smart">Smart Search</option>
+                </select>
             </div>
             <div id="range-summary-banner" class="range-summary-banner">
                 Total Combinations: <strong id="total-combinations">1,089</strong>
