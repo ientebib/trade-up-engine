@@ -21,6 +21,10 @@ The engine iterates through every combination of the ranges above. For each comb
 
 Early stopping occurs when the number of tested combinations exceeds `max_combinations_to_test` or the number of valid offers found reaches `early_stop_on_offers`.
 
+## Smart Search
+
+When `range_search_method` is set to `smart`, the engine uses SciPy's Differential Evolution algorithm to explore the parameter space. Only tens of evaluations are required to locate a near‑optimal configuration. The `smart_max_iter` setting controls the number of iterations.
+
 ## Payment Delta Tiers
 
 Offers are classified into Refresh, Upgrade and Max Upgrade tiers according to the `payment_delta_tiers` configuration. Within each tier, offers are ranked by NPV.

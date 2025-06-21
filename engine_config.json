@@ -26,6 +26,8 @@
   "max_offers_per_tier": 50,
   "max_combinations_to_test": 1000,
   "early_stop_on_offers": 100,
+  "range_search_method": "exhaustive",
+  "smart_max_iter": 30,
   "payment_delta_tiers": {
     "refresh": [
       -0.05,

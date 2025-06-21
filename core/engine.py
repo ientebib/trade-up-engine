@@ -2,6 +2,7 @@ import pandas as pd
 import numpy_financial as npf
 from abc import ABC, abstractmethod
 import logging
+from scipy.optimize import differential_evolution
 from core.logging_config import setup_logging
 from .calculator import calculate_final_npv
 from .config import (
@@ -343,7 +344,7 @@ def _run_range_optimization_search(
     current_monthly_payment,
     payment_delta_tiers,
 ):
-    """Exhaustively evaluate fee combinations within configured ranges.
+    """Evaluate fee combinations within configured ranges.
 
     Parameters
     ----------
@@ -373,6 +374,17 @@ def _run_range_optimization_search(
     limit the number of combinations tested, as described in
     ``docs/range_optimization.md``.
     """
+    search_method = engine_config.get("range_search_method", "exhaustive").lower()
+    if search_method == "smart":
+        return _run_smart_range_search(
+            customer,
+            inventory,
+            interest_rate,
+            engine_config,
+            current_monthly_payment,
+            payment_delta_tiers,
+        )
+
     import itertools
 
     all_offers = []
@@ -514,6 +526,125 @@ def _run_range_optimization_search(
         # Remove duplicates and rank by NPV within tiers
         return _finalize_optimized_offers_dataframe(
             all_offers, current_monthly_payment, engine_config, tiers
+        )
+
+    return pd.DataFrame()
+
+
+def _run_smart_range_search(
+    customer,
+    inventory,
+    interest_rate,
+    engine_config,
+    current_monthly_payment,
+    payment_delta_tiers,
+):
+    """Use differential evolution to find near-optimal fee parameters."""
+    bounds = [
+        tuple(engine_config.get("service_fee_range", (0.0, 5.0))),
+        tuple(engine_config.get("cxa_range", (0.0, 4.0))),
+        tuple(engine_config.get("cac_bonus_range", (0.0, 10000.0))),
+    ]
+
+    min_npv_threshold = engine_config.get("min_npv_threshold", 5000.0)
+    term_order = get_term_search_order(engine_config.get("term_priority", "standard"))
+    max_iter = engine_config.get("smart_max_iter", 30)
+
+    tiers = payment_delta_tiers
+
+    def objective(params):
+        service_fee_pct, cxa_pct, cac_bonus = params
+        fees_config = {
+            "service_fee_pct": service_fee_pct / 100,
+            "cxa_pct": cxa_pct / 100,
+            "cac_bonus": cac_bonus,
+            "kavak_total_amount": (
+                DEFAULT_FEES["kavak_total_amount"]
+                if engine_config.get("include_kavak_total", True)
+                else 0
+            ),
+            "insurance_amount": engine_config.get(
+                "insurance_amount", DEFAULT_FEES["insurance_amount"]
+            ),
+            "gps_installation_fee": engine_config.get(
+                "gps_installation_fee", DEFAULT_FEES["gps_installation_fee"]
+            ),
+            "gps_monthly_fee": engine_config.get(
+                "gps_monthly_fee", DEFAULT_FEES["gps_monthly_fee"]
+            ),
+        }
+
+        offers = _run_search_phase_with_npv_filter(
+            customer,
+            inventory,
+            interest_rate,
+            fees_config,
+            min_npv_threshold,
+            tiers,
+            term_order,
+        )
+
+        if not offers:
+            return 1e9
+        best_npv = max(o["npv"] for o in offers)
+        return -best_npv
+
+    result = differential_evolution(objective, bounds, maxiter=max_iter, polish=True)
+    best_service, best_cxa, best_cac = result.x
+
+    # Round to configured step sizes
+    step_s = engine_config.get("service_fee_step", 0.01)
+    step_cxa = engine_config.get("cxa_step", 0.01)
+    step_cac = engine_config.get("cac_bonus_step", 100)
+
+    best_service = round(round(best_service / step_s) * step_s, 4)
+    best_cxa = round(round(best_cxa / step_cxa) * step_cxa, 4)
+    best_cac = round(round(best_cac / step_cac) * step_cac)
+
+    fees_config = {
+        "service_fee_pct": best_service / 100,
+        "cxa_pct": best_cxa / 100,
+        "cac_bonus": best_cac,
+        "kavak_total_amount": (
+            DEFAULT_FEES["kavak_total_amount"]
+            if engine_config.get("include_kavak_total", True)
+            else 0
+        ),
+        "insurance_amount": engine_config.get(
+            "insurance_amount", DEFAULT_FEES["insurance_amount"]
+        ),
+        "gps_installation_fee": engine_config.get(
+            "gps_installation_fee", DEFAULT_FEES["gps_installation_fee"]
+        ),
+        "gps_monthly_fee": engine_config.get(
+            "gps_monthly_fee", DEFAULT_FEES["gps_monthly_fee"]
+        ),
+    }
+
+    final_offers = _run_search_phase_with_npv_filter(
+        customer,
+        inventory,
+        interest_rate,
+        fees_config,
+        min_npv_threshold,
+        tiers,
+        term_order,
+    )
+
+    for offer in final_offers:
+        offer["parameter_combination"] = {
+            "service_fee_pct": best_service,
+            "cxa_pct": best_cxa,
+            "cac_bonus": best_cac,
+        }
+
+    logger.info(
+        f"⚡ SMART SEARCH found best parameters: Service {best_service}%, CXA {best_cxa}% CAC {best_cac}"
+    )
+
+    if final_offers:
+        return _finalize_optimized_offers_dataframe(
+            final_offers, current_monthly_payment, engine_config, tiers
         )
 
     return pd.DataFrame()
