@@ -21,3 +21,16 @@ Differential Evolution strikes a good balance between performance and implementa
 ## Benchmark
 
 Using the sample data provided in `DevelopmentDataLoader` with default ranges (11×9×11 combinations), the exhaustive search processed 1,089 parameter sets in about **1.2 seconds**. The smart search using Differential Evolution completed in roughly **0.12 seconds**, over ten times faster while yielding comparable offers.
+
+## Smart Search
+
+When `range_search_method` is set to `smart`, the engine uses SciPy's Differential Evolution algorithm to explore the parameter space. Only tens of evaluations are required to locate a near‑optimal configuration. The `smart_max_iter` setting controls the number of iterations.
+
+### Method Comparison
+
+| Method | Best For | Pros | Cons |
+|--------|----------|------|------|
+| Exhaustive | Small parameter spaces, guaranteed optimal | Complete coverage, finds global optimum | Slow for large spaces |
+| Smart | Large parameter spaces, quick optimization | Fast convergence, handles high dimensions | May miss global optimum |
+
+Use exhaustive search when you need guaranteed optimal results and have manageable parameter ranges.

@@ -1,12 +1,17 @@
 from __future__ import annotations
 
 from typing import List
-from pydantic import BaseModel
+from enum import Enum
+from pydantic import BaseModel, Field
 
 class PaymentDeltaTiers(BaseModel):
     refresh: List[float] = [-0.05, 0.05]
     upgrade: List[float] = [0.0501, 0.25]
     max_upgrade: List[float] = [0.2501, 1.0]
+
+class RangeSearchMethod(str, Enum):
+    EXHAUSTIVE = "exhaustive"
+    SMART = "smart"
 
 class EngineSettings(BaseModel):
     use_custom_params: bool = False
@@ -32,8 +37,8 @@ class EngineSettings(BaseModel):
     early_stop_on_offers: int = 100
 
     # Range optimization method: 'exhaustive' or 'smart'
-    range_search_method: str = "exhaustive"
-    smart_max_iter: int = 30
+    range_search_method: RangeSearchMethod = RangeSearchMethod.EXHAUSTIVE
+    smart_max_iter: int = Field(30, ge=1)
 
     payment_delta_tiers: PaymentDeltaTiers = PaymentDeltaTiers()
 

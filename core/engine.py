@@ -585,6 +585,7 @@ def _run_smart_range_search(
         )
 
         if not offers:
+            # Return large penalty when no valid offers found
             return 1e9
         best_npv = max(o["npv"] for o in offers)
         return -best_npv
@@ -597,9 +598,10 @@ def _run_smart_range_search(
     step_cxa = engine_config.get("cxa_step", 0.01)
     step_cac = engine_config.get("cac_bonus_step", 100)
 
-    best_service = round(round(best_service / step_s) * step_s, 4)
-    best_cxa = round(round(best_cxa / step_cxa) * step_cxa, 4)
-    best_cac = round(round(best_cac / step_cac) * step_cac)
+    import numpy as np
+    best_service = np.round(best_service / step_s) * step_s
+    best_cxa = np.round(best_cxa / step_cxa) * step_cxa
+    best_cac = int(np.round(best_cac / step_cac) * step_cac)
 
     fees_config = {
         "service_fee_pct": best_service / 100,

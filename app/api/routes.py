@@ -67,6 +67,7 @@ class EngineConfig(BaseModel):
     include_kavak_total: bool = True
     use_custom_params: bool = False
     range_search_method: str = "exhaustive"
+    smart_max_iter: int = 30
 
     class Config:
         extra = "allow"  # Silently ignore unknown fields from the UI
