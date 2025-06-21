@@ -43,6 +43,9 @@ function setupModals() {
         const modal = document.createElement('div');
         modal.id = 'amortization-modal';
         modal.className = 'modal';
+        modal.setAttribute('role', 'dialog');
+        modal.setAttribute('aria-modal', 'true');
+        modal.setAttribute('aria-label', 'Amortization schedule');
         modal.style.display = 'none';
         modal.innerHTML = `
             <div class="modal-content">
@@ -59,6 +62,9 @@ function setupModals() {
         const modal = document.createElement('div');
         modal.id = 'generic-breakdown-modal';
         modal.className = 'modal';
+        modal.setAttribute('role', 'dialog');
+        modal.setAttribute('aria-modal', 'true');
+        modal.setAttribute('aria-labelledby', 'generic-breakdown-title');
         modal.style.display = 'none';
         modal.innerHTML = `
             <div class="modal-content">
