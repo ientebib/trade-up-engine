@@ -30,7 +30,7 @@ FROM (
       AND flag_published = TRUE
       AND region_name IS NOT NULL
       AND region_name != 'São Paulo'
-      AND inventory_date >= CURRENT_DATE -1
+      AND inventory_date >= CURRENT_DATE - 90
 ) ranked
 JOIN dwh.dim_car_stock dcs ON ranked.stock_id = dcs.bk_car_stock
 JOIN playground.dl_region_growth_playground pg ON ranked.hub_name = pg.hub_name

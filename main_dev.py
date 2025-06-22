@@ -123,16 +123,15 @@ async def main_dashboard(request: Request):
 
 # Customer list page
 @app.get("/customers", response_class=HTMLResponse)
-async def customer_list(request: Request):
-    """Customer list page"""
-    try:
-        return templates.TemplateResponse(
-            "customer_list.html",
-            {"request": request},
-        )
-    except Exception as e:
-        logging.error(f"Error rendering customer list: {e}")
-        return HTMLResponse(f"<h1>Customer List</h1><p>Error: {e}</p>")
+async def serve_customers_page(request: Request):
+    """Serve the customers list page."""
+    return templates.TemplateResponse(
+        "customer_list.html",
+        {
+            "request": request,
+            "active_page": "customers",
+        },
+    )
 
 # Customer view page
 @app.get("/customer/{customer_id}", response_class=HTMLResponse)
@@ -202,6 +201,17 @@ async def development_info():
             "/api/*"
         ]
     }
+
+@app.get("/audit", response_class=HTMLResponse)
+async def serve_audit_page(request: Request):
+    """Serve the system audit page."""
+    return templates.TemplateResponse(
+        "audit.html",
+        {
+            "request": request,
+            "active_page": "audit",
+        },
+    )
 
 if __name__ == "__main__":
     logger.info("🚀 Starting Trade-Up Engine in development mode...")

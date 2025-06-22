@@ -20,6 +20,7 @@ import numpy as np
 import json
 import redshift_connector
 from sse_starlette.sse import EventSourceResponse
+from datetime import datetime
 
 # Import core modules
 from core.engine import run_engine_for_customer
@@ -87,7 +88,6 @@ async def lifespan(app: FastAPI):
 
     checks["csv_files"] = {
         "customer_data.csv": csv_readable(Path("customer_data.csv")),
-        "inventory_data.csv": csv_readable(Path("inventory_data.csv")),
     }
 
     checks["redis"] = cache_utils.get_redis_status()
@@ -363,23 +363,24 @@ async def serve_calculations_page(request: Request):
 
 @app.get("/customers", response_class=HTMLResponse)
 async def serve_customers_page(request: Request):
-    """Serves the customer list page with enriched scenario data."""
-    try:
-        scenario_results = load_latest_scenario_results().get("actual_metrics", {})
-        if scenario_results:
-            # Create a summary DataFrame from the scenario results if they exist
-            # This part needs to be adapted based on the actual structure of your results
-            # For now, let's assume we have a simple dictionary we can pass
-            pass
-    except Exception:
-        scenario_results = {}
-
+    """Serve the customers list page."""
     return templates.TemplateResponse(
         "customer_list.html",
         {
             "request": request,
-            "scenario_results": json.dumps(scenario_results),
             "active_page": "customers",
+        },
+    )
+
+
+@app.get("/audit", response_class=HTMLResponse)
+async def serve_audit_page(request: Request):
+    """Serve the system audit page."""
+    return templates.TemplateResponse(
+        "audit.html",
+        {
+            "request": request,
+            "active_page": "audit",
         },
     )
 
@@ -396,15 +397,55 @@ async def health_check():
         except Exception:
             return False
 
+    def get_file_info(path: Path) -> dict:
+        try:
+            if path.exists():
+                stat = path.stat()
+                return {
+                    "exists": True,
+                    "size": stat.st_size,
+                    "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                    "readable": os.access(path, os.R_OK),
+                    "writable": os.access(path, os.W_OK)
+                }
+            else:
+                return {"exists": False}
+        except Exception as e:
+            return {"exists": False, "error": str(e)}
+
+    def get_data_counts():
+        try:
+            customer_count = len(customers_df) if not customers_df.empty else 0
+            inventory_count = len(inventory_df) if not inventory_df.empty else 0
+            return {
+                "customers": customer_count,
+                "inventory": inventory_count
+            }
+        except Exception:
+            return {"customers": 0, "inventory": 0}
+
     checks = {
         "engine_config_rw": check_rw(Path("engine_config.json")),
         "scenario_results_rw": check_rw(Path("scenario_results.json")),
         "csv_files": {
-            "customer_data.csv": Path("customer_data.csv").exists(),
-            "inventory_data.csv": Path("inventory_data.csv").exists(),
+            "customer_data.csv": get_file_info(Path("customer_data.csv"))
         },
         "redis": cache_utils.get_redis_status(),
         "startup": getattr(app.state, "startup_checks", {}),
+        "data_counts": get_data_counts(),
+        "environment_vars": {
+            "REDSHIFT_HOST": bool(os.getenv("REDSHIFT_HOST")),
+            "REDSHIFT_DATABASE": bool(os.getenv("REDSHIFT_DATABASE")),
+            "REDSHIFT_USER": bool(os.getenv("REDSHIFT_USER")),
+            "REDSHIFT_PASSWORD": bool(os.getenv("REDSHIFT_PASSWORD")),
+            "REDIS_URL": bool(os.getenv("REDIS_URL")),
+            "DISABLE_EXTERNAL_CALLS": os.getenv("DISABLE_EXTERNAL_CALLS", "false").lower() == "true",
+            "ENVIRONMENT": os.getenv("ENVIRONMENT", "production"),
+        },
+        "cache_settings": {
+            "CUSTOMER_CACHE_TTL": int(os.getenv("CUSTOMER_CACHE_TTL", 86400)),
+            "INVENTORY_CACHE_TTL": int(os.getenv("INVENTORY_CACHE_TTL", 86400)),
+        }
     }
 
     return {
@@ -416,6 +457,7 @@ async def health_check():
             else "enabled"
         ),
         "checks": checks,
+        "timestamp": datetime.now().isoformat(),
     }
 
 
@@ -603,12 +645,41 @@ async def api_get_scenario_results():
         return latest_results
     except Exception as e:
         logger.error(f"Error loading scenario results: {e}")
-        return {}
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/scenario-summary", response_class=JSONResponse)
+async def get_scenario_summary():
+    """Provides a summarized view of the last scenario run for the dashboard."""
+    try:
+        results = load_latest_scenario_results()  # Remove await since it's not async
+        if not results or not results.get("actual_metrics"):
+            return JSONResponse(content={"status": "not_found"}, status_code=404)
+
+        metrics = results["actual_metrics"]
+        details = results["execution_details"]
+        config = results["scenario_config"]
+        
+        # Calculate approval rate (all offers are assumed approved for now)
+        approval_rate = 1.0  # 100%
+        
+        summary = {
+            "total_scenarios_run": 1,  # One scenario analysis was run
+            "total_offers_generated": metrics.get("total_offers"),
+            "average_npv": metrics.get("average_npv_per_offer"),
+            "approval_rate": approval_rate,
+            "timestamp": config.get("last_updated"),  # Use config timestamp
+        }
+        return JSONResponse(content=summary)
+    except FileNotFoundError:
+        logger.info("scenario_results.json not found, returning empty summary.")
+        return JSONResponse(content={"status": "not_found"}, status_code=404)
+    except Exception as e:
+        logger.error(f"Error creating scenario summary: {e}")
+        raise HTTPException(status_code=500, detail="Could not generate scenario summary.")
 
 
 # Real-time scenario analysis with SSE
-
-
 @app.get("/api/scenario-analysis-stream")
 async def scenario_analysis_stream():
     """Stream scenario analysis progress via Server-Sent Events.

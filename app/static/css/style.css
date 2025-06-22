@@ -1816,7 +1816,202 @@ h1, h2, h3, h4, h5, h6 {
 
 /* Accessible focus outlines */
 button:focus,
-a:focus {
+a:focus,
+input:focus,
+select:focus,
+textarea:focus {
     outline: 2px solid var(--primary-color);
     outline-offset: 2px;
+}
+
+/* Audit Page Styles */
+.audit-controls {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 2rem;
+    padding: 1rem;
+    background: var(--bg-primary);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-light);
+    box-shadow: var(--shadow-xs);
+}
+
+.audit-controls .btn {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.last-updated {
+    color: var(--text-tertiary);
+    font-size: 0.875rem;
+    margin-left: auto;
+}
+
+.audit-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1.25rem;
+    margin-bottom: 2rem;
+}
+
+.audit-card {
+    background: var(--bg-primary);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-light);
+    box-shadow: var(--shadow-xs);
+    overflow: hidden;
+    transition: all 0.2s ease;
+}
+
+.audit-card:hover {
+    box-shadow: var(--shadow-md);
+    transform: translateY(-2px);
+}
+
+.audit-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 1.25rem;
+    background: var(--bg-tertiary);
+    border-bottom: 1px solid var(--border-light);
+}
+
+.audit-card-header h4 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.audit-card-content {
+    padding: 1.25rem;
+}
+
+.audit-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--border-light);
+}
+
+.audit-item:last-child {
+    border-bottom: none;
+}
+
+.audit-label {
+    font-weight: 500;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+}
+
+.audit-value {
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: 0.875rem;
+    text-align: right;
+    max-width: 60%;
+    word-break: break-word;
+}
+
+.status-badge {
+    padding: 0.25rem 0.75rem;
+    border-radius: var(--radius-md);
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+}
+
+.status-badge.status-ok {
+    background: var(--success-color);
+    color: white;
+}
+
+.status-badge.status-error {
+    background: var(--danger-color);
+    color: white;
+}
+
+.status-badge.status-warning {
+    background: var(--warning-color);
+    color: white;
+}
+
+.status-badge.status-unknown {
+    background: var(--gray-400);
+    color: white;
+}
+
+.status-badge.status-skipped {
+    background: var(--gray-500);
+    color: white;
+}
+
+.raw-data-details {
+    background: var(--bg-primary);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-light);
+    overflow: hidden;
+}
+
+.raw-data-details summary {
+    padding: 1rem 1.25rem;
+    background: var(--bg-tertiary);
+    cursor: pointer;
+    font-weight: 600;
+    color: var(--text-primary);
+    border-bottom: 1px solid var(--border-light);
+    transition: background-color 0.2s ease;
+}
+
+.raw-data-details summary:hover {
+    background: var(--gray-100);
+}
+
+.raw-data-content {
+    padding: 1.25rem;
+    background: var(--gray-50);
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 0.75rem;
+    line-height: 1.5;
+    color: var(--text-primary);
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+/* Responsive adjustments for audit page */
+@media (max-width: 768px) {
+    .audit-controls {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.75rem;
+    }
+    
+    .last-updated {
+        margin-left: 0;
+        text-align: center;
+    }
+    
+    .audit-grid {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+    
+    .audit-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.25rem;
+    }
+    
+    .audit-value {
+        max-width: 100%;
+        text-align: left;
+    }
 }

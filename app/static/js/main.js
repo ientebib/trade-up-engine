@@ -408,41 +408,42 @@ async function loadDashboardScenarioSummary() {
     const container = document.getElementById('dashboard-scenario-summary');
     if (!container) return;
     try {
-        const results = await fetch('/api/scenario-results').then(res => res.json());
-        if (!results || !results.actual_metrics) {
-            container.innerHTML = '<p>No scenario has been run yet. <a href="/config">Configure and run one</a>.</p>';
-            return;
+        const response = await fetch('/api/scenario-summary');
+        const data = await response.json();
+
+        if (data && Object.keys(data).length > 0 && data.status !== 'not_found') {
+            container.innerHTML = `
+                <div class="kpi-grid">
+                    <div class="kpi-card">
+                        <div class="kpi-value">${data.total_scenarios_run?.toLocaleString() || 'N/A'}</div>
+                        <div class="kpi-label">Scenarios Run</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-value">${data.total_offers_generated?.toLocaleString() || 'N/A'}</div>
+                        <div class="kpi-label">Offers Generated</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-value">$${data.average_npv?.toLocaleString(undefined, { maximumFractionDigits: 0 }) || 'N/A'}</div>
+                        <div class="kpi-label">Average NPV</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-value">${data.approval_rate?.toLocaleString(undefined, { style: 'percent', maximumFractionDigits: 1 }) || 'N/A'}</div>
+                        <div class="kpi-label">Approval Rate</div>
+                    </div>
+                </div>
+                <div class="summary-footer">
+                    Last analysis run: <span class="last-run-time">${new Date(data.timestamp).toLocaleString()}</span>
+                </div>
+            `;
+            container.style.display = 'grid';
+        } else {
+            container.innerHTML = `<p class="no-data-message">No scenario analysis has been run yet. Go to the <a href="/config">Settings</a> page to run one.</p>`;
+            container.style.display = 'block';
         }
-        const metrics = results.actual_metrics;
-        const details = results.execution_details;
-        const config = results.scenario_config;
-        
-        container.innerHTML = `
-            <div class="summary-header">
-                <h3>Latest Scenario: ${results.mode_info.mode}</h3>
-                <p>Ran at ${new Date(config.last_updated).toLocaleString()}</p>
-            </div>
-            <div class="kpi-grid">
-                <div class="kpi-card">
-                    <div class="kpi-value">${metrics.total_offers.toLocaleString()}</div>
-                    <div class="kpi-label">Total Offers</div>
-                </div>
-                <div class="kpi-card">
-                    <div class="kpi-value">$${Math.round(metrics.average_npv_per_offer).toLocaleString()}</div>
-                    <div class="kpi-label">Average Offer NPV</div>
-                </div>
-                <div class="kpi-card">
-                    <div class="kpi-value">${metrics.offers_per_customer}</div>
-                    <div class="kpi-label">Offers / Customer</div>
-                </div>
-                <div class="kpi-card">
-                    <div class="kpi-value">${details.processed_customers} / ${details.total_customers}</div>
-                    <div class="kpi-label">Customers Processed</div>
-                </div>
-            </div>
-        `;
-    } catch (err) {
-        container.innerHTML = '<p>Could not load scenario results.</p>';
+    } catch (error) {
+        console.error('Error loading scenario summary:', error);
+        container.innerHTML = `<p class="error-message">Could not load scenario summary. Please try again later.</p>`;
+        container.style.display = 'block';
     }
 }
 

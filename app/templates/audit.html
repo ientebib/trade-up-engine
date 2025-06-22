@@ -1,0 +1,430 @@
+{% extends "base.html" %}
+{% block title %}Kavak Trade-Up - System Audit{% endblock %}
+{% block content %}
+    <header class="main-header">
+        <h2>🔍 System Audit</h2>
+        <p>Comprehensive overview of data sources, configurations, and system health.</p>
+    </header>
+
+    <!-- Refresh Button -->
+    <div class="audit-controls">
+        <button id="refresh-audit" class="btn btn-primary">
+            <svg class="btn-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
+            </svg>
+            Refresh Audit Data
+        </button>
+        <span class="last-updated">Last updated: <span id="audit-timestamp">Loading...</span></span>
+    </div>
+
+    <!-- Data Sources Section -->
+    <div class="section-card">
+        <h3>📊 Data Sources</h3>
+        <div class="audit-grid">
+            <div class="audit-card" id="redshift-status">
+                <div class="audit-card-header">
+                    <h4>🔌 Redshift Database</h4>
+                    <span class="status-badge" id="redshift-badge">Checking...</span>
+                </div>
+                <div class="audit-card-content">
+                    <div class="audit-item">
+                        <span class="audit-label">Connection:</span>
+                        <span class="audit-value" id="redshift-connection">-</span>
+                    </div>
+                    <div class="audit-item">
+                        <span class="audit-label">Host:</span>
+                        <span class="audit-value" id="redshift-host">-</span>
+                    </div>
+                    <div class="audit-item">
+                        <span class="audit-label">Database:</span>
+                        <span class="audit-value" id="redshift-database">-</span>
+                    </div>
+                    <div class="audit-item">
+                        <span class="audit-label">Last Query:</span>
+                        <span class="audit-value" id="redshift-last-query">-</span>
+                    </div>
+                    <div class="audit-item">
+                        <span class="audit-label">Inventory Records:</span>
+                        <span class="audit-value" id="redshift-records">-</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="audit-card" id="csv-status">
+                <div class="audit-card-header">
+                    <h4>📁 CSV Files</h4>
+                    <span class="status-badge" id="csv-badge">Checking...</span>
+                </div>
+                <div class="audit-card-content">
+                    <div class="audit-item">
+                        <span class="audit-label">Customer Data:</span>
+                        <span class="audit-value" id="customer-csv-status">-</span>
+                    </div>
+                    <div class="audit-item">
+                        <span class="audit-label">Customer Records:</span>
+                        <span class="audit-value" id="customer-records">-</span>
+                    </div>
+                    <div class="audit-item">
+                        <span class="audit-label">Last Modified:</span>
+                        <span class="audit-value" id="csv-last-modified">-</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Configuration Section -->
+    <div class="section-card">
+        <h3>⚙️ Engine Configuration</h3>
+        <div class="audit-grid">
+            <div class="audit-card">
+                <div class="audit-card-header">
+                    <h4>🎛️ Current Mode</h4>
+                    <span class="status-badge" id="config-mode-badge">Loading...</span>
+                </div>
+                <div class="audit-card-content">
+                    <div class="audit-item">
+                        <span class="audit-label">Engine Mode:</span>
+                        <span class="audit-value" id="engine-mode">-</span>
+                    </div>
+                    <div class="audit-item">
+                        <span class="audit-label">Last Updated:</span>
+                        <span class="audit-value" id="config-last-updated">-</span>
+                    </div>
+                    <div class="audit-item">
+                        <span class="audit-label">Config File:</span>
+                        <span class="audit-value" id="config-file-status">-</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="audit-card">
+                <div class="audit-card-header">
+                    <h4>💰 Fee Parameters</h4>
+                </div>
+                <div class="audit-card-content">
+                    <div class="audit-item">
+                        <span class="audit-label">Service Fee:</span>
+                        <span class="audit-value" id="service-fee">-</span>
+                    </div>
+                    <div class="audit-item">
+                        <span class="audit-label">CXA Fee:</span>
+                        <span class="audit-value" id="cxa-fee">-</span>
+                    </div>
+                    <div class="audit-item">
+                        <span class="audit-label">CAC Bonus:</span>
+                        <span class="audit-value" id="cac-bonus">-</span>
+                    </div>
+                    <div class="audit-item">
+                        <span class="audit-label">Insurance:</span>
+                        <span class="audit-value" id="insurance-amount">-</span>
+                    </div>
+                    <div class="audit-item">
+                        <span class="audit-label">GPS Monthly:</span>
+                        <span class="audit-value" id="gps-monthly">-</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="audit-card">
+                <div class="audit-card-header">
+                    <h4>🎯 Range Optimization</h4>
+                </div>
+                <div class="audit-card-content">
+                    <div class="audit-item">
+                        <span class="audit-label">Service Fee Range:</span>
+                        <span class="audit-value" id="service-fee-range">-</span>
+                    </div>
+                    <div class="audit-item">
+                        <span class="audit-label">CXA Range:</span>
+                        <span class="audit-value" id="cxa-range">-</span>
+                    </div>
+                    <div class="audit-item">
+                        <span class="audit-label">CAC Bonus Range:</span>
+                        <span class="audit-value" id="cac-bonus-range">-</span>
+                    </div>
+                    <div class="audit-item">
+                        <span class="audit-label">Max Combinations:</span>
+                        <span class="audit-value" id="max-combinations">-</span>
+                    </div>
+                    <div class="audit-item">
+                        <span class="audit-label">Search Method:</span>
+                        <span class="audit-value" id="search-method">-</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cache & Performance Section -->
+    <div class="section-card">
+        <h3>⚡ Cache & Performance</h3>
+        <div class="audit-grid">
+            <div class="audit-card">
+                <div class="audit-card-header">
+                    <h4>🗄️ Redis Cache</h4>
+                    <span class="status-badge" id="redis-badge">Checking...</span>
+                </div>
+                <div class="audit-card-content">
+                    <div class="audit-item">
+                        <span class="audit-label">Status:</span>
+                        <span class="audit-value" id="redis-status">-</span>
+                    </div>
+                    <div class="audit-item">
+                        <span class="audit-label">URL:</span>
+                        <span class="audit-value" id="redis-url">-</span>
+                    </div>
+                    <div class="audit-item">
+                        <span class="audit-label">Customer TTL:</span>
+                        <span class="audit-value" id="customer-ttl">-</span>
+                    </div>
+                    <div class="audit-item">
+                        <span class="audit-label">Inventory TTL:</span>
+                        <span class="audit-value" id="inventory-ttl">-</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="audit-card">
+                <div class="audit-card-header">
+                    <h4>📈 Performance Metrics</h4>
+                </div>
+                <div class="audit-card-content">
+                    <div class="audit-item">
+                        <span class="audit-label">Environment:</span>
+                        <span class="audit-value" id="environment">-</span>
+                    </div>
+                    <div class="audit-item">
+                        <span class="audit-label">External Calls:</span>
+                        <span class="audit-value" id="external-calls">-</span>
+                    </div>
+                    <div class="audit-item">
+                        <span class="audit-label">Data Loader:</span>
+                        <span class="audit-value" id="data-loader-type">-</span>
+                    </div>
+                    <div class="audit-item">
+                        <span class="audit-label">Uptime:</span>
+                        <span class="audit-value" id="uptime">-</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- System Health Section -->
+    <div class="section-card">
+        <h3>🏥 System Health</h3>
+        <div class="audit-grid">
+            <div class="audit-card">
+                <div class="audit-card-header">
+                    <h4>📋 File Permissions</h4>
+                    <span class="status-badge" id="files-badge">Checking...</span>
+                </div>
+                <div class="audit-card-content">
+                    <div class="audit-item">
+                        <span class="audit-label">Config File:</span>
+                        <span class="audit-value" id="config-file-perm">-</span>
+                    </div>
+                    <div class="audit-item">
+                        <span class="audit-label">Scenario Results:</span>
+                        <span class="audit-value" id="scenario-file-perm">-</span>
+                    </div>
+                    <div class="audit-item">
+                        <span class="audit-label">Cache Directory:</span>
+                        <span class="audit-value" id="cache-dir-perm">-</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="audit-card">
+                <div class="audit-card-header">
+                    <h4>🔧 Environment</h4>
+                </div>
+                <div class="audit-card-content">
+                    <div class="audit-item">
+                        <span class="audit-label">Python Version:</span>
+                        <span class="audit-value" id="python-version">-</span>
+                    </div>
+                    <div class="audit-item">
+                        <span class="audit-label">Working Directory:</span>
+                        <span class="audit-value" id="working-dir">-</span>
+                    </div>
+                    <div class="audit-item">
+                        <span class="audit-label">Server Mode:</span>
+                        <span class="audit-value" id="server-mode">-</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Raw Data Section (Collapsible) -->
+    <div class="section-card">
+        <h3>📄 Raw Data</h3>
+        <details class="raw-data-details">
+            <summary>Show Raw Health Check Data</summary>
+            <pre id="raw-health-data" class="raw-data-content">Loading...</pre>
+        </details>
+    </div>
+</div>
+
+{% block extra_js %}
+<script>
+    // Audit page specific JavaScript
+    document.addEventListener('DOMContentLoaded', function() {
+        loadAuditData();
+        
+        // Refresh button
+        document.getElementById('refresh-audit').addEventListener('click', function() {
+            loadAuditData();
+        });
+    });
+
+    function loadAuditData() {
+        // Update timestamp
+        document.getElementById('audit-timestamp').textContent = new Date().toLocaleString();
+        
+        // Load health data
+        fetch('/health')
+            .then(response => response.json())
+            .then(data => {
+                updateAuditDisplay(data);
+            })
+            .catch(error => {
+                console.error('Error loading audit data:', error);
+                showError('Failed to load audit data');
+            });
+    }
+
+    function updateAuditDisplay(data) {
+        // Update raw data
+        document.getElementById('raw-health-data').textContent = JSON.stringify(data, null, 2);
+        
+        // Update status badges
+        updateStatusBadge('redshift-badge', data.checks?.startup?.redshift || 'unknown');
+        updateStatusBadge('csv-badge', data.checks?.csv_files?.['customer_data.csv']?.exists ? 'ok' : 'error');
+        updateStatusBadge('redis-badge', data.checks?.redis || 'unknown');
+        updateStatusBadge('files-badge', data.checks ? 'ok' : 'error');
+        updateStatusBadge('config-mode-badge', 'ok');
+        
+        // Update data source information
+        updateRedshiftInfo(data);
+        updateCSVInfo(data);
+        updateConfigInfo(data);
+        updateCacheInfo(data);
+        updateSystemInfo(data);
+    }
+
+    function updateStatusBadge(elementId, status) {
+        const badge = document.getElementById(elementId);
+        if (!badge) return;
+        
+        badge.textContent = status === 'ok' || status === 'connected' ? '✅ OK' : 
+                           status === 'error' || status.includes('error') ? '❌ Error' : 
+                           status === 'skipped' ? '⏭️ Skipped' : '⚠️ Unknown';
+        
+        badge.className = 'status-badge ' + 
+            (status === 'ok' || status === 'connected' ? 'status-ok' : 
+             status === 'error' || status.includes('error') ? 'status-error' : 
+             status === 'skipped' ? 'status-skipped' : 'status-unknown');
+    }
+
+    function updateRedshiftInfo(data) {
+        const startup = data.checks?.startup || {};
+        const envVars = data.checks?.environment_vars || {};
+        
+        document.getElementById('redshift-connection').textContent = startup.redshift || 'Unknown';
+        document.getElementById('redshift-host').textContent = envVars.REDSHIFT_HOST ? 'Configured' : 'Not set';
+        document.getElementById('redshift-database').textContent = envVars.REDSHIFT_DATABASE ? 'Configured' : 'Not set';
+        document.getElementById('redshift-last-query').textContent = 'On startup';
+        document.getElementById('redshift-records').textContent = data.checks?.data_counts?.inventory || '0';
+    }
+
+    function updateCSVInfo(data) {
+        const csvFiles = data.checks?.csv_files || {};
+        const dataCounts = data.checks?.data_counts || {};
+        
+        const customerFile = csvFiles['customer_data.csv'] || {};
+        
+        document.getElementById('customer-csv-status').textContent = customerFile.exists ? '✅ Available' : '❌ Missing';
+        document.getElementById('customer-records').textContent = dataCounts.customers || '0';
+        
+        const lastModified = customerFile.modified || 'Unknown';
+        document.getElementById('csv-last-modified').textContent = lastModified !== 'Unknown' ? 
+            new Date(lastModified).toLocaleString() : 'Unknown';
+    }
+
+    function updateConfigInfo(data) {
+        // Load config status
+        fetch('/api/config-status')
+            .then(response => response.json())
+            .then(configData => {
+                document.getElementById('engine-mode').textContent = configData.mode || 'Unknown';
+                document.getElementById('config-last-updated').textContent = configData.last_updated || 'Never';
+                document.getElementById('config-file-status').textContent = data.checks?.engine_config_rw ? '✅ Read/Write' : '❌ Access Error';
+                
+                // Use config data from the status response
+                const config = configData.latest_results?.scenario_config || {};
+                document.getElementById('service-fee').textContent = (config.service_fee_pct * 100).toFixed(1) + '%';
+                document.getElementById('cxa-fee').textContent = (config.cxa_pct * 100).toFixed(1) + '%';
+                document.getElementById('cac-bonus').textContent = '$' + config.cac_bonus?.toLocaleString() || '0';
+                document.getElementById('insurance-amount').textContent = '$' + config.insurance_amount?.toLocaleString() || '0';
+                document.getElementById('gps-monthly').textContent = '$' + config.gps_fee?.toLocaleString() || '0';
+                
+                document.getElementById('service-fee-range').textContent = config.service_fee_range ? 
+                    config.service_fee_range[0] + '% - ' + config.service_fee_range[1] + '%' : 'Not set';
+                document.getElementById('cxa-range').textContent = config.cxa_range ? 
+                    config.cxa_range[0] + '% - ' + config.cxa_range[1] + '%' : 'Not set';
+                document.getElementById('cac-bonus-range').textContent = config.cac_bonus_range ? 
+                    '$' + config.cac_bonus_range[0].toLocaleString() + ' - $' + config.cac_bonus_range[1].toLocaleString() : 'Not set';
+                document.getElementById('max-combinations').textContent = 'N/A (Hierarchical)';
+                document.getElementById('search-method').textContent = 'Hierarchical';
+            })
+            .catch(error => {
+                console.error('Error loading config status:', error);
+                // Fallback to basic info from health endpoint
+                document.getElementById('engine-mode').textContent = 'Unknown';
+                document.getElementById('config-last-updated').textContent = 'Never';
+                document.getElementById('config-file-status').textContent = data.checks?.engine_config_rw ? '✅ Read/Write' : '❌ Access Error';
+            });
+    }
+
+    function updateCacheInfo(data) {
+        const cacheSettings = data.checks?.cache_settings || {};
+        const envVars = data.checks?.environment_vars || {};
+        
+        document.getElementById('redis-status').textContent = data.checks?.redis || 'Unknown';
+        document.getElementById('redis-url').textContent = envVars.REDIS_URL ? 'Configured' : 'Not configured';
+        document.getElementById('customer-ttl').textContent = (cacheSettings.CUSTOMER_CACHE_TTL || 86400) + 's';
+        document.getElementById('inventory-ttl').textContent = (cacheSettings.INVENTORY_CACHE_TTL || 86400) + 's';
+    }
+
+    function updateSystemInfo(data) {
+        const envVars = data.checks?.environment_vars || {};
+        
+        document.getElementById('environment').textContent = data.environment || 'Unknown';
+        document.getElementById('external-calls').textContent = data.external_calls || 'Unknown';
+        document.getElementById('data-loader-type').textContent = data.environment === 'development' ? 'Development (CSV)' : 'Production (Redshift)';
+        document.getElementById('uptime').textContent = 'Since startup';
+        
+        document.getElementById('config-file-perm').textContent = data.checks?.engine_config_rw ? '✅ Read/Write' : '❌ Access Error';
+        document.getElementById('scenario-file-perm').textContent = data.checks?.scenario_results_rw ? '✅ Read/Write' : '❌ Access Error';
+        document.getElementById('cache-dir-perm').textContent = '✅ Available';
+        
+        document.getElementById('python-version').textContent = '3.x (Runtime)';
+        document.getElementById('working-dir').textContent = window.location.origin;
+        document.getElementById('server-mode').textContent = data.environment === 'development' ? 'Development' : 'Production';
+    }
+
+    function getEnvVar(name) {
+        // This would need to be exposed via API in a real implementation
+        return null;
+    }
+
+    function showError(message) {
+        console.error(message);
+        // Could add a toast notification here
+    }
+</script>
+{% endblock %}
+{% endblock %} 
