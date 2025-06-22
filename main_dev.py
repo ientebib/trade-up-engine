@@ -34,7 +34,7 @@ try:
     from app.app_factory import create_app
 except ImportError as e:
     logger.error(f"❌ Import error: {e}")
-    logger.error("🔧 Please run the setup script first: ./setup.sh")
+    logger.error("🔧 Please run the setup script first: ./run_local.sh setup")
     sys.exit(1)
 
 # Create FastAPI app via the shared factory

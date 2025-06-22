@@ -20,7 +20,7 @@ Create a `.env` file in the root directory with your Redshift credentials:
 ```bash
 REDSHIFT_HOST=your-redshift-cluster.region.redshift.amazonaws.com
 REDSHIFT_PORT=5439
-REDSHIFT_DB=your_database_name
+REDSHIFT_DATABASE=your_database_name
 REDSHIFT_USER=your_username
 REDSHIFT_PASSWORD=your_password
 ```

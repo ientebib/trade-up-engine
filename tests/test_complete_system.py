@@ -146,7 +146,7 @@ def main():
     if not wait_for_server():
         logger.error("❌ Server is not responding. Make sure it's running:")
         logger.error("   • Run: uvicorn main_dev:app --host 0.0.0.0 --port 8000")
-        logger.error("   • Or use: ./agent_setup.sh")
+        logger.error("   • Or use: ./run_local.sh")
         sys.exit(1)
     
     tests_passed = 0
