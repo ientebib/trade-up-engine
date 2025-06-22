@@ -1813,3 +1813,10 @@ h1, h2, h3, h4, h5, h6 {
     /* These styles were refactored or are already defined elsewhere */
     /* This empty rule block is to explicitly show they were considered */
 }
+
+/* Accessible focus outlines */
+button:focus,
+a:focus {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+}
