@@ -499,7 +499,7 @@ def get_all_customers(page: int = 1, limit: int = 100):
 
     # Sanitize values
     page = max(page, 1)
-    limit = max(limit, 1)
+    limit = max(min(limit, 1000), 1)  # Cap limit to reasonable maximum of 1000
 
     start = (page - 1) * limit
     end = start + limit
