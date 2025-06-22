@@ -54,13 +54,7 @@ def run_scenario_analysis(
         offers_by_tier = {"Refresh": 0, "Upgrade": 0, "Max Upgrade": 0}
         processing_errors = 0
 
-        # Baseline config for reference (not currently used)
-        baseline_config = {
-            "use_custom_params": False,
-            "use_range_optimization": False,
-            "include_kavak_total": True,
-            "min_npv_threshold": 5000.0,
-        }
+
 
         logger.info(f"🎯 Starting REAL scenario analysis with {total_customers} customers...")
         logger.info(f"Configuration: {config_dict}")
