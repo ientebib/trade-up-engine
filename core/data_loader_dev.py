@@ -339,29 +339,5 @@ class DevelopmentDataLoader:
         
         return customers_df
 
-    def load_all_data(self):
-        """Load and integrate all data sources for development"""
-        
-        logger.info("🚀 Starting development data loading process...")
-        logger.info("🔧 Using CSV files and sample data (no Redshift connection)")
-        
-        # Load inventory from CSV or create sample data
-        inventory_df = self.load_inventory_from_csv()
-        
-        # Load customers from CSV or create sample data
-        customers_df = self.load_customers_from_csv()
-        
-        # Enrich customer data with car models
-        if not customers_df.empty and not inventory_df.empty:
-            customers_df = self.enrich_customer_models(customers_df, inventory_df)
-        
-        logger.info("✅ Development data loading complete!")
-        logger.info(f"📊 Final data summary:")
-        logger.info(f"   - Customers: {len(customers_df)}")
-        logger.info(f"   - Inventory: {len(inventory_df)}")
-        logger.info("🔧 Development mode: Using local data sources only")
-        
-        return customers_df, inventory_df
-
 # Create a singleton instance
 dev_data_loader = DevelopmentDataLoader() 
