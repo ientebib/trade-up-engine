@@ -74,6 +74,9 @@ def calculate_demo_metrics() -> dict:
 
     return metrics
 
+app.state.metrics_func = calculate_demo_metrics
+app.state.load_customers_func = data_loader.load_customers
+
 # Development mode indicator
 @app.middleware("http")
 async def development_middleware(request: Request, call_next):
@@ -97,86 +100,6 @@ async def health_check():
     }
 
 # Main dashboard
-@app.get("/", response_class=HTMLResponse)
-async def main_dashboard(request: Request):
-    """Main dashboard page"""
-    try:
-        metrics = calculate_demo_metrics()
-        return templates.TemplateResponse(
-            "main_dashboard.html",
-            {"request": request, "metrics": metrics, "active_page": "dashboard"},
-        )
-    except Exception as e:
-        logging.error(f"Error rendering main dashboard: {e}")
-        return HTMLResponse(f"""
-        <html>
-            <head><title>Trade-Up Engine - Development</title></head>
-            <body>
-                <h1>Trade-Up Engine - Development Mode</h1>
-                <p>External network calls are disabled.</p>
-                <p>Using CSV files and sample data instead of Redshift.</p>
-                <p>Error: {e}</p>
-                <p><a href="/health">Health Check</a></p>
-            </body>
-        </html>
-        """)
-
-# Customer list page
-@app.get("/customers", response_class=HTMLResponse)
-async def serve_customers_page(request: Request):
-    """Serve the customers list page."""
-    return templates.TemplateResponse(
-        "customer_list.html",
-        {
-            "request": request,
-            "active_page": "customers",
-        },
-    )
-
-# Customer view page
-@app.get("/customer/{customer_id}", response_class=HTMLResponse)
-async def customer_view(request: Request, customer_id: str):
-    """Customer view page"""
-    try:
-        customers = data_loader.load_customers()
-        customer_row = customers[customers["customer_id"] == customer_id]
-        if customer_row.empty:
-            raise HTTPException(status_code=404, detail="Customer not found")
-
-        customer = customer_row.iloc[0].to_dict()
-        return templates.TemplateResponse(
-            "customer_view.html",
-            {"request": request, "customer": customer, "active_page": "customer"},
-        )
-    except Exception as e:
-        logging.error(f"Error rendering customer view: {e}")
-        return HTMLResponse(f"<h1>Customer View</h1><p>Error: {e}</p>")
-
-# Calculations page
-@app.get("/calculations", response_class=HTMLResponse)
-async def calculations_page(request: Request):
-    """Calculations page"""
-    try:
-        return templates.TemplateResponse(
-            "calculations.html",
-            {"request": request},
-        )
-    except Exception as e:
-        logging.error(f"Error rendering calculations: {e}")
-        return HTMLResponse(f"<h1>Calculations</h1><p>Error: {e}</p>")
-
-# Global config page
-@app.get("/config", response_class=HTMLResponse)
-async def global_config_page(request: Request):
-    """Global configuration page"""
-    try:
-        return templates.TemplateResponse(
-            "global_config.html",
-            {"request": request},
-        )
-    except Exception as e:
-        logging.error(f"Error rendering global config: {e}")
-        return HTMLResponse(f"<h1>Global Configuration</h1><p>Error: {e}</p>")
 
 # Development info endpoint
 @app.get("/dev-info")
@@ -202,16 +125,6 @@ async def development_info():
         ]
     }
 
-@app.get("/audit", response_class=HTMLResponse)
-async def serve_audit_page(request: Request):
-    """Serve the system audit page."""
-    return templates.TemplateResponse(
-        "audit.html",
-        {
-            "request": request,
-            "active_page": "audit",
-        },
-    )
 
 if __name__ == "__main__":
     logger.info("🚀 Starting Trade-Up Engine in development mode...")

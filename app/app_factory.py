@@ -40,6 +40,12 @@ def create_app(
 
     # Store the selected data loader for use elsewhere
     app.state.data_loader = loader
+    app.state.load_customers_func = loader.load_customers
+    app.state.metrics_func = lambda: {}
+
+    # Include shared web dashboard routes for all modes
+    from app.web.routes import router as web_router
+    app.include_router(web_router)
 
     if mode == "dev":
         # Development API routes
