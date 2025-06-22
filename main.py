@@ -491,11 +491,23 @@ def amortization_table(offer: Dict):
 
 
 @app.get("/api/customers", tags=["Customers"])
-def get_all_customers():
-    """Returns a list of all customers."""
+def get_all_customers(page: int = 1, limit: int = 100):
+    """Return a paginated list of customers and the total count."""
+
     if customers_df.empty:
-        return []
-    return customers_df.to_dict("records")
+        return {"customers": [], "total": 0}
+
+    # Sanitize values
+    page = max(page, 1)
+    limit = max(limit, 1)
+
+    start = (page - 1) * limit
+    end = start + limit
+
+    subset = customers_df.iloc[start:end].to_dict("records")
+    total = len(customers_df)
+
+    return {"customers": subset, "total": total}
 
 
 @app.get("/api/inventory", tags=["Inventory"])

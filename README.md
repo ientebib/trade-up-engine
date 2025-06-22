@@ -130,7 +130,7 @@ For an explanation of how offer counts and portfolio NPV are extrapolated from a
 
 ## API Endpoints
 
-- `/api/customers` - List all customers
+- `/api/customers` - List customers. Optional query params: `page` (1-indexed) and `limit` (items per page).
 - `/api/generate-offers` - Generate trade-up offers
 - `/api/save-config` - Save engine configuration
 - `/customer/{customer_id}` - View customer details

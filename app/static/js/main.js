@@ -86,8 +86,9 @@ function initializeCustomerView(customerId) {
 
 async function loadCustomersList() {
     try {
-        const response = await fetch('/api/customers');
-        allCustomers = await response.json();
+        const response = await fetch('/api/customers?limit=5000');
+        const data = await response.json();
+        allCustomers = data.customers || data;
         
         const customerSelect = document.getElementById('customer-select');
         if (customerSelect && allCustomers.length > 0) {
@@ -338,13 +339,20 @@ function showGenericBreakdownModal(title, breakdown) {
 // ---------------------
 // Customer List Page
 // ---------------------
+let customerPage = 1;
+const customerLimit = 100;
+let customerTotal = null;
+let loadingCustomers = false;
+
 async function initializeCustomerListPage() {
     const tbody = document.getElementById('customer-list-body');
+    const countSpan = document.getElementById('customer-count');
     if (!tbody) return;
-    try {
-        const customers = await fetch('/api/customers').then(r => r.json());
-        tbody.innerHTML = '';
-        customers.slice(0, 200).forEach(cust => {
+
+    tbody.innerHTML = '';
+
+    const renderRows = (custList) => {
+        custList.forEach(cust => {
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td><a href="/customer/${cust.customer_id}" class="id-link">${cust.customer_id}</a></td>
@@ -355,9 +363,36 @@ async function initializeCustomerListPage() {
                 <td><a href="/customer/${cust.customer_id}" class="view-btn">Generate Offers →</a></td>`;
             tbody.appendChild(tr);
         });
-    } catch (err) {
-        tbody.innerHTML = '<tr><td colspan="6">Failed to load customer data.</td></tr>';
-    }
+    };
+
+    const loadNextPage = async () => {
+        if (loadingCustomers) return;
+        if (customerTotal !== null && allCustomers.length >= customerTotal) return;
+        loadingCustomers = true;
+        try {
+            const data = await fetch(`/api/customers?page=${customerPage}&limit=${customerLimit}`).then(r => r.json());
+            const customers = data.customers || [];
+            customerTotal = data.total;
+            allCustomers = allCustomers.concat(customers);
+            renderRows(customers);
+            if (countSpan) {
+                countSpan.textContent = `${allCustomers.length} / ${customerTotal} customers loaded`;
+            }
+            customerPage += 1;
+        } catch (err) {
+            tbody.innerHTML = '<tr><td colspan="6">Failed to load customer data.</td></tr>';
+        } finally {
+            loadingCustomers = false;
+        }
+    };
+
+    await loadNextPage();
+
+    window.addEventListener('scroll', () => {
+        if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 100) {
+            loadNextPage();
+        }
+    });
 }
 
 // ---------------------
