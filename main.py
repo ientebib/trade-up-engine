@@ -171,6 +171,8 @@ app = create_app("prod", lifespan=lifespan)
 
 # Shared components
 templates = app.state.templates
+app.state.metrics_func = calculate_real_metrics
+app.state.load_customers_func = lambda: customers_df
 
 
 # --- Pydantic Models for API ---
@@ -318,71 +320,6 @@ def calculate_real_metrics():
         "risk_profile_distribution": risk_profile_counts,
         "top_cars": top_cars_data,
     }
-
-
-# --- HTML Endpoints ---
-@app.get("/", response_class=HTMLResponse)
-async def serve_main_dashboard(request: Request):
-    """Serves the main portfolio dashboard."""
-    metrics = calculate_real_metrics()
-    return templates.TemplateResponse(
-        "main_dashboard.html",
-        {"request": request, "metrics": metrics, "active_page": "dashboard"},
-    )
-
-
-@app.get("/customer/{customer_id}", response_class=HTMLResponse)
-async def serve_customer_dashboard(request: Request, customer_id: str):
-    """Serves the deep-dive dashboard for a single customer."""
-    customer_data = customers_df[customers_df["customer_id"] == customer_id]
-    if customer_data.empty:
-        raise HTTPException(status_code=404, detail="Customer not found")
-
-    customer_dict = customer_data.iloc[0].to_dict()
-    return templates.TemplateResponse(
-        "customer_view.html",
-        {"request": request, "customer": customer_dict, "active_page": "customer"},
-    )
-
-
-@app.get("/config", response_class=HTMLResponse)
-async def serve_config_page(request: Request):
-    """Serves the global configuration page."""
-    return templates.TemplateResponse(
-        "global_config.html", {"request": request, "active_page": "config"}
-    )
-
-
-@app.get("/calculations", response_class=HTMLResponse)
-async def serve_calculations_page(request: Request):
-    """Serves the calculations explanation page in Spanish."""
-    return templates.TemplateResponse(
-        "calculations.html", {"request": request, "active_page": "calculations"}
-    )
-
-
-@app.get("/customers", response_class=HTMLResponse)
-async def serve_customers_page(request: Request):
-    """Serve the customers list page."""
-    return templates.TemplateResponse(
-        "customer_list.html",
-        {
-            "request": request,
-            "active_page": "customers",
-        },
-    )
-
-
-@app.get("/audit", response_class=HTMLResponse)
-async def serve_audit_page(request: Request):
-    """Serve the system audit page."""
-    return templates.TemplateResponse(
-        "audit.html",
-        {
-            "request": request,
-            "active_page": "audit",
-        },
-    )
 
 
 @app.get("/health")
