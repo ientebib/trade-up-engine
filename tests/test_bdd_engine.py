@@ -4,7 +4,7 @@ import pytest
 from core.engine import TradeUpEngine
 from core.config import get_hardcoded_financial_parameters
 
-scenarios('features/generate_offers.feature')
+scenarios('tests/features/generate_offers.feature')
 
 INTEREST_RATE_TABLE, _ = get_hardcoded_financial_parameters()
 
