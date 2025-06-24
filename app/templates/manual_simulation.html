@@ -1,0 +1,972 @@
+{% extends "modern_base.html" %}
+{% block title %}Manual Simulation - Trade-Up Calculator{% endblock %}
+
+{% block extra_css %}
+<style>
+    .simulation-hero {
+        background: linear-gradient(135deg, var(--kavak-blue) 0%, #0a2d7a 100%);
+        color: white;
+        padding: 3rem 2rem;
+        border-radius: var(--radius-lg);
+        margin-bottom: 2rem;
+        text-align: center;
+    }
+    
+    .input-section {
+        background: white;
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow);
+        padding: 2rem;
+        margin-bottom: 2rem;
+    }
+    
+    .input-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 2rem;
+    }
+    
+    .input-group {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+    
+    .input-group label {
+        font-weight: 600;
+        color: var(--gray-700);
+        font-size: 0.875rem;
+    }
+    
+    .input-group input, .input-group select {
+        padding: 0.75rem;
+        border: 2px solid var(--gray-200);
+        border-radius: var(--radius);
+        font-size: 1rem;
+        transition: all 0.2s;
+    }
+    
+    .input-group input:focus, .input-group select:focus {
+        outline: none;
+        border-color: var(--kavak-blue);
+        box-shadow: 0 0 0 3px rgba(20, 81, 236, 0.1);
+    }
+    
+    .input-helper {
+        font-size: 0.75rem;
+        color: var(--gray-500);
+    }
+    
+    .calculate-button {
+        background: var(--kavak-blue);
+        color: white;
+        border: none;
+        padding: 1rem 3rem;
+        font-size: 1.125rem;
+        font-weight: 600;
+        border-radius: var(--radius);
+        cursor: pointer;
+        transition: all 0.2s;
+        margin: 2rem auto 0;
+        display: block;
+    }
+    
+    .calculate-button:hover {
+        background: #0a2d7a;
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-lg);
+    }
+    
+    .calculate-button:disabled {
+        background: var(--gray-400);
+        cursor: not-allowed;
+        transform: none;
+    }
+    
+    .results-section {
+        display: none;
+        background: white;
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow);
+        overflow: hidden;
+    }
+    
+    .results-header {
+        background: var(--kavak-blue);
+        color: white;
+        padding: 1.5rem 2rem;
+    }
+    
+    .results-content {
+        padding: 2rem;
+    }
+    
+    .terms-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+    
+    .term-card {
+        background: var(--gray-50);
+        border: 2px solid var(--gray-200);
+        border-radius: var(--radius);
+        padding: 1.5rem;
+        text-align: center;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    
+    .term-card:hover {
+        border-color: var(--kavak-blue);
+        transform: translateY(-2px);
+        box-shadow: var(--shadow);
+    }
+    
+    .term-card.selected {
+        background: var(--kavak-blue-50);
+        border-color: var(--kavak-blue);
+    }
+    
+    .term-months {
+        font-size: 2rem;
+        font-weight: 700;
+        color: var(--kavak-blue);
+    }
+    
+    .term-payment {
+        font-size: 1.25rem;
+        font-weight: 600;
+        margin-top: 0.5rem;
+    }
+    
+    .breakdown-section {
+        background: var(--gray-50);
+        border-radius: var(--radius);
+        padding: 1.5rem;
+        margin-top: 2rem;
+    }
+    
+    .error-message {
+        background: var(--error-light);
+        color: var(--error);
+        padding: 1rem;
+        border-radius: var(--radius);
+        margin-top: 1rem;
+        display: none;
+    }
+    
+    .loading-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 1000;
+        justify-content: center;
+        align-items: center;
+    }
+    
+    .loading-spinner {
+        background: white;
+        padding: 2rem;
+        border-radius: var(--radius-lg);
+        text-align: center;
+    }
+    
+    @keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+    
+    .spinner {
+        display: inline-block;
+        width: 40px;
+        height: 40px;
+        border: 4px solid var(--gray-200);
+        border-top-color: var(--kavak-blue);
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Hero Section -->
+<div class="simulation-hero">
+    <h1 style="margin-bottom: 0.5rem;">Manual Trade-Up Simulation</h1>
+    <p style="opacity: 0.9; font-size: 1.125rem;">Enter customer and vehicle details to calculate offers</p>
+</div>
+
+<div class="container">
+    <!-- Input Form -->
+    <form id="simulation-form">
+        <!-- Customer Information -->
+        <div class="input-section">
+            <h2 style="margin-bottom: 1.5rem; color: var(--kavak-blue);">
+                <i class="fas fa-user"></i> Customer Information
+            </h2>
+            
+            <div class="input-grid">
+                <div class="input-group">
+                    <label for="current-payment">Current Monthly Payment</label>
+                    <input type="number" id="current-payment" name="current_payment" 
+                           placeholder="8000" required step="0.01">
+                    <span class="input-helper">Customer's current monthly payment</span>
+                </div>
+                
+                <div class="input-group">
+                    <label for="saldo-insoluto">Saldo Insoluto (Outstanding Balance)</label>
+                    <input type="number" id="saldo-insoluto" name="saldo_insoluto" 
+                           placeholder="100000" required step="0.01">
+                    <span class="input-helper">Amount still owed on current vehicle</span>
+                </div>
+                
+                <div class="input-group">
+                    <label for="current-market-price">Current Market Price</label>
+                    <input type="number" id="current-market-price" name="current_market_price" 
+                           placeholder="250000" required step="0.01">
+                    <span class="input-helper">Current market value of your vehicle</span>
+                </div>
+                
+                <div class="input-group">
+                    <label for="vehicle-equity">Vehicle Equity (Calculated)</label>
+                    <input type="number" id="vehicle-equity" name="vehicle_equity" 
+                           readonly style="background: #f5f5f5; cursor: not-allowed;">
+                    <span class="input-helper">Market Price - Saldo Insoluto</span>
+                </div>
+                
+                <div class="input-group">
+                    <label for="risk-profile">Risk Profile</label>
+                    <select id="risk-profile" name="risk_profile" required>
+                        <option value="">Select profile...</option>
+                        <option value="AAA">AAA - Excellent (19.49%)</option>
+                        <option value="AA">AA - Very Good (19.49%)</option>
+                        <option value="A" selected>A - Good (19.49%)</option>
+                        <option value="B">B - Fair (22.49%)</option>
+                        <option value="C1">C1 - Average (22.99%)</option>
+                        <option value="C2">C2 - Below Average (23.49%)</option>
+                        <option value="C3">C3 - Poor (25.49%)</option>
+                        <option value="D1">D1 - Very Poor (29.49%)</option>
+                        <option value="E1">E1 - High Risk (23.99%)</option>
+                        <option value="F1">F1 - Very High Risk (36.49%)</option>
+                    </select>
+                </div>
+                
+                <div class="input-group">
+                    <label for="insurance-amount">Annual Insurance Amount</label>
+                    <input type="number" id="insurance-amount" name="insurance_amount" 
+                           value="10999" step="0.01">
+                    <span class="input-helper">Amount financed per year</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- New Vehicle Information -->
+        <div class="input-section">
+            <h2 style="margin-bottom: 1.5rem; color: var(--kavak-blue);">
+                <i class="fas fa-car"></i> New Vehicle Information
+            </h2>
+            
+            <div class="input-grid">
+                <div class="input-group">
+                    <label for="car-model">Car Model</label>
+                    <input type="text" id="car-model" name="car_model" 
+                           placeholder="Toyota Corolla 2023" required>
+                    <span class="input-helper">Make, model and year</span>
+                </div>
+                
+                <div class="input-group">
+                    <label for="car-price">Sale Price</label>
+                    <input type="number" id="car-price" name="car_price" 
+                           placeholder="450000" required step="0.01">
+                    <span class="input-helper">New vehicle price</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Fee Configuration -->
+        <div class="input-section">
+            <h2 style="margin-bottom: 1.5rem; color: var(--kavak-blue);">
+                <i class="fas fa-percentage"></i> Fee Configuration
+            </h2>
+            
+            <div class="input-grid">
+                <div class="input-group">
+                    <label for="service-fee">Service Fee (%)</label>
+                    <input type="number" id="service-fee" name="service_fee" 
+                           value="5" step="0.01">
+                    <span class="input-helper">Financed into loan</span>
+                </div>
+                
+                <div class="input-group">
+                    <label for="cxa-fee">CXA Marketing Fee (%)</label>
+                    <input type="number" id="cxa-fee" name="cxa_fee" 
+                           value="4" step="0.01">
+                    <span class="input-helper">Deducted from equity</span>
+                </div>
+                
+                <div class="input-group">
+                    <label for="cac-bonus">CAC Bonus ($)</label>
+                    <input type="number" id="cac-bonus" name="cac_bonus" 
+                           value="0" step="0.01">
+                    <span class="input-helper">Added to equity</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Add-on Configuration -->
+        <div class="input-section">
+            <h2 style="margin-bottom: 1.5rem; color: var(--kavak-blue);">
+                <i class="fas fa-plus-circle"></i> Add-on Configuration
+            </h2>
+            
+            <div class="input-grid">
+                <div class="input-group">
+                    <label for="kavak-total">Kavak Total Amount ($)</label>
+                    <input type="number" id="kavak-total" name="kavak_total_amount" 
+                           value="25000" step="0.01">
+                    <span class="input-helper">Service package (every 2 years)</span>
+                </div>
+                
+                <div class="input-group">
+                    <label for="gps-monthly">GPS Monthly Fee ($)</label>
+                    <input type="number" id="gps-monthly" name="gps_monthly_fee" 
+                           value="350" step="0.01">
+                    <span class="input-helper">Before IVA tax</span>
+                </div>
+                
+                <div class="input-group">
+                    <label for="gps-installation">GPS Installation Fee ($)</label>
+                    <input type="number" id="gps-installation" name="gps_installation_fee" 
+                           value="750" step="0.01">
+                    <span class="input-helper">One-time fee (before IVA)</span>
+                </div>
+            </div>
+        </div>
+        
+        <button type="submit" class="calculate-button">
+            <i class="fas fa-calculator"></i> Calculate Offers
+        </button>
+        
+        <div class="error-message" id="error-message"></div>
+    </form>
+    
+    <!-- Results Section -->
+    <div class="results-section" id="results-section">
+        <div class="results-header">
+            <h2 style="margin: 0;">Simulation Results</h2>
+            <p style="margin: 0.5rem 0 0; opacity: 0.9;" id="results-summary"></p>
+        </div>
+        
+        <div class="results-content">
+            <!-- Quick View Table -->
+            <div style="margin-bottom: 2rem;">
+                <h3 style="margin-bottom: 1rem; color: var(--gray-800); display: flex; align-items: center;">
+                    <i class="fas fa-table" style="margin-right: 0.5rem; color: var(--kavak-blue);"></i>
+                    Quick Payment Overview
+                </h3>
+                
+                <!-- Current Payment Display -->
+                <div id="current-payment-display" style="background: #FEF3C7; border: 2px solid #F59E0B; border-radius: 8px; padding: 1rem; margin-bottom: 1rem; text-align: center;">
+                    <h4 style="margin: 0; color: #92400E; font-weight: 600;">
+                        <i class="fas fa-dollar-sign" style="margin-right: 0.5rem;"></i>Current Monthly Payment
+                    </h4>
+                    <p style="margin: 0.5rem 0 0; font-size: 2rem; font-weight: 700; color: #92400E;">
+                        <!-- Will be populated by JavaScript -->
+                    </p>
+                </div>
+                
+                <div style="overflow-x: auto; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);">
+                    <table id="quick-view-table" style="width: 100%; border-collapse: collapse; background: white; border-radius: 12px; overflow: hidden;">
+                        <!-- Table will be populated here -->
+                    </table>
+                </div>
+            </div>
+            
+            <!-- Term Selection -->
+            <h3 style="margin-bottom: 1rem;">Select Loan Term</h3>
+            <div class="terms-grid" id="terms-grid">
+                <!-- Terms will be populated here -->
+            </div>
+            
+            <!-- Detailed Breakdown -->
+            <div class="breakdown-section" id="breakdown-section">
+                <!-- Breakdown will be populated here -->
+            </div>
+            
+            <!-- Amortization Preview -->
+            <div class="breakdown-section" style="margin-top: 1rem;">
+                <h4 style="margin-bottom: 1rem;">First Year Amortization Preview</h4>
+                <div id="amortization-preview">
+                    <!-- Preview will be populated here -->
+                </div>
+            </div>
+            
+            <!-- Actions -->
+            <div style="text-align: center; margin-top: 2rem;">
+                <button class="btn btn-primary" onclick="saveSimulation()">
+                    <i class="fas fa-save"></i> Save This Simulation
+                </button>
+                <button class="btn btn-secondary" onclick="resetForm()">
+                    <i class="fas fa-redo"></i> New Simulation
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Loading Overlay -->
+<div class="loading-overlay" id="loading-overlay">
+    <div class="loading-spinner">
+        <div class="spinner"></div>
+        <p style="margin-top: 1rem;">Calculating offers...</p>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let simulationData = {};
+let selectedTerm = 48;
+
+// Auto-calculate vehicle equity
+function calculateEquity() {
+    const marketPrice = parseFloat(document.getElementById('current-market-price').value) || 0;
+    const saldoInsoluto = parseFloat(document.getElementById('saldo-insoluto').value) || 0;
+    const equity = marketPrice - saldoInsoluto;
+    document.getElementById('vehicle-equity').value = equity.toFixed(2);
+}
+
+// Add event listeners for equity calculation
+document.getElementById('current-market-price').addEventListener('input', calculateEquity);
+document.getElementById('saldo-insoluto').addEventListener('input', calculateEquity);
+
+document.getElementById('simulation-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    // Show loading
+    document.getElementById('loading-overlay').style.display = 'flex';
+    document.getElementById('error-message').style.display = 'none';
+    
+    // Get form data
+    const formData = new FormData(e.target);
+    const data = {
+        current_monthly_payment: parseFloat(formData.get('current_payment')),
+        vehicle_equity: parseFloat(document.getElementById('vehicle-equity').value),
+        current_car_price: parseFloat(formData.get('current_market_price')),
+        saldo_insoluto: parseFloat(formData.get('saldo_insoluto')),
+        risk_profile: formData.get('risk_profile'),
+        insurance_amount: parseFloat(formData.get('insurance_amount')),
+        car_model: formData.get('car_model'),
+        car_price: parseFloat(formData.get('car_price')),
+        service_fee_pct: parseFloat(formData.get('service_fee')) / 100,
+        cxa_pct: parseFloat(formData.get('cxa_fee')) / 100,
+        cac_bonus: parseFloat(formData.get('cac_bonus')),
+        kavak_total_amount: parseFloat(formData.get('kavak_total_amount')),
+        gps_monthly_fee: parseFloat(formData.get('gps_monthly_fee')),
+        gps_installation_fee: parseFloat(formData.get('gps_installation_fee'))
+    };
+    
+    try {
+        // DISABLED: /api/manual-simulation endpoint returns 501
+        alert('Manual simulation is temporarily disabled');
+        return;
+        
+        // Call API
+        const response = await fetch('/api/manual-simulation', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(data)
+        });
+        
+        if (!response.ok) {
+            throw new Error('Calculation failed');
+        }
+        
+        simulationData = await response.json();
+        displayResults();
+        
+    } catch (error) {
+        document.getElementById('error-message').textContent = 
+            'Error calculating offers. Please check your inputs and try again.';
+        document.getElementById('error-message').style.display = 'block';
+    } finally {
+        document.getElementById('loading-overlay').style.display = 'none';
+    }
+});
+
+function displayResults() {
+    // Show results section
+    document.getElementById('results-section').style.display = 'block';
+    
+    // Update summary
+    const viable = Object.values(simulationData.calculations).filter(calc => 
+        calc.effective_equity >= 0
+    ).length;
+    
+    document.getElementById('results-summary').textContent = 
+        `${simulationData.car_model} - $${simulationData.car_price.toLocaleString()} | ${viable} viable terms`;
+    
+    // Update current payment display
+    const currentPaymentDisplay = simulationData.current_payment || 0;
+    document.querySelector('#current-payment-display p').textContent = `$${Math.round(currentPaymentDisplay).toLocaleString()}`;
+    
+    // Build quick view table
+    buildQuickViewTable();
+    
+    // Display terms
+    const termsGrid = document.getElementById('terms-grid');
+    termsGrid.innerHTML = '';
+    
+    [24, 36, 48, 60, 72].forEach(term => {
+        const calc = simulationData.calculations[term];
+        const termCard = document.createElement('div');
+        termCard.className = `term-card ${term === selectedTerm ? 'selected' : ''}`;
+        termCard.onclick = () => selectTerm(term);
+        
+        const delta = ((calc.total_monthly - simulationData.current_payment) / simulationData.current_payment * 100).toFixed(1);
+        const deltaClass = delta > 10 ? 'amount-negative' : delta < -10 ? 'amount-positive' : '';
+        
+        termCard.innerHTML = `
+            <div class="term-months">${term}</div>
+            <div style="font-size: 0.875rem; color: var(--gray-600);">months</div>
+            <div class="term-payment">$${Math.round(calc.total_monthly).toLocaleString()}</div>
+            <div style="font-size: 0.875rem; margin-top: 0.5rem;" class="${deltaClass}">
+                ${delta > 0 ? '+' : ''}${delta}%
+            </div>
+            ${calc.effective_equity < 0 ? '<div style="color: var(--error); font-size: 0.75rem; margin-top: 0.5rem;">⚠️ Cash needed</div>' : ''}
+        `;
+        
+        termsGrid.appendChild(termCard);
+    });
+    
+    // Show breakdown for selected term
+    showBreakdown(selectedTerm);
+}
+
+function selectTerm(term) {
+    selectedTerm = term;
+    
+    // Update selection
+    document.querySelectorAll('.term-card').forEach(card => {
+        card.classList.remove('selected');
+    });
+    event.currentTarget.classList.add('selected');
+    
+    showBreakdown(term);
+}
+
+function showBreakdown(term) {
+    const calc = simulationData.calculations[term];
+    
+    const breakdown = `
+        <h4 style="margin-bottom: 1rem;">${term} Month Breakdown</h4>
+        
+        <div style="display: grid; gap: 0.5rem;">
+            <div class="breakdown-row">
+                <span>Car Price</span>
+                <strong>$${simulationData.car_price.toLocaleString()}</strong>
+            </div>
+            <div class="breakdown-row">
+                <span>- Available Down Payment</span>
+                <strong style="color: ${calc.effective_equity >= 0 ? 'var(--success)' : 'var(--error)'}">
+                    $${Math.round(calc.effective_equity).toLocaleString()}
+                </strong>
+            </div>
+            <div class="breakdown-row">
+                <span>+ Service Fee (${(simulationData.service_fee_pct * 100).toFixed(1)}%)</span>
+                <strong style="color: var(--error);">+$${Math.round(calc.service_fee_amount).toLocaleString()}</strong>
+            </div>
+            <div class="breakdown-row total">
+                <span>Total Loan Amount</span>
+                <strong>$${Math.round(calc.loan_amount).toLocaleString()}</strong>
+            </div>
+        </div>
+        
+        <div style="margin-top: 1.5rem; display: grid; gap: 0.5rem;">
+            <div class="breakdown-row">
+                <span>Base Monthly Payment</span>
+                <strong>$${Math.round(calc.monthly_with_fees).toLocaleString()}</strong>
+            </div>
+            <div class="breakdown-row">
+                <span>+ GPS Monthly (w/IVA)</span>
+                <strong>+$${Math.round(calc.gps_monthly).toLocaleString()}</strong>
+            </div>
+            <div class="breakdown-row">
+                <span>+ Insurance Monthly</span>
+                <strong>+$${Math.round(calc.insurance_monthly).toLocaleString()}</strong>
+            </div>
+            <div class="breakdown-row total">
+                <span>Total Monthly Payment</span>
+                <strong style="color: var(--kavak-blue); font-size: 1.25rem;">
+                    $${Math.round(calc.total_monthly).toLocaleString()}
+                </strong>
+            </div>
+        </div>
+        
+        <div style="margin-top: 1.5rem; padding: 1rem; background: white; border-radius: var(--radius);">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                <div>
+                    <div style="font-size: 0.75rem; color: var(--gray-600);">Interest Rate</div>
+                    <div style="font-size: 1.125rem; font-weight: 600;">${(calc.interest_rate * 100).toFixed(1)}% APR</div>
+                </div>
+                <div>
+                    <div style="font-size: 0.75rem; color: var(--gray-600);">Payment Change</div>
+                    <div style="font-size: 1.125rem; font-weight: 600;">
+                        ${calc.payment_delta > 0 ? '+' : ''}${(calc.payment_delta * 100).toFixed(1)}%
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.getElementById('breakdown-section').innerHTML = breakdown;
+    
+    // Show amortization preview
+    showAmortizationPreview(calc);
+}
+
+function showAmortizationPreview(calc) {
+    const principal = calc.loan_amount;
+    const rate = calc.interest_rate / 12;
+    const payment = calc.monthly_with_fees;
+    
+    let balance = principal;
+    let rows = '';
+    
+    for (let month = 1; month <= 12; month++) {
+        const interest = balance * rate;
+        const principalPayment = payment - interest;
+        balance -= principalPayment;
+        
+        rows += `
+            <tr>
+                <td>${month}</td>
+                <td>$${Math.round(payment).toLocaleString()}</td>
+                <td>$${Math.round(principalPayment).toLocaleString()}</td>
+                <td>$${Math.round(interest).toLocaleString()}</td>
+                <td>$${Math.round(balance).toLocaleString()}</td>
+            </tr>
+        `;
+    }
+    
+    document.getElementById('amortization-preview').innerHTML = `
+        <table style="width: 100%; font-size: 0.875rem;">
+            <thead>
+                <tr style="border-bottom: 2px solid var(--gray-200);">
+                    <th style="padding: 0.5rem; text-align: left;">Month</th>
+                    <th style="padding: 0.5rem; text-align: right;">Payment</th>
+                    <th style="padding: 0.5rem; text-align: right;">Principal</th>
+                    <th style="padding: 0.5rem; text-align: right;">Interest</th>
+                    <th style="padding: 0.5rem; text-align: right;">Balance</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${rows}
+            </tbody>
+        </table>
+    `;
+}
+
+function saveSimulation() {
+    const data = {
+        ...simulationData,
+        selected_term: selectedTerm,
+        timestamp: new Date().toISOString()
+    };
+    
+    // In a real app, this would save to backend
+    localStorage.setItem('last_simulation', JSON.stringify(data));
+    alert('Simulation saved! You can access it from the dashboard.');
+}
+
+function resetForm() {
+    document.getElementById('simulation-form').reset();
+    document.getElementById('results-section').style.display = 'none';
+    simulationData = {};
+    selectedTerm = 48;
+}
+
+function buildQuickViewTable() {
+    const table = document.getElementById('quick-view-table');
+    const currentPayment = simulationData.current_payment || 0;
+    
+    // Formatter for currency
+    const formatCurrency = (value) => {
+        if (isNaN(value) || value === null || value === undefined) return '$0';
+        return `$${Math.round(value).toLocaleString()}`;
+    };
+    
+    // Formatter for percentage
+    const formatPercent = (value) => {
+        if (isNaN(value) || value === null || value === undefined) return '0.0%';
+        return `${value > 0 ? '+' : ''}${value.toFixed(1)}%`;
+    };
+    
+    // Table HTML with improved styling
+    let html = `
+        <thead>
+            <tr style="background: linear-gradient(135deg, #1451EC 0%, #0a2d7a 100%); color: white;">
+                <th style="padding: 1.25rem 1rem; text-align: left; font-weight: 600; font-size: 0.95rem; letter-spacing: 0.025em;">Payment Component</th>
+                <th style="padding: 1.25rem 0.75rem; text-align: center; font-weight: 600; font-size: 0.95rem;">24 months</th>
+                <th style="padding: 1.25rem 0.75rem; text-align: center; font-weight: 600; font-size: 0.95rem;">36 months</th>
+                <th style="padding: 1.25rem 0.75rem; text-align: center; font-weight: 600; font-size: 0.95rem; background: rgba(255,255,255,0.15);">48 months</th>
+                <th style="padding: 1.25rem 0.75rem; text-align: center; font-weight: 600; font-size: 0.95rem;">60 months</th>
+                <th style="padding: 1.25rem 0.75rem; text-align: center; font-weight: 600; font-size: 0.95rem;">72 months</th>
+            </tr>
+        </thead>
+        <tbody>
+            <!-- Show CAC Bonus if present -->
+            ${simulationData.cac_bonus > 0 ? `
+            <tr style="background: #D1FAE5; border-bottom: 1px solid #10B981;">
+                <td style="padding: 0.75rem 1rem; font-weight: 700; color: #065F46;">
+                    <i class="fas fa-gift" style="margin-right: 0.5rem;"></i>CAC Bonus Applied
+                </td>
+                <td colspan="5" style="padding: 0.75rem; text-align: center; font-weight: 700; color: #065F46;">
+                    +${formatCurrency(simulationData.cac_bonus)} added to vehicle equity
+                </td>
+            </tr>
+            ` : ''}
+            
+            <!-- SECTION 1: BASE PAYMENT WITH MANDATORY COSTS -->
+            <tr style="background: #F3F4F6;">
+                <td colspan="6" style="padding: 0.75rem 1rem; font-weight: 700; text-transform: uppercase; font-size: 0.75rem; color: #4B5563; letter-spacing: 0.05em;">
+                    <i class="fas fa-calculator" style="margin-right: 0.5rem;"></i>Step 1: Base Payment Structure
+                </td>
+            </tr>
+            
+            <!-- Base Loan Payment (Principal only) -->
+            <tr style="border-bottom: 1px solid #E5E7EB;">
+                <td style="padding: 0.875rem 1rem; font-weight: 600; color: #374151;">
+                    <span style="display: inline-block; width: 20px;">↳</span>Base Loan Payment
+                </td>
+                ${[24, 36, 48, 60, 72].map(term => 
+                    `<td style="padding: 0.875rem; text-align: center; ${term === 48 ? 'background: #EFF6FF;' : ''}">
+                        ${formatCurrency(simulationData.calculations[term].base_payment)}
+                    </td>`
+                ).join('')}
+            </tr>
+            
+            <!-- GPS Monthly -->
+            <tr style="border-bottom: 1px solid #E5E7EB;">
+                <td style="padding: 0.875rem 1rem; font-weight: 600; color: #374151;">
+                    <span style="display: inline-block; width: 20px;">+</span>GPS Monthly <span style="font-weight: 400; color: #6B7280;">(w/IVA)</span>
+                </td>
+                ${[24, 36, 48, 60, 72].map(term => 
+                    `<td style="padding: 0.875rem; text-align: center; color: #059669; ${term === 48 ? 'background: #EFF6FF;' : ''}">
+                        +${formatCurrency(simulationData.calculations[term].gps_monthly)}
+                    </td>`
+                ).join('')}
+            </tr>
+            
+            <!-- Insurance -->
+            <tr style="border-bottom: 1px solid #E5E7EB;">
+                <td style="padding: 0.875rem 1rem; font-weight: 600; color: #374151;">
+                    <span style="display: inline-block; width: 20px;">+</span>Insurance Monthly
+                </td>
+                ${[24, 36, 48, 60, 72].map(term => 
+                    `<td style="padding: 0.875rem; text-align: center; color: #059669; ${term === 48 ? 'background: #EFF6FF;' : ''}">
+                        +${formatCurrency(simulationData.calculations[term].insurance_monthly)}
+                    </td>`
+                ).join('')}
+            </tr>
+            
+            <!-- Base Payment with Mandatory Costs -->
+            <tr style="border-bottom: 2px solid #D1D5DB; background: #F9FAFB;">
+                <td style="padding: 1rem; font-weight: 700; color: #111827;">
+                    <span style="display: inline-block; width: 20px;">=</span>Base Payment Total
+                </td>
+                ${[24, 36, 48, 60, 72].map(term => {
+                    const calc = simulationData.calculations[term];
+                    const baseTotal = calc.base_payment + calc.gps_monthly + calc.insurance_monthly;
+                    return `<td style="padding: 1rem; text-align: center; font-weight: 700; font-size: 1.125rem; ${term === 48 ? 'background: #DBEAFE;' : ''}">
+                        ${formatCurrency(baseTotal)}
+                    </td>`;
+                }).join('')}
+            </tr>
+            
+            <!-- Base Payment Delta -->
+            <tr style="background: #FEF3C7;">
+                <td style="padding: 0.875rem 1rem; font-weight: 600; color: #92400E;">
+                    <i class="fas fa-percentage" style="margin-right: 0.5rem;"></i>Base Payment Delta
+                </td>
+                ${[24, 36, 48, 60, 72].map(term => {
+                    const calc = simulationData.calculations[term];
+                    const baseTotal = calc.base_payment + calc.gps_monthly + calc.insurance_monthly;
+                    const delta = currentPayment > 0 ? ((baseTotal - currentPayment) / currentPayment) * 100 : 0;
+                    const color = delta > 10 ? '#DC2626' : delta < -10 ? '#059669' : '#6B7280';
+                    return `<td style="padding: 0.875rem; text-align: center; ${term === 48 ? 'background: #FDE68A;' : ''}">
+                        <span style="color: ${color}; font-weight: 700; font-size: 1rem;">
+                            ${formatPercent(delta)}
+                        </span>
+                    </td>`;
+                }).join('')}
+            </tr>
+            
+            <!-- SECTION 2: ADDITIONAL FEES -->
+            <tr style="background: #F3F4F6;">
+                <td colspan="6" style="padding: 0.75rem 1rem; font-weight: 700; text-transform: uppercase; font-size: 0.75rem; color: #4B5563; letter-spacing: 0.05em;">
+                    <i class="fas fa-plus-circle" style="margin-right: 0.5rem;"></i>Step 2: Additional Fees & Services
+                </td>
+            </tr>
+            
+            <!-- Service Fee -->
+            <tr style="border-bottom: 1px solid #E5E7EB;">
+                <td style="padding: 0.875rem 1rem; font-weight: 600; color: #374151;">
+                    <span style="display: inline-block; width: 20px;">+</span>Service Fee <span style="font-weight: 400; color: #6B7280;">(${(simulationData.service_fee_pct * 100).toFixed(1)}%)</span>
+                </td>
+                ${[24, 36, 48, 60, 72].map(term => 
+                    `<td style="padding: 0.875rem; text-align: center; color: #7C3AED; ${term === 48 ? 'background: #EFF6FF;' : ''}">
+                        +${formatCurrency(simulationData.calculations[term].service_fee_monthly)}
+                    </td>`
+                ).join('')}
+            </tr>
+            
+            <!-- Payment with Service Fee -->
+            <tr style="border-bottom: 1px solid #E5E7EB; background: #F0F9FF;">
+                <td style="padding: 0.875rem 1rem; font-weight: 700; color: #1E40AF;">
+                    <span style="display: inline-block; width: 20px;">=</span>Payment w/ Service Fee
+                </td>
+                ${[24, 36, 48, 60, 72].map(term => {
+                    const calc = simulationData.calculations[term];
+                    const withSF = calc.base_payment + calc.gps_monthly + calc.insurance_monthly + calc.service_fee_monthly;
+                    return `<td style="padding: 0.875rem; text-align: center; font-weight: 700; ${term === 48 ? 'background: #DBEAFE;' : ''}">
+                        ${formatCurrency(withSF)}
+                    </td>`;
+                }).join('')}
+            </tr>
+            
+            <!-- Service Fee Delta -->
+            <tr style="border-bottom: 1px solid #E5E7EB;">
+                <td style="padding: 0.75rem 1rem; font-weight: 600; color: #6B7280; font-style: italic;">
+                    <span style="display: inline-block; width: 20px;"></span>Delta vs Current
+                </td>
+                ${[24, 36, 48, 60, 72].map(term => {
+                    const calc = simulationData.calculations[term];
+                    const withSF = calc.base_payment + calc.gps_monthly + calc.insurance_monthly + calc.service_fee_monthly;
+                    const delta = currentPayment > 0 ? ((withSF - currentPayment) / currentPayment) * 100 : 0;
+                    const color = delta > 10 ? '#DC2626' : delta < -10 ? '#059669' : '#6B7280';
+                    return `<td style="padding: 0.75rem; text-align: center; ${term === 48 ? 'background: #EFF6FF;' : ''}">
+                        <span style="color: ${color}; font-weight: 600;">
+                            ${formatPercent(delta)}
+                        </span>
+                    </td>`;
+                }).join('')}
+            </tr>
+            
+            <!-- Kavak Total -->
+            <tr style="border-bottom: 1px solid #E5E7EB;">
+                <td style="padding: 0.875rem 1rem; font-weight: 600; color: #374151;">
+                    <span style="display: inline-block; width: 20px;">+</span>Kavak Total
+                </td>
+                ${[24, 36, 48, 60, 72].map(term => 
+                    `<td style="padding: 0.875rem; text-align: center; color: #7C3AED; ${term === 48 ? 'background: #EFF6FF;' : ''}">
+                        +${formatCurrency(simulationData.calculations[term].kavak_total_monthly)}
+                    </td>`
+                ).join('')}
+            </tr>
+            
+            <!-- Payment with Both -->
+            <tr style="border-bottom: 1px solid #E5E7EB; background: #EDE9FE;">
+                <td style="padding: 1rem; font-weight: 700; color: #5B21B6;">
+                    <span style="display: inline-block; width: 20px;">=</span>Payment w/ All Fees
+                </td>
+                ${[24, 36, 48, 60, 72].map(term => {
+                    const calc = simulationData.calculations[term];
+                    return `<td style="padding: 1rem; text-align: center; font-weight: 700; font-size: 1.125rem; ${term === 48 ? 'background: #DDD6FE;' : ''}">
+                        ${formatCurrency(calc.total_monthly)}
+                    </td>`;
+                }).join('')}
+            </tr>
+            
+            <!-- All Fees Delta -->
+            <tr style="border-bottom: 2px solid #D1D5DB;">
+                <td style="padding: 0.75rem 1rem; font-weight: 600; color: #6B7280; font-style: italic;">
+                    <span style="display: inline-block; width: 20px;"></span>Delta vs Current
+                </td>
+                ${[24, 36, 48, 60, 72].map(term => {
+                    const calc = simulationData.calculations[term];
+                    const delta = currentPayment > 0 ? calc.payment_delta * 100 : 0;
+                    const color = delta > 10 ? '#DC2626' : delta < -10 ? '#059669' : '#6B7280';
+                    return `<td style="padding: 0.75rem; text-align: center; ${term === 48 ? 'background: #F3F4F6;' : ''}">
+                        <span style="color: ${color}; font-weight: 600;">
+                            ${formatPercent(delta)}
+                        </span>
+                    </td>`;
+                }).join('')}
+            </tr>
+            
+            <!-- SECTION 3: FINAL COMPARISON -->
+            <tr style="background: #F3F4F6;">
+                <td colspan="6" style="padding: 0.75rem 1rem; font-weight: 700; text-transform: uppercase; font-size: 0.75rem; color: #4B5563; letter-spacing: 0.05em;">
+                    <i class="fas fa-chart-line" style="margin-right: 0.5rem;"></i>Final Analysis
+                </td>
+            </tr>
+            
+            <!-- Final Payment Change -->
+            <tr style="background: linear-gradient(135deg, #1451EC 0%, #0a2d7a 100%); color: white;">
+                <td style="padding: 1.25rem 1rem; font-weight: 700;">
+                    <i class="fas fa-balance-scale" style="margin-right: 0.5rem;"></i>Final vs Current Payment
+                </td>
+                ${[24, 36, 48, 60, 72].map(term => {
+                    const calc = simulationData.calculations[term];
+                    const delta = currentPayment > 0 ? calc.payment_delta * 100 : 0;
+                    const deltaAmount = calc.total_monthly - currentPayment;
+                    const icon = delta > 0 ? '↑' : delta < 0 ? '↓' : '→';
+                    return `<td style="padding: 1.25rem 0.75rem; text-align: center; ${term === 48 ? 'background: rgba(255,255,255,0.15);' : ''}">
+                        <div style="font-size: 1.5rem; font-weight: 700; margin-bottom: 0.25rem;">
+                            ${icon} ${formatPercent(delta)}
+                        </div>
+                        <div style="font-size: 0.875rem; opacity: 0.9;">
+                            ${deltaAmount >= 0 ? '+' : ''}${formatCurrency(deltaAmount)}
+                        </div>
+                    </td>`;
+                }).join('')}
+            </tr>
+        </tbody>
+    `;
+    
+    table.innerHTML = html;
+}
+
+// Scroll to results when shown
+document.getElementById('results-section').addEventListener('transitionend', () => {
+    if (document.getElementById('results-section').style.display !== 'none') {
+        document.getElementById('results-section').scrollIntoView({ behavior: 'smooth' });
+    }
+});
+
+// Pre-fill form if customer data provided
+{% if prefill_customer %}
+document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('current-payment').value = {{ prefill_customer.current_payment }};
+    // Set market price from current_car_value
+    document.getElementById('current-market-price').value = {{ prefill_customer.current_car_value }};
+    // Set saldo insoluto if available, otherwise calculate from equity
+    {% if prefill_customer.saldo_insoluto %}
+    document.getElementById('saldo-insoluto').value = {{ prefill_customer.saldo_insoluto }};
+    {% else %}
+    // Calculate saldo insoluto from market price - equity
+    const saldoInsoluto = {{ prefill_customer.current_car_value }} - {{ prefill_customer.vehicle_equity }};
+    document.getElementById('saldo-insoluto').value = saldoInsoluto;
+    {% endif %}
+    // Trigger equity calculation
+    calculateEquity();
+    document.getElementById('risk-profile').value = '{{ prefill_customer.risk_profile }}';
+    
+    // Add visual indicator that this is pre-filled
+    const heroText = document.querySelector('.simulation-hero p');
+    heroText.innerHTML = 'Pre-filled with data for Customer: <strong>{{ prefill_customer.customer_id }}</strong>';
+    heroText.style.background = 'rgba(255, 255, 255, 0.1)';
+    heroText.style.padding = '0.5rem 1rem';
+    heroText.style.borderRadius = '9999px';
+    heroText.style.display = 'inline-block';
+});
+{% endif %}
+</script>
+{% endblock %}

@@ -1,0 +1,309 @@
+{% extends "modern_base.html" %}
+{% block title %}Amortization Table - {{ offer.car_model }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .amortization-header {
+        background: linear-gradient(135deg, var(--kavak-blue) 0%, #0a2d7a 100%);
+        color: white;
+        padding: 3rem 2rem;
+        border-radius: var(--radius-lg);
+        margin-bottom: 2rem;
+    }
+    
+    .financial-summary {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 2rem;
+        margin-bottom: 2rem;
+    }
+    
+    .summary-card {
+        background: white;
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow);
+        padding: 2rem;
+    }
+    
+    .breakdown-line {
+        display: flex;
+        justify-content: space-between;
+        padding: 0.5rem 0;
+        border-bottom: 1px solid var(--gray-100);
+    }
+    
+    .breakdown-line.total {
+        border-bottom: none;
+        border-top: 2px solid var(--kavak-blue);
+        margin-top: 0.5rem;
+        padding-top: 1rem;
+        font-weight: 700;
+        font-size: 1.125rem;
+    }
+    
+    .amortization-table {
+        background: white;
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow);
+        padding: 2rem;
+        overflow-x: auto;
+    }
+    
+    .table-amortization {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    
+    .table-amortization th {
+        background: var(--gray-50);
+        padding: 1rem;
+        text-align: left;
+        font-weight: 600;
+        border-bottom: 2px solid var(--gray-200);
+    }
+    
+    .table-amortization td {
+        padding: 0.75rem 1rem;
+        border-bottom: 1px solid var(--gray-100);
+    }
+    
+    .table-amortization tr:hover {
+        background: var(--gray-50);
+    }
+    
+    .highlight-row {
+        background: var(--kavak-blue-50) !important;
+        font-weight: 600;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="amortization-header">
+    <div class="container">
+        <h1 style="margin-bottom: 0.5rem;">Amortization Schedule</h1>
+        <p style="opacity: 0.9;">{{ offer.car_model }} - ${{ "{:,.0f}".format(offer.new_car_price) }}</p>
+        <p style="font-size: 0.875rem; opacity: 0.8;">
+            Customer: {{ customer.customer_id }} | Car ID: {{ offer.car_id }}
+        </p>
+    </div>
+</div>
+
+<div class="container">
+    <div class="financial-summary">
+        <!-- Loan Construction -->
+        <div class="summary-card">
+            <h3 style="margin-bottom: 1.5rem; color: var(--kavak-blue);">
+                <i class="fas fa-calculator"></i> Loan Amount Construction
+            </h3>
+            <div class="breakdown-line">
+                <span>Vehicle Price</span>
+                <strong>${{ "{:,.0f}".format(offer.new_car_price) }}</strong>
+            </div>
+            <div class="breakdown-line">
+                <span>Down Payment (from equity)</span>
+                <strong style="color: var(--error);">-${{ "{:,.0f}".format(offer.effective_equity) }}</strong>
+            </div>
+            <div class="breakdown-line">
+                <span>Service Fee ({{ "{:.1f}".format((offer.fees_applied['service_fee_pct'] if offer.get('fees_applied') else 0.05) * 100) }}% financed)</span>
+                <strong style="color: var(--error);">+${{ "{:,.0f}".format(offer.service_fee_amount) }}</strong>
+            </div>
+            {% if offer.insurance_amount and offer.insurance_amount > 0 %}
+            <div class="breakdown-line">
+                <span>Insurance (financed)</span>
+                <strong style="color: var(--error);">+${{ "{:,.0f}".format(offer.insurance_amount) }}</strong>
+            </div>
+            {% endif %}
+            {% if offer.kavak_total_amount and offer.kavak_total_amount > 0 %}
+            <div class="breakdown-line">
+                <span>Kavak Total (financed)</span>
+                <strong style="color: var(--error);">+${{ "{:,.0f}".format(offer.kavak_total_amount) }}</strong>
+            </div>
+            {% endif %}
+            <div class="breakdown-line total">
+                <span>Total Loan Amount</span>
+                <strong style="color: var(--kavak-blue);">${{ "{:,.0f}".format(offer.loan_amount) }}</strong>
+            </div>
+        </div>
+        
+        <!-- Down Payment Details -->
+        <div class="summary-card">
+            <h3 style="margin-bottom: 1.5rem; color: var(--kavak-blue);">
+                <i class="fas fa-hand-holding-usd"></i> Down Payment Breakdown
+            </h3>
+            <div class="breakdown-line">
+                <span>Customer Vehicle Equity</span>
+                <strong style="color: var(--success);">+${{ "{:,.0f}".format(customer.vehicle_equity) }}</strong>
+            </div>
+            <div class="breakdown-line">
+                <span>CXA Marketing Fee ({{ "{:.1f}".format((offer.fees_applied['cxa_pct'] if offer.get('fees_applied') else 0.04) * 100) }}%)</span>
+                <strong style="color: var(--error);">-${{ "{:,.0f}".format(offer.cxa_amount) }}</strong>
+            </div>
+            <div class="breakdown-line">
+                <span>GPS Installation (inc. IVA)</span>
+                <strong style="color: var(--error);">-${{ "{:,.0f}".format(offer.gps_install_fee) }}</strong>
+            </div>
+            {% if offer.cac_bonus and offer.cac_bonus > 0 %}
+            <div class="breakdown-line">
+                <span>CAC Bonus (subsidy)</span>
+                <strong style="color: var(--success);">+${{ "{:,.0f}".format(offer.cac_bonus) }}</strong>
+            </div>
+            {% endif %}
+            <div class="breakdown-line total">
+                <span>Effective Down Payment</span>
+                <strong style="color: var(--kavak-blue);">${{ "{:,.0f}".format(offer.effective_equity) }}</strong>
+            </div>
+        </div>
+        
+        <!-- Loan Summary -->
+        <div class="summary-card">
+            <h3 style="margin-bottom: 1.5rem; color: var(--kavak-blue);">
+                <i class="fas fa-chart-line"></i> Loan Summary
+            </h3>
+            <div class="breakdown-line">
+                <span>Principal Amount</span>
+                <strong>${{ "{:,.0f}".format(offer.loan_amount) }}</strong>
+            </div>
+            <div class="breakdown-line">
+                <span>Interest Rate (APR)</span>
+                <strong>{{ "{:.1f}".format(offer.interest_rate * 100) }}%</strong>
+            </div>
+            <div class="breakdown-line">
+                <span>Term</span>
+                <strong>{{ offer.term }} months</strong>
+            </div>
+            <div class="breakdown-line">
+                <span>Monthly Payment</span>
+                <strong>${{ "{:,.0f}".format(offer.monthly_payment) }}</strong>
+            </div>
+            <div class="breakdown-line">
+                <span>Total of Payments</span>
+                <strong>${{ "{:,.0f}".format(total_payments) }}</strong>
+            </div>
+            <div class="breakdown-line">
+                <span>Total Interest</span>
+                <strong style="color: var(--error);">${{ "{:,.0f}".format(total_interest) }}</strong>
+            </div>
+            <div class="breakdown-line total">
+                <span>NPV to Kavak</span>
+                <strong style="color: var(--success);">${{ "{:,.0f}".format(offer.npv) }}</strong>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Additional Costs -->
+    <div class="summary-card" style="margin-bottom: 2rem;">
+        <h3 style="margin-bottom: 1.5rem; color: var(--kavak-blue);">
+            <i class="fas fa-plus-circle"></i> Additional Monthly Costs (not in loan)
+        </h3>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+            <div style="text-align: center; padding: 1rem; background: var(--gray-50); border-radius: var(--radius);">
+                <div style="font-size: 0.875rem; color: var(--gray-600);">GPS Monthly Fee</div>
+                <div style="font-size: 1.5rem; font-weight: 700;">${{ "{:.0f}".format(offer.gps_monthly_fee) }}</div>
+                <div style="font-size: 0.75rem; color: var(--gray-500);">per month</div>
+            </div>
+            <div style="text-align: center; padding: 1rem; background: var(--gray-50); border-radius: var(--radius);">
+                <div style="font-size: 0.875rem; color: var(--gray-600);">Total Monthly Cost</div>
+                <div style="font-size: 1.5rem; font-weight: 700; color: var(--kavak-blue);">
+                    ${{ "{:,.0f}".format(offer.monthly_payment + offer.gps_monthly_fee) }}
+                </div>
+                <div style="font-size: 0.75rem; color: var(--gray-500);">loan + GPS</div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Amortization Table -->
+    <div class="amortization-table">
+        <h3 style="margin-bottom: 1.5rem; color: var(--kavak-blue);">
+            <i class="fas fa-table"></i> Payment Schedule
+        </h3>
+        <!-- Choice of table format -->
+        <div style="margin-bottom: 1rem;">
+            <label style="margin-right: 1rem;">
+                <input type="radio" name="tableFormat" value="excel" checked onchange="toggleTableFormat()">
+                Excel Format (Spanish)
+            </label>
+            <label>
+                <input type="radio" name="tableFormat" value="simple" onchange="toggleTableFormat()">
+                Simple Format
+            </label>
+        </div>
+        
+        <!-- Excel Format Table (Spanish columns) -->
+        <table class="table-amortization" id="excelFormatTable">
+            <thead>
+                <tr>
+                    <th>Cuota</th>
+                    <th>Saldo Insoluto</th>
+                    <th>Capital</th>
+                    <th>Interés</th>
+                    <th>Cargos</th>
+                    <th>IVA</th>
+                    <th>Exigible</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% set running_paid = 0 %}
+                {% set running_interest = 0 %}
+                {% for row in schedule %}
+                {% set running_paid = running_paid + row.payment %}
+                {% set running_interest = running_interest + row.interest %}
+                <tr {% if row.month == 1 or row.month == term or row.month % 12 == 0 %}class="highlight-row"{% endif %}>
+                    <td>{{ row.cuota }}</td>
+                    <td>${{ "{:,.2f}".format(row.saldo_insoluto) }}</td>
+                    <td>${{ "{:,.2f}".format(row.capital) }}</td>
+                    <td>${{ "{:,.2f}".format(row.interes) }}</td>
+                    <td>${{ "{:,.2f}".format(row.cargos) }}</td>
+                    <td>${{ "{:,.2f}".format(row.iva) }}</td>
+                    <td>${{ "{:,.2f}".format(row.exigible) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        
+        <!-- Simple Format Table (English columns) -->
+        <table class="table-amortization" id="simpleFormatTable" style="display: none;">
+            <thead>
+                <tr>
+                    <th>Month</th>
+                    <th>Beginning Balance</th>
+                    <th>Payment</th>
+                    <th>Principal</th>
+                    <th>Interest</th>
+                    <th>Ending Balance</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in schedule %}
+                <tr {% if row.month == 1 or row.month == term or row.month % 12 == 0 %}class="highlight-row"{% endif %}>
+                    <td>{{ row.month }}</td>
+                    <td>${{ "{:,.2f}".format(row.beginning_balance) }}</td>
+                    <td>${{ "{:,.2f}".format(row.payment) }}</td>
+                    <td>${{ "{:,.2f}".format(row.principal) }}</td>
+                    <td>${{ "{:,.2f}".format(row.interest) }}</td>
+                    <td>${{ "{:,.2f}".format(row.ending_balance) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    
+    <!-- Actions -->
+    <div style="margin: 3rem 0; text-align: center;">
+        <a href="/customer/{{ customer.customer_id }}?generate=true" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Back to Offers
+        </a>
+        <button class="btn btn-primary" onclick="window.print()">
+            <i class="fas fa-print"></i> Print Schedule
+        </button>
+    </div>
+</div>
+
+<script>
+function toggleTableFormat() {
+    const format = document.querySelector('input[name="tableFormat"]:checked').value;
+    document.getElementById('excelFormatTable').style.display = format === 'excel' ? 'table' : 'none';
+    document.getElementById('simpleFormatTable').style.display = format === 'simple' ? 'table' : 'none';
+}
+</script>
+{% endblock %}

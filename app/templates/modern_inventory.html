@@ -1,0 +1,349 @@
+{% extends "modern_base.html" %}
+{% block title %}Inventory - Kavak Trade-Up Engine{% endblock %}
+
+{% block extra_css %}
+<style>
+    .main {
+        padding: 2rem 0;
+        min-height: calc(100vh - 4rem);
+        background: var(--gray-50);
+    }
+    
+    .inventory-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+        gap: 1.5rem;
+        margin-top: 2rem;
+    }
+    
+    .car-card {
+        background: white;
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow);
+        overflow: hidden;
+        transition: var(--transition);
+        cursor: pointer;
+    }
+    
+    .car-card:hover {
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-lg);
+    }
+    
+    .car-image {
+        height: 200px;
+        background: linear-gradient(135deg, var(--gray-100) 0%, var(--gray-200) 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+    }
+    
+    .car-image i {
+        font-size: 4rem;
+        color: var(--gray-400);
+    }
+    
+    .promotion-badge {
+        position: absolute;
+        top: 1rem;
+        right: 1rem;
+        background: var(--error);
+        color: white;
+        padding: 0.25rem 0.75rem;
+        border-radius: 9999px;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+    
+    .car-details {
+        padding: 1.5rem;
+    }
+    
+    .car-model {
+        font-size: 1.125rem;
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+        color: var(--gray-900);
+    }
+    
+    .car-price {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: var(--kavak-blue);
+        margin-bottom: 1rem;
+    }
+    
+    .car-meta {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 0.75rem;
+        font-size: 0.875rem;
+        color: var(--gray-600);
+    }
+    
+    .car-meta-item {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    
+    .filters-section {
+        background: white;
+        padding: 1.5rem;
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow);
+        margin-bottom: 2rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Data Status Banner -->
+{% include 'data_status_banner.html' %}
+
+<div style="margin-top: 2rem;">
+    <div class="page-header">
+        <div>
+            <h1>Inventory</h1>
+            <p style="color: var(--gray-600); margin-top: 0.25rem;">
+                Available vehicles for trade-up offers
+            </p>
+        </div>
+        <div style="display: flex; gap: 1rem;">
+            <button class="btn btn-secondary" onclick="refreshInventory()">
+                <i class="fas fa-sync-alt"></i> Refresh
+            </button>
+            <button class="btn btn-primary" onclick="exportInventory()">
+                <i class="fas fa-download"></i> Export
+            </button>
+        </div>
+    </div>
+    
+    <!-- Filters -->
+    <div class="filters-section">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+            <div class="filter-group">
+                <label class="form-label">Search</label>
+                <input type="text" class="form-input" placeholder="Model, brand, or ID..." id="search-inventory">
+            </div>
+            <div class="filter-group">
+                <label class="form-label">Price Range</label>
+                <select class="form-select" id="price-filter">
+                    <option value="">All Prices</option>
+                    <option value="0-500000">Under $500k</option>
+                    <option value="500000-750000">$500k - $750k</option>
+                    <option value="750000-1000000">$750k - $1M</option>
+                    <option value="1000000+">Over $1M</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label class="form-label">Region</label>
+                <select class="form-select" id="region-filter">
+                    <option value="">All Regions</option>
+                    <option value="CDMX">CDMX</option>
+                    <option value="Monterrey">Monterrey</option>
+                    <option value="Guadalajara">Guadalajara</option>
+                    <option value="Querétaro">Querétaro</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label class="form-label">Promotions</label>
+                <select class="form-select" id="promo-filter">
+                    <option value="">All Cars</option>
+                    <option value="true">With Promotion</option>
+                    <option value="false">Regular Price</option>
+                </select>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Inventory Stats -->
+    <div class="stats-grid" style="margin-bottom: 2rem;">
+        <div class="stat-card">
+            <div class="stat-value">{{ inventory_count }}</div>
+            <div class="stat-label">Total Vehicles</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">${{ "{:,.0f}".format(inventory|map(attribute='sales_price')|sum / inventory|length) }}</div>
+            <div class="stat-label">Average Price</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ inventory|selectattr('has_promotion', 'equalto', true)|list|length }}</div>
+            <div class="stat-label">On Promotion</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">4</div>
+            <div class="stat-label">Regions</div>
+        </div>
+    </div>
+    
+    <!-- Inventory Grid -->
+    <div class="inventory-grid" id="inventory-grid">
+        {% for car in inventory[:12] %}
+        <div class="car-card" data-car-id="{{ car.car_id }}">
+            <div class="car-image">
+                <i class="fas fa-car"></i>
+                {% if car.has_promotion %}
+                <span class="promotion-badge">PROMO</span>
+                {% endif %}
+            </div>
+            <div class="car-details">
+                <div class="car-model">{{ car.model|truncate(50) }}</div>
+                <div class="car-price">${{ "{:,.0f}".format(car.sales_price) }}</div>
+                <div class="car-meta">
+                    <div class="car-meta-item">
+                        <i class="fas fa-tachometer-alt"></i>
+                        <span>{{ "{:,.0f}".format(car.kilometers) }} km</span>
+                    </div>
+                    <div class="car-meta-item">
+                        <i class="fas fa-map-marker-alt"></i>
+                        <span>{{ car.region }}</span>
+                    </div>
+                    <div class="car-meta-item">
+                        <i class="fas fa-palette"></i>
+                        <span>{{ car.color }}</span>
+                    </div>
+                    <div class="car-meta-item">
+                        <i class="fas fa-store"></i>
+                        <span>{{ car.hub_name }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    
+    <!-- Load More -->
+    <div style="text-align: center; margin-top: 2rem;">
+        <button class="btn btn-secondary" onclick="loadMore()">
+            <i class="fas fa-plus"></i> Load More
+        </button>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let allInventory = {{ inventory|tojson }};
+let displayedCount = 12;
+
+function refreshInventory() {
+    showToast('Refreshing inventory...', 'info');
+    location.reload();
+}
+
+function exportInventory() {
+    showToast('Preparing export...', 'info');
+    // In real app, this would download CSV/Excel
+    setTimeout(() => {
+        showToast('Inventory exported successfully!', 'success');
+    }, 1500);
+}
+
+function loadMore() {
+    const grid = document.getElementById('inventory-grid');
+    const nextBatch = allInventory.slice(displayedCount, displayedCount + 12);
+    
+    nextBatch.forEach(car => {
+        const card = createCarCard(car);
+        grid.appendChild(card);
+    });
+    
+    displayedCount += nextBatch.length;
+    
+    if (displayedCount >= allInventory.length) {
+        document.querySelector('button[onclick="loadMore()"]').style.display = 'none';
+    }
+}
+
+function createCarCard(car) {
+    const div = document.createElement('div');
+    div.className = 'car-card';
+    div.dataset.carId = car.car_id;
+    
+    div.innerHTML = `
+        <div class="car-image">
+            <i class="fas fa-car"></i>
+            ${car.has_promotion ? '<span class="promotion-badge">PROMO</span>' : ''}
+        </div>
+        <div class="car-details">
+            <div class="car-model">${car.model.substring(0, 50)}${car.model.length > 50 ? '...' : ''}</div>
+            <div class="car-price">$${Math.round(car.sales_price).toLocaleString()}</div>
+            <div class="car-meta">
+                <div class="car-meta-item">
+                    <i class="fas fa-tachometer-alt"></i>
+                    <span>${Math.round(car.kilometers).toLocaleString()} km</span>
+                </div>
+                <div class="car-meta-item">
+                    <i class="fas fa-map-marker-alt"></i>
+                    <span>${car.region}</span>
+                </div>
+                <div class="car-meta-item">
+                    <i class="fas fa-palette"></i>
+                    <span>${car.color}</span>
+                </div>
+                <div class="car-meta-item">
+                    <i class="fas fa-store"></i>
+                    <span>${car.hub_name}</span>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    return div;
+}
+
+// Setup filters
+document.getElementById('search-inventory').addEventListener('input', filterInventory);
+document.getElementById('price-filter').addEventListener('change', filterInventory);
+document.getElementById('region-filter').addEventListener('change', filterInventory);
+document.getElementById('promo-filter').addEventListener('change', filterInventory);
+
+function filterInventory() {
+    const search = document.getElementById('search-inventory').value.toLowerCase();
+    const priceRange = document.getElementById('price-filter').value;
+    const region = document.getElementById('region-filter').value;
+    const promo = document.getElementById('promo-filter').value;
+    
+    let filtered = allInventory;
+    
+    if (search) {
+        filtered = filtered.filter(car => 
+            car.model.toLowerCase().includes(search) ||
+            car.car_id.toString().includes(search)
+        );
+    }
+    
+    if (priceRange) {
+        const [min, max] = priceRange.split('-').map(x => x === '+' ? Infinity : parseInt(x));
+        filtered = filtered.filter(car => {
+            const price = car.sales_price;
+            return price >= (min || 0) && price <= (max || Infinity);
+        });
+    }
+    
+    if (region) {
+        filtered = filtered.filter(car => car.region === region);
+    }
+    
+    if (promo) {
+        filtered = filtered.filter(car => car.has_promotion === (promo === 'true'));
+    }
+    
+    // Re-render grid
+    const grid = document.getElementById('inventory-grid');
+    grid.innerHTML = '';
+    filtered.slice(0, 12).forEach(car => {
+        grid.appendChild(createCarCard(car));
+    });
+    
+    displayedCount = Math.min(12, filtered.length);
+    
+    // Update load more button
+    const loadMoreBtn = document.querySelector('button[onclick="loadMore()"]');
+    loadMoreBtn.style.display = displayedCount >= filtered.length ? 'none' : 'block';
+}
+</script>
+{% endblock %}

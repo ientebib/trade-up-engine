@@ -1,0 +1,5 @@
+{% if not has_inventory %}
+<div class="alert alert-warning">
+    <strong>⚠️ No Inventory Data</strong> - Unable to load inventory from Redshift. Check your connection settings.
+</div>
+{% endif %}

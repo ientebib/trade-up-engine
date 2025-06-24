@@ -85,6 +85,23 @@ function initializeCustomerView(customerId) {
     console.log('🏁 Initializing customer view for:', customerId);
     currentCustomer = customerId;
     allowAmortizationModal = false; // Reset flag
+    
+    // Set up generate button
+    const generateBtn = document.getElementById('generate-offers-btn');
+    if (generateBtn) {
+        generateBtn.addEventListener('click', () => {
+            generateOffersForCustomer(customerId);
+        });
+    }
+    
+    // Set up mode selector
+    const modeSelect = document.getElementById('mode-select');
+    if (modeSelect) {
+        modeSelect.addEventListener('change', () => {
+            // Mode change will be handled when generating offers
+        });
+    }
+    
     loadCustomersList().then(() => {
         generateOffersForCustomer(customerId);
     });
@@ -92,16 +109,22 @@ function initializeCustomerView(customerId) {
 
 async function loadCustomersList() {
     try {
-        const response = await fetch('/api/customers?limit=5000');
+        const response = await fetch('/api/customers?limit=100'); // Backend max is 100
         const data = await response.json();
         allCustomers = data.customers || data;
+        
         
         const customerSelect = document.getElementById('customer-select');
         if (customerSelect && allCustomers.length > 0) {
             allCustomers.forEach(customer => {
                 const option = document.createElement('option');
                 option.value = customer.customer_id;
-                option.textContent = `Customer ${customer.customer_id} (${customer.risk_profile_name})`;
+                
+                // Ensure we're properly accessing customer properties
+                const customerId = customer.customer_id || 'Unknown';
+                const riskProfile = customer.risk_profile_name || 'N/A';
+                option.textContent = `Customer ${customerId} (${riskProfile})`;
+                
                 if (customer.customer_id == currentCustomer) {
                     option.selected = true;
                 }
@@ -122,13 +145,13 @@ async function generateOffersForCustomer(customerId) {
         const customer = allCustomers.find(c => c.customer_id == customerId);
         if (!customer) throw new Error('Customer not found');
         
+        // Fixed: API expects only customer_id, backend loads inventory internally
         const requestData = {
-            customer_data: customer,
-            inventory: await fetch('/api/inventory').then(r => r.json()),
-            engine_config: {} // Use saved config on backend
+            customer_id: customerId,
+            max_offers: 50
         };
         
-        const response = await fetch('/api/generate-offers', {
+        const response = await fetch('/api/generate-offers-basic', { // Fixed: was calling non-existent endpoint
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(requestData)
@@ -137,10 +160,12 @@ async function generateOffersForCustomer(customerId) {
         const result = await response.json();
         if (!response.ok) throw new Error(result.detail || 'Failed to generate offers');
         
+        
         displayOffers(result.offers, customer);
     } catch (error) {
         console.error('Error generating offers:', error);
-        showError(error.message);
+        // Pass the entire error object to showError, which will handle it properly
+        showError(error);
     } finally {
         hideLoading();
     }
@@ -181,11 +206,45 @@ function displayOffersByTier(offersByTier) {
     container.innerHTML = '';
     const tierOrder = ['Refresh', 'Upgrade', 'Max Upgrade'];
     
+    // Store offers globally for filtering
+    window.currentOffers = offersByTier;
+    
+    // Set up tier filter
+    const tierSelect = document.getElementById('tier-select');
+    if (tierSelect && !tierSelect.hasAttribute('data-initialized')) {
+        tierSelect.setAttribute('data-initialized', 'true');
+        tierSelect.addEventListener('change', () => {
+            filterOffersByTier(tierSelect.value);
+        });
+    }
+    
     tierOrder.forEach(tier => {
         if (offersByTier[tier]) {
             container.appendChild(createTierSection(tier, offersByTier[tier]));
         }
     });
+}
+
+function filterOffersByTier(selectedTier) {
+    const container = document.getElementById('offers-by-tier');
+    if (!container || !window.currentOffers) return;
+    
+    container.innerHTML = '';
+    const tierOrder = ['Refresh', 'Upgrade', 'Max Upgrade'];
+    
+    if (selectedTier === 'all') {
+        tierOrder.forEach(tier => {
+            if (window.currentOffers[tier]) {
+                container.appendChild(createTierSection(tier, window.currentOffers[tier]));
+            }
+        });
+    } else {
+        if (window.currentOffers[selectedTier]) {
+            container.appendChild(createTierSection(selectedTier, window.currentOffers[selectedTier]));
+        } else {
+            container.innerHTML = '<div class="no-offers-state"><p>No offers found for the selected tier.</p></div>';
+        }
+    }
 }
 
 function createTierSection(tierName, offers) {
@@ -274,7 +333,14 @@ function showAmortizationModal(table) {
 function showAmortizationError(message) {
     if (!allowAmortizationModal) return;
     const container = document.getElementById('amortization-table');
-    container.innerHTML = `<div class="error-state"><h3>Error Loading Table</h3><p>${message}</p></div>`;
+    
+    // Convert message to string if it's an object
+    let errorMessage = message;
+    if (typeof message === 'object' && message !== null) {
+        errorMessage = message.message || message.detail || message.error || JSON.stringify(message);
+    }
+    
+    container.innerHTML = `<div class="error-state"><h3>Error Loading Table</h3><p>${errorMessage}</p></div>`;
     document.getElementById('amortization-modal').style.display = 'block';
 }
 
@@ -303,7 +369,15 @@ function showError(message) {
     hideLoading();
     const noResultsDiv = document.getElementById('no-results');
     noResultsDiv.style.display = 'block';
-    noResultsDiv.innerHTML = `<div class="section-card"><div class="no-offers-state"><h3>Error</h3><p>${message}</p></div></div>`;
+    
+    // Convert message to string if it's an object
+    let errorMessage = message;
+    if (typeof message === 'object' && message !== null) {
+        // Try to extract a meaningful error message
+        errorMessage = message.message || message.detail || message.error || JSON.stringify(message);
+    }
+    
+    noResultsDiv.innerHTML = `<div class="section-card"><div class="no-offers-state"><h3>Error</h3><p>${errorMessage}</p></div></div>`;
 }
 
 // Delegated click listener for breakdown modals
@@ -360,12 +434,16 @@ async function initializeCustomerListPage() {
     const renderRows = (custList) => {
         custList.forEach(cust => {
             const tr = document.createElement('tr');
+            // Check if customer has scenario results
+            const potentialOffers = cust.potential_offers || 'N/A';
+            const avgNPV = cust.avg_npv ? `$${Math.round(cust.avg_npv).toLocaleString()}` : 'N/A';
+            
             tr.innerHTML = `
                 <td><a href="/customer/${cust.customer_id}" class="id-link">${cust.customer_id}</a></td>
                 <td>${cust.current_car_model || 'Unknown'}</td>
                 <td><span class="risk-badge risk-${cust.risk_profile_name || 'default'}">${cust.risk_profile_name || 'N/A'}</span></td>
-                <td>$${Math.round(cust.current_monthly_payment).toLocaleString()}</td>
-                <td>$${Math.round(cust.vehicle_equity).toLocaleString()}</td>
+                <td>${potentialOffers}</td>
+                <td>${avgNPV}</td>
                 <td><a href="/customer/${cust.customer_id}" class="view-btn">Generate Offers →</a></td>`;
             tbody.appendChild(tr);
         });
@@ -407,6 +485,10 @@ async function initializeCustomerListPage() {
 async function loadDashboardScenarioSummary() {
     const container = document.getElementById('dashboard-scenario-summary');
     if (!container) return;
+    
+    // DISABLED: /api/scenario-summary endpoint doesn't exist
+    return;
+    
     try {
         const response = await fetch('/api/scenario-summary');
         const data = await response.json();
@@ -535,13 +617,17 @@ function initializeConfigPage() {
             updateStatusBanner(newMode, result.config.last_updated);
             alert('Configuration saved successfully!');
         } catch (error) {
-            alert(`Error saving configuration: ${error.message}`);
+            alert(`Error saving configuration: ${error.message || error}`);
         } finally {
             hideLoadingModal();
         }
     };
 
     const runAnalysis = async () => {
+        // DISABLED: /api/scenario-analysis endpoint doesn't exist
+        alert('Scenario analysis is currently disabled');
+        return;
+        
         if (!confirm('This will save the current configuration and run a full analysis, which may take time. Are you sure you want to proceed?')) return;
         showLoadingModal('Running Full Analysis...', 'This might take a moment. The page will redirect to the dashboard when complete.');
         try {
@@ -553,7 +639,7 @@ function initializeConfigPage() {
             window.location.href = '/'; 
         } catch (error) {
             hideLoadingModal();
-            alert(`Error running analysis: ${error.message}`);
+            alert(`Error running analysis: ${error.message || error}`);
         }
     };
     
@@ -643,11 +729,13 @@ function initializeConfigPage() {
         group.step.addEventListener('input', updateAllRangeCounts);
     });
 
-    fetch('/api/config-status')
+    // DISABLED: /api/config-status endpoint doesn't exist
+    // Use /api/config instead
+    fetch('/api/config')
         .then(res => res.json())
-        .then(data => updateStatusBanner(data.mode, data.last_updated))
+        .then(data => updateStatusBanner('Custom', new Date().toISOString()))
         .catch(err => {
-            console.error("Failed to load config status:", err);
+            console.error("Failed to load config:", err);
             updateStatusBanner('Error', 'Could not connect to server');
             elements.statusBanner.style.borderColor = '#f43f5e'; // Error color
         });

@@ -1,0 +1,1385 @@
+{% extends "modern_base.html" %}
+{% block title %}{{ customer.full_name or customer.customer_id }} - Kavak Trade-Up Engine{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Add better spacing and layout */
+    body {
+        overflow-x: hidden;
+    }
+    
+    .container {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 0 2rem;
+    }
+    .main {
+        padding: 2rem 0;
+        min-height: calc(100vh - 4rem);
+        background: var(--gray-50);
+    }
+    
+    .customer-header {
+        background: white;
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow);
+        padding: 2rem;
+        margin-bottom: 2rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    
+    .customer-info {
+        display: flex;
+        gap: 2rem;
+        align-items: center;
+        flex: 1;
+    }
+    
+    .customer-avatar {
+        width: 80px;
+        height: 80px;
+        border-radius: 50%;
+        background: var(--kavak-blue-50);
+        color: var(--kavak-blue);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 2rem;
+        font-weight: 600;
+    }
+    
+    .customer-identity {
+        flex: 1;
+    }
+    
+    .customer-identity h1 {
+        margin: 0 0 0.5rem 0;
+        font-size: 1.75rem;
+        color: var(--gray-900);
+    }
+    
+    .identity-details {
+        display: flex;
+        gap: 1.5rem;
+        color: var(--gray-600);
+        font-size: 0.875rem;
+        flex-wrap: wrap;
+    }
+    
+    .identity-details span {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    
+    .customer-badges {
+        display: flex;
+        gap: 0.75rem;
+        align-items: center;
+    }
+    
+    .badge {
+        padding: 0.375rem 0.75rem;
+        border-radius: 9999px;
+        font-size: 0.75rem;
+        font-weight: 500;
+        display: flex;
+        align-items: center;
+        gap: 0.375rem;
+    }
+    
+    .badge-kt {
+        background: var(--success-light);
+        color: var(--success);
+    }
+    
+    .badge-no-kt {
+        background: var(--gray-100);
+        color: var(--gray-600);
+    }
+    
+    .badge-risk {
+        background: var(--kavak-blue);
+        color: white;
+    }
+    
+    .vehicle-showcase {
+        background: linear-gradient(135deg, var(--kavak-blue) 0%, var(--kavak-blue-dark) 100%);
+        color: white;
+        padding: 1.5rem;
+        border-radius: var(--radius-lg);
+        margin-bottom: 1rem;
+    }
+    
+    .vehicle-showcase h4 {
+        margin: 0 0 0.5rem 0;
+        font-size: 1.25rem;
+    }
+    
+    .vehicle-details {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1rem;
+        margin-top: 1rem;
+    }
+    
+    .vehicle-detail {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.875rem;
+        opacity: 0.9;
+    }
+    
+    .config-panel {
+        background: white;
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow);
+        padding: 2rem;
+        margin-bottom: 2rem;
+    }
+    
+    .config-panel h2 {
+        margin: 0 0 1.5rem 0;
+        font-size: 1.25rem;
+        color: var(--gray-900);
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    
+    .config-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+        gap: 2rem;
+        margin-bottom: 1rem;
+    }
+    
+    .config-item label {
+        display: block;
+        margin-bottom: 0.5rem;
+        font-weight: 500;
+        color: var(--gray-700);
+    }
+    
+    .config-item input[type="range"] {
+        width: 100%;
+        margin-bottom: 0.25rem;
+        -webkit-appearance: none;
+        appearance: none;
+        height: 6px;
+        background: var(--gray-200);
+        border-radius: 3px;
+        outline: none;
+    }
+    
+    .config-item input[type="range"]::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 18px;
+        height: 18px;
+        background: var(--kavak-blue);
+        border-radius: 50%;
+        cursor: pointer;
+        box-shadow: var(--shadow);
+    }
+    
+    .config-value {
+        text-align: right;
+        font-size: 0.875rem;
+        color: var(--kavak-blue);
+        font-weight: 600;
+    }
+    
+    .toggle-wrapper {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+    
+    .toggle {
+        width: 48px;
+        height: 24px;
+        background: var(--gray-300);
+        border-radius: 9999px;
+        position: relative;
+        cursor: pointer;
+        transition: var(--transition);
+    }
+    
+    .toggle.active {
+        background: var(--kavak-blue);
+    }
+    
+    .toggle::after {
+        content: '';
+        width: 20px;
+        height: 20px;
+        background: white;
+        border-radius: 50%;
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        transition: var(--transition);
+        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+    
+    .toggle.active::after {
+        transform: translateX(24px);
+    }
+    
+    .tabs {
+        display: flex;
+        gap: 1rem;
+        margin-bottom: 2rem;
+        border-bottom: 2px solid var(--gray-200);
+        background: white;
+        border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+        padding: 0 2rem;
+        box-shadow: var(--shadow);
+    }
+    
+    .tab {
+        padding: 1rem 1.5rem;
+        background: none;
+        border: none;
+        font-weight: 500;
+        color: var(--gray-600);
+        cursor: pointer;
+        position: relative;
+        transition: var(--transition);
+        font-size: 0.9375rem;
+    }
+    
+    .tab i {
+        margin-right: 0.5rem;
+    }
+    
+    .tab:hover {
+        color: var(--gray-900);
+    }
+    
+    .tab.active {
+        color: var(--kavak-blue);
+    }
+    
+    .tab.active::after {
+        content: '';
+        position: absolute;
+        bottom: -2px;
+        left: 0;
+        right: 0;
+        height: 2px;
+        background: var(--kavak-blue);
+    }
+    
+    .mode-badge {
+        background: var(--kavak-blue-50);
+        color: var(--kavak-blue);
+        padding: 0.25rem 0.75rem;
+        border-radius: 9999px;
+        font-size: 0.75rem;
+        font-weight: 500;
+        margin-left: 0.5rem;
+    }
+    
+    .offer-section {
+        background: white;
+        border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+        box-shadow: var(--shadow);
+        padding: 2rem;
+        margin-bottom: 2rem;
+    }
+    
+    .action-buttons {
+        display: flex;
+        gap: 1rem;
+        margin-bottom: 2rem;
+        flex-wrap: wrap;
+    }
+    
+    .offer-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+        gap: 1.5rem;
+        margin-top: 1.5rem;
+    }
+    
+    .offer-card {
+        border: 2px solid var(--gray-200);
+        border-radius: var(--radius);
+        padding: 1.5rem;
+        transition: var(--transition);
+        cursor: pointer;
+        position: relative;
+    }
+    
+    .offer-card:hover {
+        border-color: var(--kavak-blue);
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-md);
+    }
+    
+    .offer-tier-badge {
+        position: absolute;
+        top: 1rem;
+        right: 1rem;
+        padding: 0.25rem 0.75rem;
+        border-radius: 9999px;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+    
+    .tier-refresh {
+        background: var(--info-light);
+        color: var(--info);
+    }
+    
+    .tier-upgrade {
+        background: var(--success-light);
+        color: var(--success);
+    }
+    
+    .tier-max-upgrade {
+        background: var(--warning-light);
+        color: var(--warning);
+    }
+    
+    .subsidy-info {
+        background: var(--kavak-blue-50);
+        border: 1px solid var(--kavak-blue-100);
+        border-radius: var(--radius);
+        padding: 1rem;
+        margin-bottom: 1.5rem;
+        font-size: 0.875rem;
+    }
+    
+    .no-offers-message {
+        text-align: center;
+        padding: 4rem 2rem;
+        color: var(--gray-500);
+    }
+    
+    .loading-offers {
+        text-align: center;
+        padding: 4rem 2rem;
+    }
+    
+    .offer-details-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 0.75rem;
+        margin-top: 1rem;
+        font-size: 0.875rem;
+    }
+    
+    .offer-detail-item {
+        display: flex;
+        justify-content: space-between;
+    }
+    
+    .offer-detail-label {
+        color: var(--gray-600);
+    }
+    
+    .offer-detail-value {
+        font-weight: 600;
+        color: var(--gray-900);
+    }
+    
+    /* Better stats grid */
+    .stat-card {
+        background: white;
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow);
+        padding: 1.5rem;
+        text-align: center;
+        transition: var(--transition);
+    }
+    
+    .stat-card:hover {
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-md);
+    }
+    
+    .stat-value {
+        font-size: 2rem;
+        font-weight: 700;
+        color: var(--gray-900);
+        margin-bottom: 0.5rem;
+    }
+    
+    .stat-label {
+        font-size: 0.875rem;
+        color: var(--gray-600);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+    
+    .stat-change {
+        font-size: 0.75rem;
+        margin-top: 0.5rem;
+    }
+    
+    .stat-change.positive {
+        color: var(--success);
+    }
+    
+    .stat-change.negative {
+        color: var(--error);
+    }
+    
+    /* Fix grid spacing */
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 1.5rem;
+        margin-bottom: 2rem;
+    }
+    
+    /* Better offer grid */
+    .offer-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+        gap: 1.5rem;
+        margin-top: 1.5rem;
+    }
+    
+    /* Responsive adjustments */
+    @media (max-width: 768px) {
+        .container {
+            padding: 0 1rem;
+        }
+        
+        .stats-grid {
+            grid-template-columns: 1fr;
+        }
+        
+        .offer-grid {
+            grid-template-columns: 1fr;
+        }
+        
+        .config-grid {
+            grid-template-columns: 1fr !important;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Data Status Banner -->
+{% include 'data_status_banner.html' %}
+
+<div class="container" style="max-width: 1400px; margin: 2rem auto; padding: 0 1rem;">
+    <!-- Customer Header -->
+    <div class="customer-header">
+        <div class="customer-info">
+            <div class="customer-avatar">
+                {% if customer.first_name and customer.last_name %}
+                    {{ customer.first_name[0] if customer.first_name else '' }}{{ customer.last_name[0] if customer.last_name else '' }}
+                {% else %}
+                    {{ customer.customer_id[:2] if customer.customer_id else 'NA' }}
+                {% endif %}
+            </div>
+            
+            <div class="customer-identity">
+                <h1>{{ customer.full_name or customer.customer_id }}</h1>
+                <div class="identity-details">
+                    <span><i class="fas fa-id-card"></i> {{ customer.contract_id }}</span>
+                    <span><i class="fas fa-car"></i> Stock #{{ customer.current_stock_id }}</span>
+                    {% if customer.email %}
+                    <span><i class="fas fa-envelope"></i> {{ customer.email }}</span>
+                    {% endif %}
+                    <span><i class="fas fa-calendar"></i> Customer since {{ customer.contract_date if customer.contract_date else 'N/A' }}</span>
+                </div>
+            </div>
+        </div>
+        
+        <div style="display: flex; gap: 1rem; align-items: center;">
+            {% if customer.has_kavak_total %}
+            <div class="badge badge-kt">
+                <i class="fas fa-shield-alt"></i> Has Kavak Total
+            </div>
+            {% else %}
+            <div class="badge badge-no-kt">
+                <i class="fas fa-shield-alt"></i> No Kavak Total
+            </div>
+            {% endif %}
+            <div class="badge badge-risk">
+                {{ customer.risk_profile_name }}
+            </div>
+            <button class="btn btn-secondary" onclick="window.location.href='/customers'">
+                <i class="fas fa-arrow-left"></i> Back to List
+            </button>
+        </div>
+    </div>
+    
+    <!-- Customer Stats -->
+    <div class="stats-grid" style="margin-bottom: 2rem;">
+        <div class="stat-card">
+            <div class="stat-value">${{ "{:,.0f}".format(customer.current_monthly_payment) }}</div>
+            <div class="stat-label">Current Payment</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">${{ "{:,.0f}".format(customer.vehicle_equity) }}</div>
+            <div class="stat-label">Vehicle Equity</div>
+            <div class="stat-change {% if customer.vehicle_equity > 0 %}positive{% else %}negative{% endif %}">
+                {{ "{:.1f}".format((customer.vehicle_equity / customer.current_car_price * 100) if customer.current_car_price > 0 else 0) }}% of value
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ customer.risk_profile|default('A1') }}</div>
+            <div class="stat-label">Risk Profile</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">${{ "{:,.0f}".format(customer.current_car_price) }}</div>
+            <div class="stat-label">Current Car Value</div>
+        </div>
+    </div>
+    
+    <!-- Current Vehicle & Loan Details -->
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
+        <!-- Current Vehicle -->
+        <div class="offer-section" style="padding: 1.5rem;">
+            <h3 style="margin: 0 0 1rem 0; display: flex; align-items: center; gap: 0.5rem;">
+                <i class="fas fa-car" style="color: var(--kavak-blue);"></i> Current Vehicle
+            </h3>
+            <div class="vehicle-showcase">
+                <h4>{{ customer.current_car_model }}</h4>
+                <div class="vehicle-details">
+                    <div class="vehicle-detail">
+                        <i class="fas fa-tachometer-alt"></i>
+                        {{ "{:,}".format(customer.current_car_km) if customer.current_car_km else 0 }} km
+                    </div>
+                    <div class="vehicle-detail">
+                        <i class="fas fa-calendar-alt"></i>
+                        {{ customer.car_age_at_purchase }} years old when bought
+                    </div>
+                    <div class="vehicle-detail">
+                        <i class="fas fa-tag"></i>
+                        ${{ "{:,.0f}".format(customer.current_car_price) }}
+                    </div>
+                    <div class="vehicle-detail">
+                        <i class="fas fa-hourglass-half"></i>
+                        {{ customer.months_since_contract }} months owned
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Financial Summary -->
+        <div class="offer-section" style="padding: 1.5rem;">
+            <h3 style="margin: 0 0 1rem 0; display: flex; align-items: center; gap: 0.5rem;">
+                <i class="fas fa-dollar-sign" style="color: var(--kavak-blue);"></i> Financial Summary
+            </h3>
+            <div style="background: var(--gray-50); padding: 1rem; border-radius: var(--radius);">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                    <span>Monthly Payment:</span>
+                    <strong>${{ "{:,.0f}".format(customer.current_monthly_payment) }}</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                    <span>Vehicle Equity:</span>
+                    <strong style="color: var(--success);">${{ "{:,.0f}".format(customer.vehicle_equity) }}</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                    <span>Outstanding Balance:</span>
+                    <strong>${{ "{:,.0f}".format(customer.outstanding_balance) }}</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between; padding-top: 0.5rem; border-top: 1px solid var(--gray-300);">
+                    <span>Remaining Months:</span>
+                    <strong>{{ customer.remaining_months }} months</strong>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Original Loan -->
+        <div class="offer-section" style="padding: 1.5rem;">
+            <h3 style="margin: 0 0 1rem 0; display: flex; align-items: center; gap: 0.5rem;">
+                <i class="fas fa-file-contract" style="color: var(--kavak-blue);"></i> Original Loan
+            </h3>
+            <div style="background: var(--gray-50); padding: 1rem; border-radius: var(--radius);">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                    <span>Original Amount:</span>
+                    <strong>${{ "{:,.0f}".format(customer.original_loan_amount) }}</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                    <span>Interest Rate:</span>
+                    <strong>{{ "{:.1%}".format(customer.original_interest_rate) if customer.original_interest_rate else 'N/A' }}</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between;">
+                    <span>Contract Date:</span>
+                    <strong>{{ customer.contract_date if customer.contract_date else 'N/A' }}</strong>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Configuration Panel -->
+    <div class="config-panel">
+        <h2>
+            <i class="fas fa-sliders-h"></i> 
+            Per-Customer Configuration
+            <span class="mode-badge">Overrides Global Settings</span>
+        </h2>
+        
+        <div class="config-grid">
+            <div class="config-item">
+                <label for="service-fee">Service Fee</label>
+                <input type="range" id="service-fee" min="2" max="5" step="0.5" value="4">
+                <div class="config-value" id="service-fee-value">4.0%</div>
+            </div>
+            
+            <div class="config-item">
+                <label for="cxa-fee">CXA (Opening Fee)</label>
+                <input type="range" id="cxa-fee" min="1" max="4" step="0.5" value="4">
+                <div class="config-value" id="cxa-fee-value">4.0%</div>
+            </div>
+            
+            <div class="config-item">
+                <label for="cac-bonus">CAC Bonus</label>
+                <input type="range" id="cac-bonus" min="0" max="10000" step="500" value="0">
+                <div class="config-value" id="cac-bonus-value">$0</div>
+            </div>
+            
+            <div class="config-item">
+                <label for="insurance-amount">Insurance Amount</label>
+                <input type="range" id="insurance-amount" min="8000" max="20000" step="500" value="10999">
+                <div class="config-value" id="insurance-amount-value">$10,999</div>
+                <span style="font-size: 0.75rem; color: var(--gray-600);">Annual, financed 12 months</span>
+            </div>
+            
+            <div class="config-item">
+                <label for="interest-rate">Interest Rate (Annual)</label>
+                <input type="range" id="interest-rate" min="10" max="30" step="0.5" value="{{ (customer.original_interest_rate * 100) if customer.original_interest_rate else 18 }}">
+                <div class="config-value" id="interest-rate-value">{{ '{:.1f}%'.format(customer.original_interest_rate * 100) if customer.original_interest_rate else '18.0%' }}</div>
+                <span style="font-size: 0.75rem; color: var(--gray-600);">Before IVA</span>
+            </div>
+            
+            <div class="config-item">
+                <label>Kavak Total</label>
+                <div class="toggle-wrapper">
+                    <div class="toggle active" id="kavak-total-toggle" onclick="toggleKavakTotal()"></div>
+                    <span>$25,000 MXN (One-time)</span>
+                </div>
+            </div>
+        </div>
+        
+        <div style="background: var(--gray-100); padding: 1rem; border-radius: var(--radius); margin-top: 1rem;">
+            <h4 style="margin: 0 0 0.5rem 0; font-size: 0.875rem; color: var(--gray-700);">
+                <i class="fas fa-lock"></i> Fixed System Values
+            </h4>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; font-size: 0.875rem;">
+                <div>
+                    <span style="color: var(--gray-600);">GPS Installation:</span>
+                    <strong>$750 + IVA = $870</strong>
+                </div>
+                <div>
+                    <span style="color: var(--gray-600);">GPS Monthly:</span>
+                    <strong>$350 + IVA = $406</strong>
+                </div>
+                <div>
+                    <span style="color: var(--gray-600);">IVA Rate:</span>
+                    <strong>16%</strong>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabs for Different Modes -->
+    <div class="tabs">
+        <button class="tab active" onclick="switchTab(event, 'basic')">
+            <i class="fas fa-list"></i> All Offers
+        </button>
+        <button class="tab" onclick="switchTab(event, 'smart')">
+            <i class="fas fa-magic"></i> Smart Search
+        </button>
+        <button class="tab" onclick="switchTab(event, 'insights')">
+            <i class="fas fa-chart-line"></i> Customer Insights
+        </button>
+    </div>
+
+    <!-- Tab Content -->
+    <div class="offer-section">
+        <div id="basic-tab" class="tab-content" style="display: block;">
+            <div class="action-buttons">
+                <button class="btn btn-primary" onclick="generateWithGlobalConfig()">
+                    <i class="fas fa-globe"></i> Generate with Global Config
+                </button>
+                <button class="btn btn-primary" onclick="generateCustomOffers()">
+                    <i class="fas fa-magic"></i> Generate with Custom Config
+                </button>
+                <button class="btn btn-secondary" onclick="resetConfig()">
+                    <i class="fas fa-undo"></i> Reset to Global Config
+                </button>
+                <button class="btn btn-warning" onclick="testButton()">
+                    <i class="fas fa-check"></i> Test Button
+                </button>
+                <button class="btn btn-info" onclick="alert('Direct onclick works!'); document.getElementById('offers-container').innerHTML = '<h3>Direct button clicked!</h3>';">
+                    <i class="fas fa-bolt"></i> Direct Test
+                </button>
+            </div>
+            
+            <div id="offers-container" style="min-height: 200px; border: 2px dashed #e0e0e0; border-radius: 12px; padding: 2rem; margin-top: 1.5rem;">
+                <p style="color: #999; text-align: center;">Click a button above to generate offers</p>
+            </div>
+        </div>
+
+        <div id="smart-tab" class="tab-content" style="display: none;">
+        </div>
+
+        <div id="insights-tab" class="tab-content" style="display: none;">
+            <!-- Customer Insights -->
+            <div style="background: var(--gray-50); padding: 1.5rem; border-radius: var(--radius);">
+                <h3 style="margin: 0 0 1rem 0;"><i class="fas fa-chart-line"></i> Customer Insights</h3>
+                <div class="offer-details-grid">
+                    <div class="offer-detail-item">
+                        <span class="offer-detail-label">Brand Loyalty</span>
+                        <span class="offer-detail-value">{{ customer.current_car_brand }}</span>
+                    </div>
+                    <div class="offer-detail-item">
+                        <span class="offer-detail-label">Average KM/Month</span>
+                        <span class="offer-detail-value">{{ "{:,.0f}".format((customer.current_car_km or 0) / ((customer.months_since_contract or 1) if (customer.months_since_contract or 1) > 0 else 1)) }}</span>
+                    </div>
+                    <div class="offer-detail-item">
+                        <span class="offer-detail-label">Payment History</span>
+                        <span class="offer-detail-value">{{ customer.months_since_contract }} months</span>
+                    </div>
+                    <div class="offer-detail-item">
+                        <span class="offer-detail-label">Equity Percentage</span>
+                        <span class="offer-detail-value">{{ "{:.1f}".format((customer.vehicle_equity / customer.current_car_price * 100) if customer.current_car_price > 0 else 0) }}% of value</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Offer Details Modal -->
+<div id="offer-modal" class="modal-backdrop" style="display: none;" onclick="closeModal(event)">
+    <div class="modal" onclick="event.stopPropagation()">
+        <div class="modal-header">
+            <h3>Offer Details</h3>
+            <button class="btn btn-ghost" onclick="closeModal()">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="modal-body" id="modal-content">
+            <!-- Content will be populated dynamically -->
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeModal()">Close</button>
+            <button class="btn btn-primary" onclick="viewCalculator()">
+                <i class="fas fa-calculator"></i> View Full Calculator
+            </button>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Add error handler to log any JavaScript errors
+window.addEventListener('error', function(e) {
+    console.error('JavaScript Error:', e.message, 'at', e.filename, ':', e.lineno);
+    alert('JavaScript Error: ' + e.message);
+});
+
+// Customer data constants
+const customerId = '{{ customer.customer_id }}';
+const currentPayment = {{ customer.current_monthly_payment or 0 }};
+const vehicleEquity = {{ customer.vehicle_equity or 0 }};
+
+// Test function
+function testButton() {
+    try {
+        alert('Step 1: Button click works!');
+        
+        const container = document.getElementById('offers-container');
+        alert('Step 2: Looking for container... found = ' + (container !== null));
+        
+        if (container) {
+            const testHTML = '<div style="padding: 2rem; text-align: center; background: yellow; border: 2px solid red;">Test button clicked! Container found at ' + new Date().toLocaleTimeString() + '</div>';
+            container.innerHTML = testHTML;
+            alert('Step 3: HTML updated. Check if you see yellow box.');
+            
+            // Double check
+            setTimeout(() => {
+                const check = document.getElementById('offers-container');
+                alert('Step 4: Container still exists = ' + (check !== null) + ', has content = ' + (check && check.innerHTML.length > 0));
+            }, 100);
+        } else {
+            alert('ERROR: offers-container not found!');
+            
+            // Try to find what elements DO exist
+            const allDivs = document.querySelectorAll('div[id]');
+            const ids = Array.from(allDivs).map(d => d.id).filter(id => id.includes('offer') || id.includes('tab'));
+            alert('Found these IDs: ' + ids.join(', '));
+        }
+    } catch (error) {
+        alert('JavaScript Error: ' + error.message);
+    }
+}
+
+// Update range input displays - wrapped in DOMContentLoaded to ensure elements exist
+document.addEventListener('DOMContentLoaded', function() {
+    const serviceFee = document.getElementById('service-fee');
+    if (serviceFee) {
+        serviceFee.addEventListener('input', function(e) {
+            document.getElementById('service-fee-value').textContent = e.target.value + '%';
+        });
+    }
+
+    const cxaFee = document.getElementById('cxa-fee');
+    if (cxaFee) {
+        cxaFee.addEventListener('input', function(e) {
+            document.getElementById('cxa-fee-value').textContent = e.target.value + '%';
+        });
+    }
+
+    const cacBonus = document.getElementById('cac-bonus');
+    if (cacBonus) {
+        cacBonus.addEventListener('input', function(e) {
+            document.getElementById('cac-bonus-value').textContent = '$' + parseInt(e.target.value).toLocaleString();
+        });
+    }
+
+    const insuranceAmount = document.getElementById('insurance-amount');
+    if (insuranceAmount) {
+        insuranceAmount.addEventListener('input', function(e) {
+            document.getElementById('insurance-amount-value').textContent = '$' + parseInt(e.target.value).toLocaleString();
+        });
+    }
+
+    const interestRate = document.getElementById('interest-rate');
+    if (interestRate) {
+        interestRate.addEventListener('input', function(e) {
+            document.getElementById('interest-rate-value').textContent = e.target.value + '%';
+        });
+    }
+});
+
+function toggleKavakTotal() {
+    const toggle = document.getElementById('kavak-total-toggle');
+    toggle.classList.toggle('active');
+}
+
+function switchTab(event, tab) {
+    // Update tab buttons
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    if (event && event.target) {
+        event.target.classList.add('active');
+    }
+    
+    // Update content
+    document.querySelectorAll('.tab-content').forEach(c => {
+        if (c) c.style.display = 'none';
+    });
+    
+    const targetTab = document.getElementById(tab + '-tab');
+    if (targetTab) {
+        targetTab.style.display = 'block';
+    } else {
+        console.warn('Tab not found:', tab + '-tab');
+    }
+}
+
+let selectedOffer = null;
+
+function generateWithGlobalConfig() {
+    console.log('generateWithGlobalConfig called for customer:', customerId);
+    
+    // Show loading state
+    const container = document.getElementById('offers-container');
+    if (!container) {
+        console.error('offers-container not found!');
+        return;
+    }
+    
+    // Set inline styles to ensure visibility
+    container.style.display = 'block';
+    container.style.visibility = 'visible';
+    container.style.opacity = '1';
+    container.style.minHeight = '200px';
+    
+    container.innerHTML = `
+        <div style="text-align: center; padding: 40px; background: #f0f0f0; border-radius: 10px;">
+            <i class="fas fa-spinner fa-spin" style="font-size: 3rem; color: #1451EC;"></i>
+            <p style="margin-top: 1rem; font-size: 1.2rem;">Generating offers with global configuration...</p>
+        </div>
+    `;
+    
+    // Call basic API (uses standard fees)
+    fetch('/api/generate-offers-basic', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            customer_id: customerId,
+            max_offers: 50
+        })
+    })
+    .then(res => {
+        if (!res.ok) {
+            throw new Error(`HTTP error! status: ${res.status}`);
+        }
+        return res.json();
+    })
+    .then(data => {
+        console.log('Offers received:', data);
+        
+        // Simple display for testing
+        const container = document.getElementById('offers-container');
+        if (container && data.offers) {
+            let html = `<div style="padding: 20px; background: #e8f5e9; border-radius: 10px;">`;
+            html += `<h3>✅ Offers Generated Successfully!</h3>`;
+            html += `<p>Total offers: ${data.total_offers}</p>`;
+            html += `<p>Processing time: ${data.processing_time}s</p>`;
+            html += `<ul>`;
+            
+            Object.entries(data.offers).forEach(([tier, offers]) => {
+                html += `<li><strong>${tier}:</strong> ${offers.length} offers</li>`;
+            });
+            
+            html += `</ul>`;
+            html += `<hr style="margin: 20px 0;">`;
+            html += `<p><strong>Now calling displayOffers function...</strong></p>`;
+            html += `</div>`;
+            
+            container.innerHTML = html;
+            
+            // Try the full display after a delay
+            setTimeout(() => {
+                try {
+                    displayOffers(data, 'global');
+                } catch (e) {
+                    console.error('Error in displayOffers:', e);
+                    container.innerHTML += `<div style="color: red; margin-top: 20px;">Error in displayOffers: ${e.message}</div>`;
+                }
+            }, 1000);
+        }
+    })
+    .catch(err => {
+        console.error('Error:', err);
+        const container = document.getElementById('offers-container');
+        if (container) {
+            container.innerHTML = `
+                <div style="color: red; text-align: center; padding: 2rem; background: #ffe0e0; border-radius: 10px;">
+                    <i class="fas fa-exclamation-circle" style="font-size: 2rem;"></i>
+                    <p style="margin-top: 1rem;">Failed to generate offers: ${err.message}</p>
+                </div>
+            `;
+        }
+    });
+}
+
+function generateCustomOffers() {
+    console.log('generateCustomOffers called for customer:', customerId);
+    
+    const container = document.getElementById('offers-container');
+    if (!container) {
+        console.error('offers-container not found!');
+        return;
+    }
+    
+    const config = {
+        customer_id: customerId,
+        service_fee_pct: parseFloat(document.getElementById('service-fee').value) / 100,
+        cxa_pct: parseFloat(document.getElementById('cxa-fee').value) / 100,
+        cac_bonus: parseInt(document.getElementById('cac-bonus').value),
+        insurance_amount: parseInt(document.getElementById('insurance-amount').value),
+        interest_rate: parseFloat(document.getElementById('interest-rate').value) / 100,
+        kavak_total_enabled: document.getElementById('kavak-total-toggle').classList.contains('active')
+    };
+    
+    console.log('Custom config:', config);
+    
+    // Show loading state
+    container.innerHTML = `
+        <div class="loading-offers">
+            <i class="fas fa-spinner fa-spin" style="font-size: 2rem; color: var(--kavak-blue);"></i>
+            <p style="margin-top: 1rem;">Generating offers with custom configuration...</p>
+        </div>
+    `;
+    
+    // Call API with custom config
+    fetch('/api/generate-offers-custom', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(config)
+    })
+    .then(res => {
+        if (!res.ok) {
+            throw new Error(`HTTP error! status: ${res.status}`);
+        }
+        return res.json();
+    })
+    .then(data => {
+        console.log('Custom offers received:', data);
+        displayOffers(data, 'custom');
+    })
+    .catch(err => {
+        console.error('Error:', err);
+        const container = document.getElementById('offers-container');
+        if (container) {
+            container.innerHTML = `
+                <div style="color: var(--error); text-align: center; padding: 2rem;">
+                    <i class="fas fa-exclamation-circle"></i> Failed to generate offers: ${err.message}
+                </div>
+            `;
+        }
+    });
+}
+
+function displayOffers(data, mode) {
+    const container = document.getElementById('offers-container');
+    
+    if (!data.offers) {
+        container.innerHTML = '<div class="no-offers-message">No offers found</div>';
+        return;
+    }
+    
+    // Build the offers display
+    let html = `
+        <div class="subsidy-info">
+            <strong>Results:</strong> 
+            ${data.total_offers} viable offers from ${data.cars_tested} cars tested in ${data.processing_time}s
+            <br>
+            <strong>Breakdown:</strong>
+            Refresh: ${data.offers.Refresh?.length || 0}, 
+            Upgrade: ${data.offers.Upgrade?.length || 0}, 
+            Max Upgrade: ${data.offers['Max Upgrade']?.length || 0}
+            ${data.fees_used ? `<br><strong>Fees:</strong> Service ${(data.fees_used.service_fee_pct * 100).toFixed(1)}%, CXA ${(data.fees_used.cxa_pct * 100).toFixed(1)}%, CAC $${data.fees_used.cac_bonus}` : ''}
+        </div>
+    `;
+    
+    // Display offers by tier
+    ['Refresh', 'Upgrade', 'Max Upgrade'].forEach(tier => {
+        const tierOffers = data.offers[tier] || [];
+        if (tierOffers.length === 0) return;
+        
+        html += `
+            <h3 style="margin-top: 2.5rem; margin-bottom: 1.5rem; font-size: 1.5rem;">
+                ${tier} 
+                <span style="font-size: 1rem; color: var(--gray-600); font-weight: normal;">
+                    (${tierOffers.length} offers)
+                </span>
+            </h3>
+            <div class="offer-grid">
+        `;
+        
+        const tierClass = tier.toLowerCase().replace(' ', '-');
+        
+        tierOffers.slice(0, 20).forEach(offer => {
+            const paymentChange = offer.payment_delta * 100;
+            const changeColor = paymentChange > 0 ? 'var(--error)' : 'var(--success)';
+            
+            html += `
+                <div class="offer-card" onclick="showOfferDetails(${JSON.stringify(offer).replace(/"/g, '&quot;')})">
+                    <span class="offer-tier-badge tier-${tierClass}">${tier}</span>
+                    <h4 style="margin: 0 0 0.5rem 0; padding-right: 4rem;">${offer.car_model}</h4>
+                    <p style="font-size: 0.875rem; color: var(--gray-600); margin-bottom: 1rem;">
+                        $${offer.new_car_price.toLocaleString()} • ${offer.term} months
+                    </p>
+                    
+                    <div style="display: grid; gap: 1rem;">
+                        <!-- Monthly Payment -->
+                        <div style="background: var(--gray-50); padding: 1rem; border-radius: var(--radius);">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <div>
+                                    <div style="font-size: 0.75rem; color: var(--gray-500);">Monthly Payment</div>
+                                    <div style="font-size: 1.5rem; font-weight: 700;">$${Math.round(offer.monthly_payment).toLocaleString()}</div>
+                                </div>
+                                <div style="text-align: right;">
+                                    <div style="font-size: 0.75rem; color: var(--gray-500);">vs current</div>
+                                    <div style="font-size: 1.125rem; font-weight: 600; color: ${changeColor};">
+                                        ${paymentChange > 0 ? '+' : ''}${paymentChange.toFixed(1)}%
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Financial Details -->
+                        <div style="font-size: 0.875rem;">
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                                <span style="color: var(--gray-600);">Down Payment</span>
+                                <strong>$${Math.round(offer.effective_equity).toLocaleString()}</strong>
+                            </div>
+                            <div style="display: flex; justify-content: space-between;">
+                                <span style="color: var(--gray-600);">NPV to Kavak</span>
+                                <strong style="color: var(--success);">$${Math.round(offer.npv).toLocaleString()}</strong>
+                            </div>
+                        </div>
+                        
+                        <!-- Add amortization button -->
+                        <button class="btn btn-secondary" onclick="event.stopPropagation(); showAmortization(${JSON.stringify(offer).replace(/"/g, '&quot;')})" style="width: 100%; margin-top: 0.75rem;">
+                            <i class="fas fa-table"></i> View Amortization
+                        </button>
+                    </div>
+                </div>
+            `;
+        });
+        
+        html += `</div>`;
+        
+        if (tierOffers.length > 20) {
+            html += `
+                <div style="text-align: center; margin-top: 1rem;">
+                    <p style="color: var(--gray-600);">Showing 20 of ${tierOffers.length} ${tier} offers</p>
+                </div>
+            `;
+        }
+    });
+    
+    container.innerHTML = html;
+}
+
+async function showAmortization(offer) {
+    // Lazy-create modal container the first time
+    let modal = document.getElementById('amortization-modal');
+    if (!modal) {
+        const modalHtml = `
+        <div id="amortization-modal" class="modal-backdrop" style="display:none" onclick="closeModal(event)">
+            <div class="modal" onclick="event.stopPropagation()" style="max-width:860px;">
+                <div class="modal-header">
+                    <h3>Amortization Schedule</h3>
+                    <button class="btn btn-ghost" onclick="closeModal()"><i class="fas fa-times"></i></button>
+                </div>
+                <div class="modal-body" id="amortization-content" style="max-height:70vh; overflow-y:auto;"></div>
+            </div>
+        </div>`;
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        modal = document.getElementById('amortization-modal');
+    }
+
+    // Show loading placeholder
+    document.getElementById('amortization-content').innerHTML = '<p style="padding:2rem; text-align:center;"><i class="fas fa-spinner fa-spin"></i> Loading schedule...</p>';
+    modal.style.display = 'flex';
+
+    try {
+        const res = await fetch('/api/amortization-table', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(offer)
+        });
+        const data = await res.json();
+
+        // Build table rows with Spanish columns
+        const rows = data.table.map(r => `
+            <tr>
+                <td style="padding:0.5rem">${r.cuota}</td>
+                <td style="padding:0.5rem; text-align:right;">$${r.saldo_insoluto.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                <td style="padding:0.5rem; text-align:right;">$${r.capital.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                <td style="padding:0.5rem; text-align:right;">$${r.interes.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                <td style="padding:0.5rem; text-align:right;">$${r.cargos.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                <td style="padding:0.5rem; text-align:right;">$${r.iva.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                <td style="padding:0.5rem; text-align:right;">$${r.exigible.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+            </tr>`).join('');
+
+        document.getElementById('amortization-content').innerHTML = `
+          <div style="margin-bottom:1rem; font-size:0.9rem; color:var(--gray-600);">
+              Monto del préstamo: $${offer.loan_amount.toLocaleString()} | Plazo: ${offer.term} meses | Pago mensual: $${Math.round(offer.monthly_payment).toLocaleString()}
+          </div>
+          <table style="width:100%; border-collapse:collapse;">
+              <thead style="background:var(--gray-50);">
+                  <tr>
+                      <th style="padding:0.5rem">Cuota</th>
+                      <th style="padding:0.5rem">Saldo Insoluto</th>
+                      <th style="padding:0.5rem">Capital</th>
+                      <th style="padding:0.5rem">Interés</th>
+                      <th style="padding:0.5rem">Cargos</th>
+                      <th style="padding:0.5rem">IVA</th>
+                      <th style="padding:0.5rem">Exigible</th>
+                  </tr>
+              </thead>
+              <tbody>${rows}</tbody>
+          </table>`;
+    } catch (err) {
+        console.error(err);
+        document.getElementById('amortization-content').innerHTML = '<p style="color:red; padding:2rem;">Failed to load schedule.</p>';
+    }
+}
+
+function showOfferDetails(offer) {
+    selectedOffer = offer;
+    const modal = document.getElementById('offer-modal');
+    const content = document.getElementById('modal-content');
+    
+    // Extract all fee details from the offer
+    const serviceFeeAmount = offer.service_fee_amount || (offer.new_car_price * 0.04);
+    const cxaAmount = offer.cxa_amount || (offer.new_car_price * 0.04);
+    const cacBonus = offer.cac_bonus !== undefined ? offer.cac_bonus : 0;
+    const kavakTotal = offer.kavak_total_amount !== undefined ? offer.kavak_total_amount : 25000;
+    const insuranceAmount = offer.insurance_amount || 10999;
+    const gpsInstallFee = offer.gps_install_fee || (750 * 1.16);
+    const gpsMonthlyFee = offer.gps_monthly_fee || (350 * 1.16);
+    
+    content.innerHTML = `
+        <div style="display: grid; gap: 1.5rem;">
+            <div>
+                <h4>${offer.car_model}</h4>
+                <p style="color: var(--gray-600);">Stock ID: ${offer.car_id}</p>
+            </div>
+            
+            <div style="background: var(--gray-50); padding: 1rem; border-radius: var(--radius);">
+                <h5 style="margin-bottom: 1rem;">Payment Comparison</h5>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                    <div>
+                        <div style="font-size: 0.75rem; color: var(--gray-500);">Current Payment</div>
+                        <div style="font-size: 1.5rem; font-weight: 700;">$${Math.round({{ customer.current_monthly_payment }}).toLocaleString()}</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 0.75rem; color: var(--gray-500);">New Payment</div>
+                        <div style="font-size: 1.5rem; font-weight: 700; color: var(--kavak-blue);">$${Math.round(offer.monthly_payment).toLocaleString()}</div>
+                        <div style="font-size: 0.75rem; color: var(--gray-500); margin-top: 0.25rem;">
+                            ${((offer.monthly_payment / currentPayment - 1) * 100).toFixed(1)}% ${offer.monthly_payment > currentPayment ? 'increase' : 'decrease'}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div>
+                <h5>Vehicle & Loan Details</h5>
+                <div class="offer-details-grid">
+                    <div class="offer-detail-item">
+                        <span class="offer-detail-label">Car Price</span>
+                        <span class="offer-detail-value">$${Math.round(offer.new_car_price).toLocaleString()}</span>
+                    </div>
+                    <div class="offer-detail-item">
+                        <span class="offer-detail-label">Term</span>
+                        <span class="offer-detail-value">${offer.term} months</span>
+                    </div>
+                    <div class="offer-detail-item">
+                        <span class="offer-detail-label">Interest Rate</span>
+                        <span class="offer-detail-value">${(offer.interest_rate * 100).toFixed(1)}% (${(offer.interest_rate * 100 * 1.16).toFixed(1)}% with IVA)</span>
+                    </div>
+                    <div class="offer-detail-item">
+                        <span class="offer-detail-label">Total Loan Amount</span>
+                        <span class="offer-detail-value">$${Math.round(offer.loan_amount).toLocaleString()}</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div style="background: var(--info-light); padding: 1rem; border-radius: var(--radius);">
+                <h5 style="margin-bottom: 1rem;">Equity Breakdown</h5>
+                <div style="font-size: 0.875rem; space-y: 0.5rem;">
+                    <div style="display: flex; justify-content: space-between; padding: 0.25rem 0;">
+                        <span>Vehicle Equity:</span>
+                        <strong>+$${Math.round(vehicleEquity).toLocaleString()}</strong>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; padding: 0.25rem 0; color: var(--error);">
+                        <span>CXA Fee (${(cxaAmount / offer.new_car_price * 100).toFixed(1)}%):</span>
+                        <strong>-$${Math.round(cxaAmount).toLocaleString()}</strong>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; padding: 0.25rem 0; color: var(--error);">
+                        <span>GPS Installation (inc. IVA):</span>
+                        <strong>-$${Math.round(gpsInstallFee).toLocaleString()}</strong>
+                    </div>
+                    ${cacBonus > 0 ? `
+                    <div style="display: flex; justify-content: space-between; padding: 0.25rem 0; color: var(--success);">
+                        <span>CAC Bonus:</span>
+                        <strong>+$${Math.round(cacBonus).toLocaleString()}</strong>
+                    </div>` : ''}
+                    <div style="border-top: 1px solid var(--gray-300); margin: 0.5rem 0;"></div>
+                    <div style="display: flex; justify-content: space-between; padding: 0.25rem 0; font-weight: 600;">
+                        <span>Effective Equity (Down Payment):</span>
+                        <strong>$${Math.round(offer.effective_equity).toLocaleString()}</strong>
+                    </div>
+                </div>
+            </div>
+            
+            <div style="background: var(--warning-light); padding: 1rem; border-radius: var(--radius);">
+                <h5 style="margin-bottom: 1rem;">Fees & Services</h5>
+                <div style="font-size: 0.875rem; space-y: 0.5rem;">
+                    <div style="display: flex; justify-content: space-between; padding: 0.25rem 0;">
+                        <span>Service Fee (${(serviceFeeAmount / offer.new_car_price * 100).toFixed(1)}%):</span>
+                        <strong>$${Math.round(serviceFeeAmount).toLocaleString()} (financed)</strong>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; padding: 0.25rem 0;">
+                        <span>Kavak Total:</span>
+                        <strong>$${Math.round(kavakTotal).toLocaleString()} (financed)</strong>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; padding: 0.25rem 0;">
+                        <span>Insurance (annual):</span>
+                        <strong>$${Math.round(insuranceAmount).toLocaleString()}</strong>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; padding: 0.25rem 0;">
+                        <span>GPS Monthly (inc. IVA):</span>
+                        <strong>$${Math.round(gpsMonthlyFee).toLocaleString()}</strong>
+                    </div>
+                    <div style="border-top: 1px solid var(--gray-300); margin: 0.5rem 0;"></div>
+                    <div style="display: flex; justify-content: space-between; padding: 0.25rem 0; font-weight: 600; color: var(--success);">
+                        <span>NPV to Kavak:</span>
+                        <strong>$${Math.round(offer.npv).toLocaleString()}</strong>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    modal.style.display = 'flex';
+}
+
+function viewCalculator() {
+    if (selectedOffer) {
+        // Calculator route removed - show offer details instead
+        alert(`Selected: ${selectedOffer.car_model}\\nMonthly Payment: $${Math.round(selectedOffer.monthly_payment)}\\nNPV: $${Math.round(selectedOffer.npv)}`);
+    }
+}
+
+function closeModal(event) {
+    if (!event || event.target.classList.contains('modal-backdrop')) {
+        const offerModal = document.getElementById('offer-modal');
+        const amortizationModal = document.getElementById('amortization-modal');
+        
+        if (offerModal) offerModal.style.display = 'none';
+        if (amortizationModal) amortizationModal.style.display = 'none';
+        
+        selectedOffer = null;
+    }
+}
+
+function resetConfig() {
+    document.getElementById('service-fee').value = 4;
+    document.getElementById('cxa-fee').value = 4;
+    document.getElementById('cac-bonus').value = 0;
+    document.getElementById('insurance-amount').value = 10999;
+    document.getElementById('interest-rate').value = 18;
+    document.getElementById('kavak-total-toggle').classList.add('active');
+    
+    // Update displays
+    document.getElementById('service-fee-value').textContent = '4.0%';
+    document.getElementById('cxa-fee-value').textContent = '4.0%';
+    document.getElementById('cac-bonus-value').textContent = '$0';
+    document.getElementById('insurance-amount-value').textContent = '$10,999';
+    document.getElementById('interest-rate-value').textContent = '18.0%';
+}
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('Page loaded, initializing...');
+    
+    // Ensure basic tab is visible
+    const basicTab = document.getElementById('basic-tab');
+    if (basicTab) {
+        basicTab.style.display = 'block';
+        console.log('Basic tab made visible');
+    }
+    
+    // Ensure offers container exists
+    const container = document.getElementById('offers-container');
+    if (container) {
+        console.log('Offers container found');
+    } else {
+        console.error('Offers container NOT found!');
+    }
+    
+    // Mark the basic tab as active
+    const basicTabButton = document.querySelector('.tab.active');
+    if (basicTabButton) {
+        console.log('Active tab button found');
+    }
+});
+</script>
+{% endblock %}

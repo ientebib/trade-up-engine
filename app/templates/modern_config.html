@@ -1,0 +1,724 @@
+{% extends "modern_base.html" %}
+{% block title %}Configuration - Kavak Trade-Up Engine{% endblock %}
+
+{% block extra_css %}
+<style>
+    .main {
+        padding: 2rem 0;
+        min-height: calc(100vh - 4rem);
+        background: var(--gray-50);
+    }
+    
+    .config-section {
+        background: white;
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow);
+        padding: 2rem;
+        margin-bottom: 2rem;
+    }
+    
+    .config-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+        gap: 2rem;
+        margin-top: 1.5rem;
+    }
+    
+    .config-group {
+        background: var(--gray-50);
+        padding: 1.5rem;
+        border-radius: var(--radius);
+        border: 2px solid transparent;
+        transition: all 0.2s;
+    }
+    
+    .config-group:hover {
+        border-color: var(--kavak-blue-200);
+        box-shadow: var(--shadow);
+    }
+    
+    .config-group h4 {
+        color: var(--gray-800);
+        margin-bottom: 1rem;
+        font-size: 1rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    
+    .config-input {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        margin-bottom: 1rem;
+    }
+    
+    .config-input:last-child {
+        margin-bottom: 0;
+    }
+    
+    .config-input label {
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: var(--gray-700);
+    }
+    
+    .config-input input,
+    .config-input select {
+        padding: 0.75rem;
+        border: 2px solid var(--gray-200);
+        border-radius: var(--radius);
+        font-size: 1rem;
+        transition: all 0.2s;
+    }
+    
+    .config-input input:focus,
+    .config-input select:focus {
+        outline: none;
+        border-color: var(--kavak-blue);
+        box-shadow: 0 0 0 3px rgba(20, 81, 236, 0.1);
+    }
+    
+    .config-input .helper {
+        font-size: 0.75rem;
+        color: var(--gray-500);
+    }
+    
+    .range-input {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+    }
+    
+    .range-input input {
+        width: 100%;
+    }
+    
+    /* Responsive adjustments */
+    @media (max-width: 768px) {
+        .config-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+    
+    .save-button {
+        background: var(--kavak-blue);
+        color: white;
+        border: none;
+        padding: 1rem 3rem;
+        font-size: 1.125rem;
+        font-weight: 600;
+        border-radius: var(--radius);
+        cursor: pointer;
+        transition: all 0.2s;
+        margin-top: 2rem;
+    }
+    
+    .save-button:hover {
+        background: #0a2d7a;
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-lg);
+    }
+    
+    .save-button:disabled {
+        background: var(--gray-400);
+        cursor: not-allowed;
+        transform: none;
+    }
+    
+    .toggle-switch {
+        position: relative;
+        width: 60px;
+        height: 34px;
+        display: inline-block;
+    }
+    
+    .toggle-switch input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+    }
+    
+    .toggle-slider {
+        position: absolute;
+        cursor: pointer;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: #ccc;
+        transition: .4s;
+        border-radius: 34px;
+    }
+    
+    .toggle-slider:before {
+        position: absolute;
+        content: "";
+        height: 26px;
+        width: 26px;
+        left: 4px;
+        bottom: 4px;
+        background-color: white;
+        transition: .4s;
+        border-radius: 50%;
+    }
+    
+    input:checked + .toggle-slider {
+        background-color: var(--kavak-blue);
+    }
+    
+    input:checked + .toggle-slider:before {
+        transform: translateX(26px);
+    }
+    
+    .success-message {
+        background: var(--success-light);
+        color: var(--success);
+        padding: 1rem;
+        border-radius: var(--radius);
+        display: none;
+        margin-bottom: 1rem;
+    }
+    
+    .terms-selector {
+        display: flex;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+    
+    .term-checkbox {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 1rem;
+        background: white;
+        border: 2px solid var(--gray-200);
+        border-radius: var(--radius);
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    
+    .term-checkbox:hover {
+        border-color: var(--kavak-blue);
+    }
+    
+    .term-checkbox input[type="checkbox"] {
+        cursor: pointer;
+    }
+    
+    .term-checkbox.checked {
+        background: var(--kavak-blue-50);
+        border-color: var(--kavak-blue);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Data Status Banner -->
+{% include 'data_status_banner.html' %}
+
+<div style="margin-top: 2rem;">
+    <div class="success-message" id="success-message">
+        <i class="fas fa-check-circle"></i> Configuration saved successfully!
+    </div>
+
+    <form id="config-form">
+        <!-- Fee Configuration -->
+        <div class="config-section">
+            <h2 style="margin-bottom: 0.5rem;">
+                <i class="fas fa-percentage" style="color: var(--kavak-blue);"></i> Fee Configuration
+            </h2>
+            <p style="color: var(--gray-600); margin-bottom: 2rem;">
+                Configure the fees and commissions applied to all calculations
+            </p>
+            
+            <div class="config-grid">
+                <div class="config-group">
+                    <h4><i class="fas fa-tools"></i> Service Fee</h4>
+                    <div class="config-input">
+                        <label for="service-fee">Service Fee Percentage</label>
+                        <input type="number" id="service-fee" name="service_fee_pct" 
+                               value="4" min="0" max="10" step="0.1">
+                        <span class="helper">Financed into loan (% of car price)</span>
+                    </div>
+                </div>
+                
+                <div class="config-group">
+                    <h4><i class="fas fa-door-open"></i> Opening Fee (CXA)</h4>
+                    <div class="config-input">
+                        <label for="cxa-fee">Comisión por Apertura</label>
+                        <input type="number" id="cxa-fee" name="cxa_pct" 
+                               value="4" min="0" max="10" step="0.1">
+                        <span class="helper">Deducted from equity (% of car price)</span>
+                    </div>
+                </div>
+                
+                <div class="config-group">
+                    <h4><i class="fas fa-gift"></i> Customer Acquisition Bonus</h4>
+                    <div style="background: white; padding: 1rem; border-radius: var(--radius); margin-bottom: 1rem; font-size: 0.875rem; color: var(--gray-700);">
+                        <strong>How it works:</strong> The CAC bonus is added to the customer's vehicle equity, reducing their loan amount. The engine tries different bonus levels to find profitable deals:
+                        <ul style="margin: 0.5rem 0 0 1rem; padding-left: 1rem;">
+                            <li>First tries with $0 bonus</li>
+                            <li>If needed, tries intermediate amounts</li>
+                            <li>Finally tries the maximum if still no profitable deal</li>
+                        </ul>
+                    </div>
+                    <div class="config-input">
+                        <label for="cac-min">Minimum CAC Bonus</label>
+                        <input type="number" id="cac-min" name="cac_min" 
+                               value="0" min="0" step="500">
+                        <span class="helper">Starting bonus amount (MXN)</span>
+                    </div>
+                    <div class="config-input">
+                        <label for="cac-max">Maximum CAC Bonus</label>
+                        <input type="number" id="cac-max" name="cac_max" 
+                               value="5000" min="0" step="500">
+                        <span class="helper">Maximum bonus allowed (MXN)</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Payment Delta Tiers -->
+        <div class="config-section">
+            <h2 style="margin-bottom: 0.5rem;">
+                <i class="fas fa-layer-group" style="color: var(--kavak-blue);"></i> Payment Delta Tiers
+            </h2>
+            <p style="color: var(--gray-600); margin-bottom: 2rem;">
+                Define how offers are categorized based on payment change
+            </p>
+            
+            <div class="config-grid">
+                <div class="config-group">
+                    <h4 style="color: var(--info);"><i class="fas fa-sync"></i> Refresh Tier</h4>
+                    <div class="range-input">
+                        <div class="config-input">
+                            <label for="refresh-min">Min Delta (%)</label>
+                            <input type="number" id="refresh-min" name="refresh_min" 
+                                   value="-5" step="1">
+                        </div>
+                        <div class="config-input">
+                            <label for="refresh-max">Max Delta (%)</label>
+                            <input type="number" id="refresh-max" name="refresh_max" 
+                                   value="5" step="1">
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="config-group">
+                    <h4 style="color: var(--success);"><i class="fas fa-arrow-up"></i> Upgrade Tier</h4>
+                    <div class="range-input">
+                        <div class="config-input">
+                            <label for="upgrade-min">Min Delta (%)</label>
+                            <input type="number" id="upgrade-min" name="upgrade_min" 
+                                   value="5" step="1">
+                        </div>
+                        <div class="config-input">
+                            <label for="upgrade-max">Max Delta (%)</label>
+                            <input type="number" id="upgrade-max" name="upgrade_max" 
+                                   value="25" step="1">
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="config-group">
+                    <h4 style="color: var(--warning);"><i class="fas fa-rocket"></i> Max Upgrade Tier</h4>
+                    <div class="range-input">
+                        <div class="config-input">
+                            <label for="max-upgrade-min">Min Delta (%)</label>
+                            <input type="number" id="max-upgrade-min" name="max_upgrade_min" 
+                                   value="25" step="1">
+                        </div>
+                        <div class="config-input">
+                            <label for="max-upgrade-max">Max Delta (%)</label>
+                            <input type="number" id="max-upgrade-max" name="max_upgrade_max" 
+                                   value="100" step="1">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Business Rules -->
+        <div class="config-section">
+            <h2 style="margin-bottom: 0.5rem;">
+                <i class="fas fa-sliders-h" style="color: var(--kavak-blue);"></i> Business Rules
+            </h2>
+            <p style="color: var(--gray-600); margin-bottom: 2rem;">
+                Configure engine behavior and constraints
+            </p>
+            
+            <div class="config-grid">
+                <div class="config-group">
+                    <h4><i class="fas fa-chart-line"></i> Profitability</h4>
+                    <div class="config-input">
+                        <label for="min-npv">Minimum NPV Required</label>
+                        <input type="number" id="min-npv" name="min_npv" 
+                               value="5000" min="0" step="500">
+                        <span class="helper">Minimum profit per transaction (MXN)</span>
+                    </div>
+                </div>
+                
+                <div class="config-group">
+                    <h4><i class="fas fa-calendar"></i> Loan Terms</h4>
+                    <div class="config-input">
+                        <label>Available Terms (months)</label>
+                        <div class="terms-selector">
+                            <label class="term-checkbox">
+                                <input type="checkbox" name="terms" value="12"> 12
+                            </label>
+                            <label class="term-checkbox">
+                                <input type="checkbox" name="terms" value="24" checked> 24
+                            </label>
+                            <label class="term-checkbox">
+                                <input type="checkbox" name="terms" value="36" checked> 36
+                            </label>
+                            <label class="term-checkbox">
+                                <input type="checkbox" name="terms" value="48" checked> 48
+                            </label>
+                            <label class="term-checkbox">
+                                <input type="checkbox" name="terms" value="60" checked> 60
+                            </label>
+                            <label class="term-checkbox">
+                                <input type="checkbox" name="terms" value="72" checked> 72
+                            </label>
+                        </div>
+                        <span class="helper">Select which terms to offer customers</span>
+                    </div>
+                </div>
+                
+                <div class="config-group">
+                    <h4><i class="fas fa-shield-alt"></i> Kavak Total</h4>
+                    <div class="config-input">
+                        <label for="kavak-total-toggle">Enable Kavak Total</label>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="kavak-total-toggle" name="kavak_total_enabled" checked>
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="config-input" id="kavak-total-amount-group">
+                        <label for="kavak-total-amount">Kavak Total Amount</label>
+                        <input type="number" id="kavak-total-amount" name="kavak_total_amount" 
+                               value="25000" min="0" step="1000">
+                        <span class="helper">Service package amount (MXN)</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Fixed Values (Read-only) -->
+        <div class="config-section">
+            <h2 style="margin-bottom: 0.5rem;">
+                <i class="fas fa-lock" style="color: var(--gray-600);"></i> Fixed System Values
+            </h2>
+            <p style="color: var(--gray-600); margin-bottom: 2rem;">
+                These values are system constants and cannot be modified
+            </p>
+            
+            <div class="config-grid">
+                <div class="config-group" style="background: var(--gray-100);">
+                    <h4><i class="fas fa-satellite"></i> GPS Fees</h4>
+                    <div class="config-input">
+                        <label>Installation Fee</label>
+                        <input type="text" value="$750 + IVA = $870" disabled style="background: white;">
+                    </div>
+                    <div class="config-input">
+                        <label>Monthly Fee</label>
+                        <input type="text" value="$350 + IVA = $406" disabled style="background: white;">
+                    </div>
+                </div>
+                
+                <div class="config-group" style="background: var(--gray-100);">
+                    <h4><i class="fas fa-shield-alt"></i> Insurance</h4>
+                    <div class="config-input">
+                        <label>Annual Insurance Amount</label>
+                        <input type="text" value="$10,999" disabled style="background: white;">
+                        <span class="helper">Fixed for all customers, financed over 12 months</span>
+                    </div>
+                </div>
+                
+                <div class="config-group" style="background: var(--gray-100);">
+                    <h4><i class="fas fa-percentage"></i> Tax Rate</h4>
+                    <div class="config-input">
+                        <label>IVA Rate</label>
+                        <input type="text" value="16%" disabled style="background: white;">
+                        <span class="helper">Applied to interest rate and GPS fees</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div style="text-align: center;">
+            <button type="submit" class="save-button">
+                <i class="fas fa-save"></i> Save Configuration
+            </button>
+        </div>
+    </form>
+    
+    <!-- Batch Processing Section -->
+    <div class="config-section" style="margin-top: 3rem;">
+        <h2 style="margin-bottom: 0.5rem;">
+            <i class="fas fa-rocket" style="color: var(--kavak-blue);"></i> Batch Processing
+        </h2>
+        <p style="color: var(--gray-600); margin-bottom: 2rem;">
+            Re-calculate offers for all customers with current configuration
+        </p>
+        
+        <div style="background: var(--gray-50); padding: 2rem; border-radius: var(--radius);">
+            <h4 style="margin-bottom: 1rem;">What this does:</h4>
+            <ul style="color: var(--gray-700); margin-bottom: 2rem; line-height: 1.8;">
+                <li>Takes the current configuration settings above</li>
+                <li>Re-calculates offers for ALL customers in the system</li>
+                <li>Shows you the impact of fee/tier changes on profitability</li>
+                <li>Generates a report with before/after comparisons</li>
+            </ul>
+            
+            <div id="batch-progress" style="display: none;">
+                <div style="background: white; padding: 2rem; border-radius: var(--radius); margin-bottom: 1rem;">
+                    <h4 style="margin-bottom: 1rem;">Processing Progress</h4>
+                    <div style="background: var(--gray-200); height: 20px; border-radius: 10px; overflow: hidden; margin-bottom: 1rem;">
+                        <div id="progress-bar" style="background: var(--kavak-blue); height: 100%; width: 0%; transition: width 0.3s ease;"></div>
+                    </div>
+                    <div id="progress-text" style="text-align: center; color: var(--gray-600); font-size: 0.875rem;">
+                        Initializing...
+                    </div>
+                </div>
+                
+                <div id="progress-details" style="background: white; padding: 1.5rem; border-radius: var(--radius);">
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; text-align: center;">
+                        <div>
+                            <div style="font-size: 2rem; font-weight: bold; color: var(--kavak-blue);" id="customers-processed">0</div>
+                            <div style="color: var(--gray-600); font-size: 0.875rem;">Customers Processed</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 2rem; font-weight: bold; color: var(--success);" id="offers-generated">0</div>
+                            <div style="color: var(--gray-600); font-size: 0.875rem;">Offers Generated</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 2rem; font-weight: bold; color: var(--warning);" id="avg-npv">$0</div>
+                            <div style="color: var(--gray-600); font-size: 0.875rem;">Average NPV</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 2rem; font-weight: bold; color: var(--info);" id="time-elapsed">0s</div>
+                            <div style="color: var(--gray-600); font-size: 0.875rem;">Time Elapsed</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <button id="run-batch" class="save-button" style="margin: 0 auto; display: block;">
+                <i class="fas fa-play"></i> Run Batch Processing
+            </button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Toggle Kavak Total amount field
+document.getElementById('kavak-total-toggle').addEventListener('change', function() {
+    const amountGroup = document.getElementById('kavak-total-amount-group');
+    amountGroup.style.opacity = this.checked ? '1' : '0.5';
+    document.getElementById('kavak-total-amount').disabled = !this.checked;
+});
+
+// Update term checkbox styling
+document.querySelectorAll('input[name="terms"]').forEach(checkbox => {
+    checkbox.addEventListener('change', function() {
+        this.parentElement.classList.toggle('checked', this.checked);
+    });
+    // Set initial state
+    checkbox.parentElement.classList.toggle('checked', checkbox.checked);
+});
+
+// Handle form submission
+document.getElementById('config-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const formData = new FormData(this);
+    const config = {
+        fees: {
+            service_fee_pct: parseFloat(formData.get('service_fee_pct')) / 100,
+            cxa_pct: parseFloat(formData.get('cxa_pct')) / 100,
+            cac_min: parseFloat(formData.get('cac_min')),
+            cac_max: parseFloat(formData.get('cac_max'))
+        },
+        payment_delta_tiers: {
+            refresh: {
+                min: parseFloat(formData.get('refresh_min')) / 100,
+                max: parseFloat(formData.get('refresh_max')) / 100
+            },
+            upgrade: {
+                min: parseFloat(formData.get('upgrade_min')) / 100,
+                max: parseFloat(formData.get('upgrade_max')) / 100
+            },
+            max_upgrade: {
+                min: parseFloat(formData.get('max_upgrade_min')) / 100,
+                max: parseFloat(formData.get('max_upgrade_max')) / 100
+            }
+        },
+        business_rules: {
+            min_npv: parseFloat(formData.get('min_npv')),
+            available_terms: Array.from(formData.getAll('terms')).map(t => parseInt(t)),
+            kavak_total_enabled: formData.get('kavak_total_enabled') === 'on',
+            kavak_total_amount: parseFloat(formData.get('kavak_total_amount'))
+        }
+    };
+    
+    try {
+        const response = await fetch('/api/save-config', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(config)
+        });
+        
+        if (response.ok) {
+            document.getElementById('success-message').style.display = 'block';
+            setTimeout(() => {
+                document.getElementById('success-message').style.display = 'none';
+            }, 3000);
+        } else {
+            alert('Error saving configuration. Please try again.');
+        }
+    } catch (error) {
+        alert('Error saving configuration: ' + error.message);
+    }
+});
+
+// Load current config on page load
+async function loadConfig() {
+    try {
+        const response = await fetch('/api/config');
+        if (response.ok) {
+            const config = await response.json();
+            // Populate form with current values
+            if (config.fees) {
+                document.getElementById('service-fee').value = (config.fees.service_fee_pct * 100).toFixed(1);
+                document.getElementById('cxa-fee').value = (config.fees.cxa_pct * 100).toFixed(1);
+                document.getElementById('cac-min').value = config.fees.cac_min || 0;
+                document.getElementById('cac-max').value = config.fees.cac_max || 5000;
+            }
+            // ... populate other fields
+        }
+    } catch (error) {
+        console.error('Error loading config:', error);
+    }
+}
+
+// Load config when page loads
+document.addEventListener('DOMContentLoaded', loadConfig);
+
+// Batch Processing
+document.getElementById('run-batch').addEventListener('click', async function() {
+    const button = this;
+    const progressDiv = document.getElementById('batch-progress');
+    const progressBar = document.getElementById('progress-bar');
+    const progressText = document.getElementById('progress-text');
+    
+    // UI elements for stats
+    const customersProcessed = document.getElementById('customers-processed');
+    const offersGenerated = document.getElementById('offers-generated');
+    const avgNpv = document.getElementById('avg-npv');
+    const timeElapsed = document.getElementById('time-elapsed');
+    
+    // Disable button and show progress
+    button.disabled = true;
+    button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+    progressDiv.style.display = 'block';
+    
+    const startTime = Date.now();
+    let stats = {
+        processed: 0,
+        offers: 0,
+        totalNpv: 0,
+        errors: 0
+    };
+    
+    try {
+        // First, get all customers
+        progressText.textContent = 'Loading customer data...';
+        const customersResponse = await fetch('/api/customers?limit=1000');
+        const customersData = await customersResponse.json();
+        const totalCustomers = customersData.total;
+        
+        progressText.textContent = `Processing ${totalCustomers} customers...`;
+        
+        // Process in batches of 10
+        const batchSize = 10;
+        const batches = Math.ceil(totalCustomers / batchSize);
+        
+        for (let i = 0; i < batches; i++) {
+            const batchStart = i * batchSize;
+            const batchEnd = Math.min((i + 1) * batchSize, totalCustomers);
+            const customerBatch = customersData.customers.slice(batchStart, batchEnd);
+            
+            // Process batch
+            const batchPromises = customerBatch.map(async (customer) => {
+                try {
+                    const response = await fetch('/api/generate-offers-basic', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ customer_id: customer.customer_id })
+                    });
+                    
+                    if (response.ok) {
+                        const result = await response.json();
+                        stats.offers += result.total_offers || 0;
+                        
+                        // Calculate average NPV from offers
+                        if (result.offers) {
+                            Object.values(result.offers).forEach(tierOffers => {
+                                tierOffers.forEach(offer => {
+                                    if (offer.npv) stats.totalNpv += offer.npv;
+                                });
+                            });
+                        }
+                    }
+                } catch (error) {
+                    stats.errors++;
+                }
+                
+                stats.processed++;
+                
+                // Update UI
+                const progress = (stats.processed / totalCustomers) * 100;
+                progressBar.style.width = progress + '%';
+                customersProcessed.textContent = stats.processed;
+                offersGenerated.textContent = stats.offers.toLocaleString();
+                
+                const avgNpvValue = stats.offers > 0 ? Math.round(stats.totalNpv / stats.offers) : 0;
+                avgNpv.textContent = '$' + avgNpvValue.toLocaleString();
+                
+                const elapsed = Math.round((Date.now() - startTime) / 1000);
+                timeElapsed.textContent = elapsed + 's';
+            });
+            
+            await Promise.all(batchPromises);
+            
+            // Small delay between batches to not overwhelm the server
+            if (i < batches - 1) {
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
+        }
+        
+        progressText.textContent = `✅ Completed! Processed ${stats.processed} customers, generated ${stats.offers} offers`;
+        
+        // Show summary
+        if (stats.errors > 0) {
+            progressText.textContent += ` (${stats.errors} errors)`;
+        }
+        
+    } catch (error) {
+        progressText.textContent = '❌ Error: ' + error.message;
+        console.error('Batch processing error:', error);
+    } finally {
+        // Re-enable button
+        button.disabled = false;
+        button.innerHTML = '<i class="fas fa-play"></i> Run Batch Processing';
+    }
+});
+</script>
+{% endblock %}

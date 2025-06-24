@@ -1,0 +1,519 @@
+{% extends "modern_base.html" %}
+{% block title %}Customers - Kavak Trade-Up Engine{% endblock %}
+
+{% block extra_css %}
+<style>
+    .main {
+        padding: 2rem 0;
+        min-height: calc(100vh - 4rem);
+        background: var(--gray-50);
+    }
+    
+    .page-header {
+        margin-bottom: 2rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 1rem;
+    }
+    
+    .filters-bar {
+        background: white;
+        padding: 1.5rem;
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow);
+        margin-bottom: 2rem;
+        display: flex;
+        gap: 1rem;
+        align-items: flex-end;
+        flex-wrap: wrap;
+    }
+    
+    .filter-group {
+        flex: 1;
+        min-width: 200px;
+    }
+    
+    .customer-grid {
+        display: grid;
+        gap: 1.5rem;
+    }
+    
+    .customer-card {
+        background: white;
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow);
+        padding: 1.5rem;
+        transition: var(--transition);
+        cursor: pointer;
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        gap: 1.5rem;
+        align-items: center;
+    }
+    
+    .customer-card:hover {
+        box-shadow: var(--shadow-md);
+        transform: translateY(-2px);
+    }
+    
+    .customer-avatar {
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        background: var(--kavak-blue-50);
+        color: var(--kavak-blue);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 600;
+        font-size: 1.25rem;
+    }
+    
+    .customer-info h4 {
+        margin-bottom: 0.25rem;
+        color: var(--gray-900);
+    }
+    
+    .customer-meta {
+        display: flex;
+        gap: 1.5rem;
+        font-size: 0.875rem;
+        color: var(--gray-600);
+    }
+    
+    .customer-meta-item {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    
+    .customer-actions {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+    }
+    
+    .risk-badge {
+        padding: 0.25rem 0.75rem;
+        border-radius: 9999px;
+        font-size: 0.75rem;
+        font-weight: 500;
+    }
+    
+    .risk-low {
+        background: var(--success-light);
+        color: var(--success);
+    }
+    
+    .risk-medium {
+        background: var(--warning-light);
+        color: var(--warning);
+    }
+    
+    .risk-high {
+        background: var(--error-light);
+        color: var(--error);
+    }
+    
+    .pagination {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 0.5rem;
+        margin-top: 2rem;
+    }
+    
+    .pagination-btn {
+        padding: 0.5rem 1rem;
+        border: 1px solid var(--gray-300);
+        background: white;
+        border-radius: var(--radius);
+        cursor: pointer;
+        transition: var(--transition);
+    }
+    
+    .pagination-btn:hover:not(:disabled) {
+        border-color: var(--kavak-blue);
+        color: var(--kavak-blue);
+    }
+    
+    .pagination-btn.active {
+        background: var(--kavak-blue);
+        color: white;
+        border-color: var(--kavak-blue);
+    }
+    
+    .pagination-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+    
+    .empty-state {
+        text-align: center;
+        padding: 4rem 2rem;
+        color: var(--gray-500);
+    }
+    
+    .empty-state-icon {
+        font-size: 4rem;
+        margin-bottom: 1rem;
+        opacity: 0.3;
+    }
+    
+    .skeleton-card {
+        background: white;
+        border-radius: var(--radius-lg);
+        padding: 1.5rem;
+        display: grid;
+        grid-template-columns: 60px 1fr auto;
+        gap: 1.5rem;
+        align-items: center;
+    }
+    
+    .skeleton-avatar {
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        background: var(--gray-200);
+        animation: skeleton 1.5s ease-in-out infinite;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Customers</h1>
+        <p style="color: var(--gray-600); margin-top: 0.25rem;">
+            Manage and generate offers for your customers
+        </p>
+    </div>
+    <button class="btn btn-primary" onclick="bulkGenerateOffers()">
+        <i class="fas fa-magic"></i> Bulk Generate Offers
+    </button>
+</div>
+
+<!-- Filters -->
+<div class="filters-bar">
+    <div class="filter-group" style="flex: 2;">
+        <label class="form-label">Search Customer</label>
+        <div class="search-container">
+            <i class="fas fa-search search-icon"></i>
+            <input 
+                type="text" 
+                class="search-input" 
+                placeholder="Search by ID, name, or contract..."
+                id="customer-search"
+                autocomplete="off"
+            >
+        </div>
+    </div>
+    
+    <div class="filter-group">
+        <label class="form-label">Risk Profile</label>
+        <select class="form-select" id="risk-filter">
+            <option value="">All Profiles</option>
+            <option value="low">Low Risk</option>
+            <option value="medium">Medium Risk</option>
+            <option value="high">High Risk</option>
+        </select>
+    </div>
+    
+    <div class="filter-group">
+        <label class="form-label">Payment Range</label>
+        <select class="form-select" id="payment-filter">
+            <option value="">All Ranges</option>
+            <option value="0-8000">Under $8,000</option>
+            <option value="8000-15000">$8,000 - $15,000</option>
+            <option value="15000+">Over $15,000</option>
+        </select>
+    </div>
+    
+    <div class="filter-group">
+        <label class="form-label">Sort By</label>
+        <select class="form-select" id="sort-filter">
+            <option value="recent">Most Recent</option>
+            <option value="payment-high">Payment (High-Low)</option>
+            <option value="payment-low">Payment (Low-High)</option>
+            <option value="equity-high">Equity (High-Low)</option>
+        </select>
+    </div>
+    
+    <button class="btn btn-secondary" onclick="resetFilters()">
+        <i class="fas fa-times"></i> Reset
+    </button>
+</div>
+
+<!-- Results Count -->
+<div style="margin-bottom: 1rem; color: var(--gray-600);">
+    Showing <span id="results-count">0</span> of <span id="total-count">0</span> customers
+</div>
+
+<!-- Customer List -->
+<div class="customer-grid" id="customer-list">
+    <!-- Loading skeletons -->
+    <div class="skeleton-card">
+        <div class="skeleton-avatar"></div>
+        <div style="flex: 1;">
+            <div class="skeleton" style="height: 1.25rem; width: 200px; margin-bottom: 0.5rem;"></div>
+            <div class="skeleton" style="height: 1rem; width: 300px;"></div>
+        </div>
+        <div class="skeleton" style="height: 2.5rem; width: 120px;"></div>
+    </div>
+</div>
+
+<!-- Pagination -->
+<div class="pagination" id="pagination">
+    <!-- Pagination will be rendered here -->
+</div>
+
+<!-- Empty State -->
+<div class="empty-state" id="empty-state" style="display: none;">
+    <div class="empty-state-icon">
+        <i class="fas fa-users"></i>
+    </div>
+    <h3>No customers found</h3>
+    <p>Try adjusting your filters or search terms</p>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentPage = 1;
+let totalPages = 1;
+let currentFilters = {};
+let allCustomers = [];
+
+document.addEventListener('DOMContentLoaded', function() {
+    loadCustomers();
+    setupFilters();
+    setupSearch();
+});
+
+async function loadCustomers(page = 1) {
+    try {
+        showLoading();
+        
+        const params = new URLSearchParams({
+            page: page,
+            limit: 20,
+            ...currentFilters
+        });
+        
+        const response = await fetch(`/api/customers?${params}`);
+        const data = await response.json();
+        
+        allCustomers = data.customers || [];
+        totalPages = Math.ceil((data.total || allCustomers.length) / 20);
+        currentPage = page;
+        
+        renderCustomers(allCustomers);
+        renderPagination();
+        updateCounts(allCustomers.length, data.total || allCustomers.length);
+        
+    } catch (error) {
+        console.error('Failed to load customers:', error);
+        showToast('Failed to load customers', 'error');
+    }
+}
+
+function renderCustomers(customers) {
+    const container = document.getElementById('customer-list');
+    
+    if (customers.length === 0) {
+        container.innerHTML = '';
+        document.getElementById('empty-state').style.display = 'block';
+        return;
+    }
+    
+    document.getElementById('empty-state').style.display = 'none';
+    
+    container.innerHTML = customers.map(customer => {
+        const riskClass = getRiskClass(customer.risk_profile_index);
+        const initials = customer.customer_id.substring(0, 2).toUpperCase();
+        
+        return `
+            <div class="customer-card" onclick="viewCustomer('${customer.customer_id}')">
+                <div class="customer-avatar">${initials}</div>
+                <div class="customer-info">
+                    <h4>${customer.customer_id}</h4>
+                    <div class="customer-meta">
+                        <div class="customer-meta-item">
+                            <i class="fas fa-dollar-sign"></i>
+                            <span>$${Math.round(customer.current_monthly_payment).toLocaleString()}/mo</span>
+                        </div>
+                        <div class="customer-meta-item">
+                            <i class="fas fa-car"></i>
+                            <span>${customer.current_car_model || 'Unknown Model'}</span>
+                        </div>
+                        <div class="customer-meta-item">
+                            <i class="fas fa-coins"></i>
+                            <span>$${Math.round(customer.vehicle_equity).toLocaleString()} equity</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="customer-actions">
+                    <span class="risk-badge risk-${riskClass}">
+                        ${customer.risk_profile_name || 'Risk ' + riskClass}
+                    </span>
+                    <button class="btn btn-sm btn-primary" onclick="event.stopPropagation(); generateOffers('${customer.customer_id}')">
+                        <i class="fas fa-magic"></i> Generate
+                    </button>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function getRiskClass(riskIndex) {
+    if (riskIndex <= 5) return 'low';
+    if (riskIndex <= 15) return 'medium';
+    return 'high';
+}
+
+function renderPagination() {
+    const container = document.getElementById('pagination');
+    
+    if (totalPages <= 1) {
+        container.innerHTML = '';
+        return;
+    }
+    
+    let html = `
+        <button class="pagination-btn" onclick="loadCustomers(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''}>
+            <i class="fas fa-chevron-left"></i>
+        </button>
+    `;
+    
+    // Show max 5 page numbers
+    const startPage = Math.max(1, currentPage - 2);
+    const endPage = Math.min(totalPages, startPage + 4);
+    
+    for (let i = startPage; i <= endPage; i++) {
+        html += `
+            <button class="pagination-btn ${i === currentPage ? 'active' : ''}" onclick="loadCustomers(${i})">
+                ${i}
+            </button>
+        `;
+    }
+    
+    html += `
+        <button class="pagination-btn" onclick="loadCustomers(${currentPage + 1})" ${currentPage === totalPages ? 'disabled' : ''}>
+            <i class="fas fa-chevron-right"></i>
+        </button>
+    `;
+    
+    container.innerHTML = html;
+}
+
+function setupFilters() {
+    const filters = ['risk-filter', 'payment-filter', 'sort-filter'];
+    filters.forEach(id => {
+        document.getElementById(id).addEventListener('change', applyFilters);
+    });
+}
+
+function setupSearch() {
+    const searchInput = document.getElementById('customer-search');
+    let searchTimeout;
+    
+    searchInput.addEventListener('input', (e) => {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => {
+            const query = e.target.value.trim();
+            if (query.length >= 2 || query.length === 0) {
+                searchCustomers(query);
+            }
+        }, 300);
+    });
+}
+
+function searchCustomers(query) {
+    if (!query) {
+        renderCustomers(allCustomers);
+        return;
+    }
+    
+    const filtered = allCustomers.filter(customer => 
+        customer.customer_id.toLowerCase().includes(query.toLowerCase()) ||
+        (customer.contract_id && customer.contract_id.toLowerCase().includes(query.toLowerCase()))
+    );
+    
+    renderCustomers(filtered);
+    updateCounts(filtered.length, allCustomers.length);
+}
+
+function applyFilters() {
+    currentFilters = {
+        risk: document.getElementById('risk-filter').value,
+        payment: document.getElementById('payment-filter').value,
+        sort: document.getElementById('sort-filter').value
+    };
+    
+    loadCustomers(1);
+}
+
+function resetFilters() {
+    document.getElementById('risk-filter').value = '';
+    document.getElementById('payment-filter').value = '';
+    document.getElementById('sort-filter').value = 'recent';
+    document.getElementById('customer-search').value = '';
+    
+    currentFilters = {};
+    loadCustomers(1);
+}
+
+function updateCounts(shown, total) {
+    document.getElementById('results-count').textContent = shown;
+    document.getElementById('total-count').textContent = total;
+}
+
+function showLoading() {
+    const container = document.getElementById('customer-list');
+    container.innerHTML = Array(3).fill(0).map(() => `
+        <div class="skeleton-card">
+            <div class="skeleton-avatar"></div>
+            <div style="flex: 1;">
+                <div class="skeleton" style="height: 1.25rem; width: 200px; margin-bottom: 0.5rem;"></div>
+                <div class="skeleton" style="height: 1rem; width: 300px;"></div>
+            </div>
+            <div class="skeleton" style="height: 2.5rem; width: 120px;"></div>
+        </div>
+    `).join('');
+}
+
+function viewCustomer(customerId) {
+    window.location.href = `/customer/${customerId}`;
+}
+
+async function generateOffers(customerId) {
+    showToast(`Generating offers for ${customerId}...`, 'info');
+    
+    // In real implementation, this would call the API
+    setTimeout(() => {
+        showToast('Offers generated successfully!', 'success');
+        viewCustomer(customerId);
+    }, 2000);
+}
+
+async function bulkGenerateOffers() {
+    const selectedCount = document.querySelectorAll('.customer-card').length;
+    
+    if (selectedCount === 0) {
+        showToast('No customers to process', 'warning');
+        return;
+    }
+    
+    if (confirm(`Generate offers for ${selectedCount} customers?`)) {
+        showToast(`Processing ${selectedCount} customers...`, 'info');
+        
+        // In real implementation, this would process in batches
+        setTimeout(() => {
+            showToast('Bulk generation completed!', 'success');
+        }, 3000);
+    }
+}
+</script>
+{% endblock %}

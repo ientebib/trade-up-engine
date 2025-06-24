@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Kavak Trade-Up Engine{% endblock %}</title>
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Montserrat:wght@600;700&display=swap" rel="stylesheet">
+    
+    <!-- Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Kavak Modern CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', path='css/modern.css') }}">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="https://www.kavak.com/favicon-32x32.png">
+    
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <div class="header-content">
+                <a href="/" class="logo">
+                    <img src="/static/images/kavak-logo.svg" alt="Kavak" style="height: 36px;">
+                    <span style="font-weight: 600; margin-left: 0.5rem;">Trade-Up Engine</span>
+                </a>
+                
+                <nav class="nav">
+                    <a href="/" class="nav-link {% if active_page == 'dashboard' %}active{% endif %}">
+                        <i class="fas fa-home"></i> Dashboard
+                    </a>
+                    <a href="/customers" class="nav-link {% if active_page == 'customers' %}active{% endif %}">
+                        <i class="fas fa-users"></i> Customers
+                    </a>
+                    <a href="/inventory" class="nav-link {% if active_page == 'inventory' %}active{% endif %}">
+                        <i class="fas fa-car"></i> Inventory
+                    </a>
+                    <a href="/manual-simulation" class="nav-link {% if active_page == 'simulation' %}active{% endif %}">
+                        <i class="fas fa-calculator"></i> Simulate
+                    </a>
+                    <a href="/config" class="nav-link {% if active_page == 'config' %}active{% endif %}">
+                        <i class="fas fa-cog"></i> Config
+                    </a>
+                    <a href="/health" class="nav-link" target="_blank">
+                        <i class="fas fa-heartbeat"></i> Health
+                    </a>
+                </nav>
+            </div>
+        </div>
+    </header>
+    
+    <!-- Main Content -->
+    <main class="main">
+        <div class="container">
+            {% block content %}{% endblock %}
+        </div>
+    </main>
+    
+    <!-- Toast Container -->
+    <div id="toast-container" style="position: fixed; top: 1rem; right: 1rem; z-index: 9999;"></div>
+    
+    <!-- Scripts -->
+    <script>
+        // Global functions for modern UI
+        function showToast(message, type = 'info') {
+            const toast = document.createElement('div');
+            toast.className = `toast toast-${type}`;
+            toast.innerHTML = `
+                <div style="
+                    background: ${type === 'success' ? 'var(--success)' : 
+                                 type === 'error' ? 'var(--error)' : 
+                                 type === 'warning' ? 'var(--warning)' : 
+                                 'var(--info)'};
+                    color: white;
+                    padding: 1rem 1.5rem;
+                    border-radius: 0.5rem;
+                    box-shadow: var(--shadow-lg);
+                    margin-bottom: 0.5rem;
+                    display: flex;
+                    align-items: center;
+                    gap: 0.75rem;
+                    animation: slideIn 0.3s ease;
+                ">
+                    <i class="fas fa-${type === 'success' ? 'check-circle' : 
+                                       type === 'error' ? 'exclamation-circle' : 
+                                       type === 'warning' ? 'exclamation-triangle' : 
+                                       'info-circle'}"></i>
+                    <span>${message}</span>
+                </div>
+            `;
+            
+            document.getElementById('toast-container').appendChild(toast);
+            
+            setTimeout(() => {
+                toast.style.animation = 'slideOut 0.3s ease';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+        
+        // Add animations
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes slideIn {
+                from { transform: translateX(100%); opacity: 0; }
+                to { transform: translateX(0); opacity: 1; }
+            }
+            @keyframes slideOut {
+                from { transform: translateX(0); opacity: 1; }
+                to { transform: translateX(100%); opacity: 0; }
+            }
+        `;
+        document.head.appendChild(style);
+    </script>
+    
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

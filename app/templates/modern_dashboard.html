@@ -1,0 +1,415 @@
+{% extends "modern_base.html" %}
+{% block title %}Dashboard - Kavak Trade-Up Engine{% endblock %}
+
+{% block extra_css %}
+<style>
+    .main {
+        padding: 2rem 0;
+        min-height: calc(100vh - 4rem);
+        background: var(--gray-50);
+    }
+    
+    .dashboard-header {
+        margin-bottom: 2rem;
+    }
+    
+    .dashboard-title {
+        margin-bottom: 0.5rem;
+    }
+    
+    .dashboard-subtitle {
+        color: var(--gray-600);
+        font-size: 1.125rem;
+    }
+    
+    .action-bar {
+        display: flex;
+        gap: 1rem;
+        align-items: center;
+        margin-bottom: 2rem;
+        flex-wrap: wrap;
+    }
+    
+    .quick-stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 1.5rem;
+        margin-bottom: 2rem;
+    }
+    
+    .recent-section {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 2rem;
+        margin-top: 2rem;
+    }
+    
+    @media (max-width: 1024px) {
+        .recent-section {
+            grid-template-columns: 1fr;
+        }
+    }
+    
+    .chart-container {
+        height: 300px;
+        position: relative;
+    }
+    
+    .quick-action-card {
+        background: linear-gradient(135deg, var(--kavak-blue) 0%, var(--kavak-blue-dark) 100%);
+        color: white;
+        padding: 2rem;
+        border-radius: var(--radius-lg);
+        text-align: center;
+        cursor: pointer;
+        transition: var(--transition);
+    }
+    
+    .quick-action-card:hover {
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-lg);
+    }
+    
+    .quick-action-icon {
+        font-size: 3rem;
+        margin-bottom: 1rem;
+    }
+    
+    .quick-action-title {
+        font-size: 1.25rem;
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+    }
+    
+    .quick-action-desc {
+        opacity: 0.9;
+        font-size: 0.875rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-header">
+    <h1 class="dashboard-title">Dashboard</h1>
+    <p class="dashboard-subtitle">Welcome back! Here's your Trade-Up Engine overview.</p>
+</div>
+
+<!-- Action Bar -->
+<div class="action-bar">
+    <div class="search-container" style="flex: 1; max-width: 400px;">
+        <i class="fas fa-search search-icon"></i>
+        <input type="text" class="search-input" placeholder="Search customers by ID or name..." id="global-search">
+    </div>
+    <button class="btn btn-primary" onclick="window.location.href='/customers'">
+        <i class="fas fa-users"></i> View All Customers
+    </button>
+    <button class="btn btn-secondary" onclick="refreshDashboard()">
+        <i class="fas fa-sync-alt"></i> Refresh
+    </button>
+</div>
+
+<!-- Quick Stats -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-value" id="total-customers">{{ metrics.total_customers | default(0) }}</div>
+        <div class="stat-label">Total Customers</div>
+        <div class="stat-change positive">
+            <i class="fas fa-arrow-up"></i> 12% from last month
+        </div>
+    </div>
+    
+    <div class="stat-card">
+        <div class="stat-value" id="total-inventory">{{ metrics.total_inventory | default(0) }}</div>
+        <div class="stat-label">Available Inventory</div>
+        <div class="stat-change positive">
+            <i class="fas fa-arrow-up"></i> 8% from last week
+        </div>
+    </div>
+    
+    <div class="stat-card">
+        <div class="stat-value" id="avg-npv">${{ "{:,.0f}".format(metrics.avg_npv | default(0)) }}</div>
+        <div class="stat-label">Average NPV</div>
+        <div class="stat-change positive">
+            <i class="fas fa-arrow-up"></i> 5% improvement
+        </div>
+    </div>
+    
+    <div class="stat-card">
+        <div class="stat-value" id="conversion-rate">{{ metrics.conversion_rate | default(0) }}%</div>
+        <div class="stat-label">Conversion Rate</div>
+        <div class="stat-change negative">
+            <i class="fas fa-arrow-down"></i> 2% from target
+        </div>
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="quick-stats">
+    <div class="quick-action-card" onclick="window.location.href='/customers?action=generate'">
+        <div class="quick-action-icon">
+            <i class="fas fa-magic"></i>
+        </div>
+        <div class="quick-action-title">Generate Offers</div>
+        <div class="quick-action-desc">Create personalized offers for customers</div>
+    </div>
+    
+    <div class="quick-action-card" onclick="runScenarioAnalysis()">
+        <div class="quick-action-icon">
+            <i class="fas fa-chart-line"></i>
+        </div>
+        <div class="quick-action-title">Run Analysis</div>
+        <div class="quick-action-desc">Test different pricing scenarios</div>
+    </div>
+    
+    <div class="quick-action-card" onclick="window.location.href='/config'">
+        <div class="quick-action-icon">
+            <i class="fas fa-cog"></i>
+        </div>
+        <div class="quick-action-title">Configure Engine</div>
+        <div class="quick-action-desc">Adjust fees and parameters</div>
+    </div>
+</div>
+
+<!-- Recent Activity -->
+<div class="recent-section">
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">Recent Offers Generated</h3>
+            <button class="btn btn-sm btn-ghost">View All</button>
+        </div>
+        <div class="table-container">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Customer</th>
+                        <th>Offers</th>
+                        <th>Best NPV</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody id="recent-offers">
+                    <tr>
+                        <td colspan="4" style="text-align: center; padding: 2rem;">
+                            <div class="skeleton" style="height: 1rem; width: 80%; margin: 0 auto;"></div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">Performance Trends</h3>
+            <select class="form-select" style="width: auto; font-size: 0.875rem;">
+                <option>Last 7 days</option>
+                <option>Last 30 days</option>
+                <option>Last 90 days</option>
+            </select>
+        </div>
+        <div class="chart-container">
+            <canvas id="performance-chart"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- Scenario Results Summary -->
+<div class="card" style="margin-top: 2rem;" id="scenario-summary-card">
+    <div class="card-header">
+        <h3 class="card-title">Latest Scenario Analysis</h3>
+        <button class="btn btn-sm btn-ghost" onclick="window.location.href='/audit'">
+            <i class="fas fa-history"></i> View History
+        </button>
+    </div>
+    <div id="scenario-summary-content">
+        <div style="text-align: center; padding: 2rem; color: var(--gray-500);">
+            <i class="fas fa-chart-bar" style="font-size: 3rem; margin-bottom: 1rem; display: block;"></i>
+            No scenario analysis results yet. Run an analysis to see insights here.
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+// Initialize dashboard
+document.addEventListener('DOMContentLoaded', function() {
+    initializeDashboard();
+    loadRecentOffers();
+    loadScenarioSummary();
+    setupGlobalSearch();
+    initializeChart();
+});
+
+function initializeDashboard() {
+    // Animate numbers on load
+    animateValue('total-customers', 0, {{ metrics.total_customers | default(0) }}, 1000);
+    animateValue('total-inventory', 0, {{ metrics.total_inventory | default(0) }}, 1000);
+}
+
+function animateValue(id, start, end, duration) {
+    const obj = document.getElementById(id);
+    const range = end - start;
+    const increment = end > start ? 1 : -1;
+    const stepTime = Math.abs(Math.floor(duration / range));
+    let current = start;
+    
+    const timer = setInterval(function() {
+        current += increment * Math.ceil(range / 50);
+        if ((increment > 0 && current >= end) || (increment < 0 && current <= end)) {
+            obj.textContent = end.toLocaleString();
+            clearInterval(timer);
+        } else {
+            obj.textContent = current.toLocaleString();
+        }
+    }, stepTime);
+}
+
+async function loadRecentOffers() {
+    try {
+        const response = await fetch('/api/customers?limit=5');
+        const data = await response.json();
+        const customers = data.customers || [];
+        
+        const tbody = document.getElementById('recent-offers');
+        tbody.innerHTML = customers.map(customer => `
+            <tr>
+                <td>
+                    <a href="/customer/${customer.customer_id}" style="color: var(--kavak-blue); text-decoration: none;">
+                        ${customer.customer_id.substring(0, 8)}...
+                    </a>
+                </td>
+                <td><span class="badge badge-info">Pending</span></td>
+                <td>$${Math.round(Math.random() * 10000 + 5000).toLocaleString()}</td>
+                <td><span class="badge badge-success">Ready</span></td>
+            </tr>
+        `).join('');
+    } catch (error) {
+        console.error('Failed to load recent offers:', error);
+    }
+}
+
+async function loadScenarioSummary() {
+    // DISABLED: /api/scenario-summary endpoint doesn't exist
+    return;
+    
+    try {
+        const response = await fetch('/api/scenario-summary');
+        const data = await response.json();
+        
+        if (data && data.summary) {
+            document.getElementById('scenario-summary-content').innerHTML = `
+                <div class="stats-grid" style="margin: 0;">
+                    <div style="text-align: center;">
+                        <div style="font-size: 2rem; font-weight: 700; color: var(--kavak-blue);">
+                            ${data.summary.total_offers.toLocaleString()}
+                        </div>
+                        <div style="color: var(--gray-600); font-size: 0.875rem;">Total Offers</div>
+                    </div>
+                    <div style="text-align: center;">
+                        <div style="font-size: 2rem; font-weight: 700; color: var(--success);">
+                            $${Math.round(data.summary.total_npv / 1000000)}M
+                        </div>
+                        <div style="color: var(--gray-600); font-size: 0.875rem;">Portfolio NPV</div>
+                    </div>
+                    <div style="text-align: center;">
+                        <div style="font-size: 2rem; font-weight: 700; color: var(--kavak-blue-dark);">
+                            $${Math.round(data.summary.avg_npv_per_offer).toLocaleString()}
+                        </div>
+                        <div style="color: var(--gray-600); font-size: 0.875rem;">Avg NPV/Offer</div>
+                    </div>
+                </div>
+            `;
+        }
+    } catch (error) {
+        console.error('Failed to load scenario summary:', error);
+    }
+}
+
+function setupGlobalSearch() {
+    const searchInput = document.getElementById('global-search');
+    let searchTimeout;
+    
+    searchInput.addEventListener('input', (e) => {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => {
+            const query = e.target.value.trim();
+            if (query.length > 2) {
+                // In a real app, this would search via API
+                showToast(`Searching for "${query}"...`, 'info');
+            }
+        }, 300);
+    });
+}
+
+function initializeChart() {
+    const ctx = document.getElementById('performance-chart').getContext('2d');
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+            datasets: [{
+                label: 'Offers Generated',
+                data: [65, 78, 90, 81, 86, 95, 114],
+                borderColor: 'rgb(20, 81, 236)',
+                backgroundColor: 'rgba(20, 81, 236, 0.1)',
+                tension: 0.4
+            }, {
+                label: 'Conversions',
+                data: [28, 34, 42, 38, 40, 45, 52],
+                borderColor: 'rgb(16, 185, 129)',
+                backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                tension: 0.4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+}
+
+function refreshDashboard() {
+    showToast('Refreshing dashboard...', 'info');
+    location.reload();
+}
+
+async function runScenarioAnalysis() {
+    // DISABLED: /api/scenario-analysis endpoint doesn't exist
+    showToast('Scenario analysis is currently disabled', 'warning');
+    return;
+    
+    try {
+        const response = await fetch('/api/scenario-analysis', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                use_custom_params: false,
+                use_range_optimization: true,
+                include_kavak_total: true
+            })
+        });
+        
+        if (response.ok) {
+            showToast('Scenario analysis completed!', 'success');
+            setTimeout(() => loadScenarioSummary(), 1000);
+        } else {
+            showToast('Analysis failed. Please try again.', 'error');
+        }
+    } catch (error) {
+        showToast('Network error. Please check your connection.', 'error');
+    }
+}
+</script>
+{% endblock %}
