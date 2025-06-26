@@ -130,8 +130,10 @@ class FileLoader(BaseLoader):
     def _is_decimal_string(self, value: str) -> bool:
         """Check if a string should be converted to Decimal"""
         try:
+            # Try to convert to float - if successful, it's a numeric string
             float(value)
-            return '.' in value or 'e' in value.lower()
+            # Convert all numeric strings to Decimal for consistency
+            return True
         except:
             return False
     

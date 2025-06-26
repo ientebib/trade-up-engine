@@ -5,6 +5,7 @@ This is the main entry point for the new configuration system.
 from typing import Dict, Any, Optional, List, Union
 from decimal import Decimal
 import logging
+import threading
 
 from .registry import ConfigRegistry
 
@@ -12,14 +13,18 @@ logger = logging.getLogger(__name__)
 
 # Global registry instance
 _registry: Optional[ConfigRegistry] = None
+_registry_lock = threading.Lock()
 
 
 def _get_registry() -> ConfigRegistry:
-    """Get or create the global registry instance"""
+    """Get or create the global registry instance (thread-safe)"""
     global _registry
     if _registry is None:
-        _registry = ConfigRegistry()
-        _registry.load_all()
+        with _registry_lock:
+            # Double-check locking pattern
+            if _registry is None:
+                _registry = ConfigRegistry()
+                _registry.load_all()
     return _registry
 
 
@@ -116,7 +121,31 @@ def get_list(key: str, default: Optional[List] = None) -> List:
     value = get(key, default or [])
     if isinstance(value, list):
         return value
-    return list(value)
+    
+    # Handle string values
+    if isinstance(value, str):
+        # Try JSON parsing first
+        import json
+        try:
+            parsed = json.loads(value)
+            if isinstance(parsed, list):
+                return parsed
+        except:
+            pass
+        
+        # Try comma-separated values
+        if ',' in value:
+            return [item.strip() for item in value.split(',')]
+        
+        # Single value as list
+        return [value]
+    
+    # Try converting other iterables
+    try:
+        return list(value)
+    except:
+        # Last resort: wrap single value in list
+        return [value]
 
 
 def get_dict(key: str, default: Optional[Dict] = None) -> Dict:

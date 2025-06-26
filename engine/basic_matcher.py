@@ -271,7 +271,7 @@ class BasicMatcher:
         else:
             interest_rate = base_interest_rate
         
-        interest_rate_with_iva = interest_rate * IVA_RATE
+        interest_rate_with_iva = interest_rate * (1 + IVA_RATE)
         monthly_rate = interest_rate_with_iva / 12
         
         if risk_index not in DOWN_PAYMENT_TABLE.index or term not in DOWN_PAYMENT_TABLE.columns:

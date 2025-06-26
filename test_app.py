@@ -2,7 +2,11 @@
 """Test the application without running a server"""
 
 import sys
-sys.path.append('/Users/isaacentebi/Desktop/Trade-Up-Engine')
+import os
+
+# Add project root to path
+project_root = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, project_root)
 
 from data import database
 from app.services.offer_service import offer_service

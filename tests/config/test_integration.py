@@ -13,7 +13,6 @@ from config.registry import ConfigRegistry
 from config.loaders.defaults import DefaultsLoader
 from config.loaders.env import EnvLoader
 from config.loaders.file import FileLoader
-from config.configuration_shim import ConfigurationManagerShim
 
 
 class TestConfigurationIntegration:

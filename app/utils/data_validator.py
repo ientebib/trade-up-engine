@@ -373,8 +373,23 @@ def validate_customer_input(func):
 def validate_calculation_input(func):
     """Decorator to validate calculation inputs"""
     def wrapper(*args, **kwargs):
-        # Validate specific arguments
-        if 'loan_amount' in kwargs:
+        # For functions that take offer_details dict
+        if args and isinstance(args[0], dict):
+            offer_details = args[0]
+            # Extract values from offer_details
+            loan_amount = offer_details.get('loan_amount', 0.0)
+            term = offer_details.get('term', 0)
+            interest_rate = offer_details.get('interest_rate', 0.0)
+            
+            # Validate if we have the required fields
+            if loan_amount and term and interest_rate:
+                DataValidator.validate_calculation_inputs(
+                    loan_amount=float(loan_amount),
+                    term=int(term),
+                    interest_rate=float(interest_rate)
+                )
+        # For functions with keyword arguments
+        elif 'loan_amount' in kwargs:
             DataValidator.validate_calculation_inputs(
                 loan_amount=kwargs.get('loan_amount'),
                 term=kwargs.get('term'),
