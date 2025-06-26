@@ -1,54 +1,77 @@
 import numpy_financial as npf
-from functools import lru_cache
-from config import IVA_RATE
+from decimal import Decimal, ROUND_HALF_UP
+from config.configuration_manager import get_config
+from .payment_utils import calculate_payment_components, calculate_final_npv
+from .financial_audit import get_audit_logger, CalculationType
+from app.utils.data_validator import DataValidator, validate_calculation_input
+import logging
 
-@lru_cache(maxsize=256)
-def calculate_final_npv(loan_amount, interest_rate, term_months):
-    """
-    Calculates the Net Present Value of the interest income for the loan.
-    This uses the audited method: interest cash flows are calculated with the
-    contractual rate, and then discounted using the IVA-inclusive rate.
-    """
-    if loan_amount <= 0:
-        return 0.0
-
-    monthly_rate = interest_rate / 12
-    monthly_rate_with_iva = (interest_rate * (1 + IVA_RATE)) / 12
-
-    # Interest cash flow for each period (contractual interest, no IVA yet)
-    interest_payments = [
-        abs(npf.ipmt(monthly_rate, period, term_months, -loan_amount))
-        for period in range(1, term_months + 1)
-    ]
-    
-    # The actual cash flow includes IVA on interest
-    interest_cash_flow_with_iva = [(p * (1 + IVA_RATE)) for p in interest_payments]
-
-    # Discount at the IVA-inclusive rate
-    npv = npf.npv(monthly_rate_with_iva, [0] + interest_cash_flow_with_iva)
-    return npv
+logger = logging.getLogger(__name__)
+config = get_config()
 
 
+@validate_calculation_input
 def generate_amortization_table(offer_details: dict) -> list[dict]:
     """
     Generate month-by-month amortization table using the EXACT audited logic.
     CRITICAL: This follows the exact calculation from the risk team.
     """
-    # Extract offer details
-    loan_amount = float(offer_details.get("loan_amount", 0.0) or offer_details.get(1, 0.0))
-    term = int(offer_details.get("term", 0) or offer_details.get(2, 0))
-    rate = float(offer_details.get("interest_rate", 0.0) or offer_details.get(3, 0.0))
-    service_fee = float(offer_details.get("service_fee_amount", 0.0) or offer_details.get(4, 0.0))
-    kavak_total = float(offer_details.get("kavak_total_amount", 0.0) or offer_details.get(5, 0.0))
-    insurance_amt = float(offer_details.get("insurance_amount", 0.0) or offer_details.get(6, 0.0))
+    # Use Decimal for precision if enabled
+    use_decimal = config.get_bool("features.enable_decimal_precision", True)
     
-    gps_monthly_fee = 350.0 * (1 + IVA_RATE)
-    gps_install_fee = float(offer_details.get("gps_install_fee", 0.0) or 0.0)
+    # Extract offer details and convert to appropriate type
+    if use_decimal:
+        loan_amount = Decimal(str(offer_details.get("loan_amount", 0.0) or offer_details.get(1, 0.0)))
+        rate = Decimal(str(offer_details.get("interest_rate", 0.0) or offer_details.get(3, 0.0)))
+        service_fee = Decimal(str(offer_details.get("service_fee_amount", 0.0) or offer_details.get(4, 0.0)))
+        kavak_total = Decimal(str(offer_details.get("kavak_total_amount", 0.0) or offer_details.get(5, 0.0)))
+        insurance_amt = Decimal(str(offer_details.get("insurance_amount", 0.0) or offer_details.get(6, 0.0)))
+        gps_install_fee = Decimal(str(offer_details.get("gps_install_fee", 0.0) or 0.0))
+    else:
+        loan_amount = float(offer_details.get("loan_amount", 0.0) or offer_details.get(1, 0.0))
+        rate = float(offer_details.get("interest_rate", 0.0) or offer_details.get(3, 0.0))
+        service_fee = float(offer_details.get("service_fee_amount", 0.0) or offer_details.get(4, 0.0))
+        kavak_total = float(offer_details.get("kavak_total_amount", 0.0) or offer_details.get(5, 0.0))
+        insurance_amt = float(offer_details.get("insurance_amount", 0.0) or offer_details.get(6, 0.0))
+        gps_install_fee = float(offer_details.get("gps_install_fee", 0.0) or 0.0)
+    
+    term = int(offer_details.get("term", 0) or offer_details.get(2, 0))
+    
+    # Get configuration values
+    iva_rate = config.get_decimal("financial.iva_rate")
+    gps_monthly_base = config.get_decimal("fees.gps.monthly")
+    apply_iva = config.get_bool("fees.gps.apply_iva", True)
+    
+    # Calculate GPS monthly fee
+    if use_decimal:
+        gps_monthly_fee = gps_monthly_base * (Decimal("1") + iva_rate) if apply_iva else gps_monthly_base
+    else:
+        gps_monthly_fee = float(gps_monthly_base) * (1 + float(iva_rate)) if apply_iva else float(gps_monthly_base)
 
+    # Start audit logging if enabled
+    if config.get_bool("features.enable_audit_logging"):
+        audit_logger = get_audit_logger()
+        amortization_inputs = {
+            "loan_amount": str(loan_amount),
+            "interest_rate": str(rate),
+            "term_months": term,
+            "service_fee": str(service_fee),
+            "kavak_total": str(kavak_total),
+            "insurance_amount": str(insurance_amt),
+            "gps_monthly_fee": str(gps_monthly_fee),
+            "gps_install_fee": str(gps_install_fee),
+            "iva_rate": str(iva_rate)
+        }
+    
     # CRITICAL: Apply IVA to the rate once (as per audited logic)
-    monthly_rate = rate / 12
-    rate_with_iva = rate * (1 + IVA_RATE)
-    monthly_rate_with_iva = rate_with_iva / 12
+    if use_decimal:
+        monthly_rate = rate / Decimal("12")
+        rate_with_iva = rate * (Decimal("1") + iva_rate)
+        monthly_rate_with_iva = rate_with_iva / Decimal("12")
+    else:
+        monthly_rate = rate / 12
+        rate_with_iva = rate * (1 + float(iva_rate))
+        monthly_rate_with_iva = rate_with_iva / 12
 
     # Extract main principal portion for amortization buckets
     financed_main = loan_amount - service_fee - kavak_total - insurance_amt
@@ -75,21 +98,27 @@ def generate_amortization_table(offer_details: dict) -> list[dict]:
         beginning_balance_kt = balance_kt
         beginning_balance_ins = balance_ins if insurance_amt > 0 else 0.0
 
-        # --- Main loan bucket ---
-        principal_main = abs(npf.ppmt(monthly_rate_with_iva, month, term, -financed_main))
-        interest_main = abs(npf.ipmt(monthly_rate, month, term, -financed_main)) * (1 + IVA_RATE)
+        # Use the SINGLE SOURCE OF TRUTH for payment calculations
+        components = calculate_payment_components(
+            loan_base=financed_main,
+            service_fee_amount=financed_sf,
+            kavak_total_amount=financed_kt,
+            insurance_amount=insurance_amt,
+            annual_rate_nominal=rate,
+            term_months=term,
+            period=month,
+            insurance_term=12
+        )
         
-        # --- Service Fee bucket ---
-        principal_sf = abs(npf.ppmt(monthly_rate_with_iva, month, term, -financed_sf))
-        interest_sf = abs(npf.ipmt(monthly_rate, month, term, -financed_sf)) * (1 + IVA_RATE)
-
-        # --- Kavak Total bucket ---
-        principal_kt = abs(npf.ppmt(monthly_rate_with_iva, month, term, -financed_kt))
-        interest_kt = abs(npf.ipmt(monthly_rate, month, term, -financed_kt)) * (1 + IVA_RATE)
-
-        # --- Insurance bucket (recurring every 12 months) ---
-        principal_ins = abs(npf.ppmt(monthly_rate_with_iva, months_since_insurance_reset, 12, -insurance_amt)) if insurance_amt > 0 else 0.0
-        interest_ins = abs(npf.ipmt(monthly_rate, months_since_insurance_reset, 12, -insurance_amt)) * (1 + IVA_RATE) if insurance_amt > 0 else 0.0
+        # Extract component values
+        principal_main = components["principal_main"]
+        principal_sf = components["principal_sf"]
+        principal_kt = components["principal_kt"]
+        principal_ins = components["principal_ins"]
+        interest_main = components["interest_main"]
+        interest_sf = components["interest_sf"]
+        interest_kt = components["interest_kt"]
+        interest_ins = components["interest_ins"]
 
         # --- Aggregate payment ---
         # Add GPS install fee only to first month
@@ -101,11 +130,9 @@ def generate_amortization_table(offer_details: dict) -> list[dict]:
         # Calculate total principal for DISPLAY (including GPS install in month 1 per Excel)
         total_principal_display = principal_main + principal_sf + principal_kt + principal_ins + gps_install_principal
         
-        # For payment calculation, use component principals only
-        total_principal = principal_main + principal_sf + principal_kt + principal_ins
-        
-        # Calculate total interest WITH IVA (as used in actual payment)
-        total_interest_with_iva = interest_main + interest_sf + interest_kt + interest_ins
+        # Use totals from the single source of truth
+        total_principal = components["total_principal"]
+        total_interest_with_iva = components["total_interest"]
         
         payment = (
             principal_main + principal_sf + principal_kt + principal_ins  # Component principals
@@ -129,23 +156,37 @@ def generate_amortization_table(offer_details: dict) -> list[dict]:
 
         # Calculate interest components for display
         # Extract base interest from what we already calculated (remove IVA)
-        interest_base_main = interest_main / (1 + IVA_RATE)
-        interest_base_sf = interest_sf / (1 + IVA_RATE)
-        interest_base_kt = interest_kt / (1 + IVA_RATE)
-        interest_base_ins = interest_ins / (1 + IVA_RATE) if insurance_amt > 0 else 0.0
+        if use_decimal:
+            iva_divisor = Decimal("1") + iva_rate
+            interest_base_main = interest_main / iva_divisor
+            interest_base_sf = interest_sf / iva_divisor
+            interest_base_kt = interest_kt / iva_divisor
+            interest_base_ins = interest_ins / iva_divisor if insurance_amt > 0 else Decimal("0")
+        else:
+            iva_divisor = 1 + float(iva_rate)
+            interest_base_main = interest_main / iva_divisor
+            interest_base_sf = interest_sf / iva_divisor
+            interest_base_kt = interest_kt / iva_divisor
+            interest_base_ins = interest_ins / iva_divisor if insurance_amt > 0 else 0.0
         
         # Total base interest
         interest_base_total = interest_base_main + interest_base_sf + interest_base_kt + interest_base_ins
         
         # For Excel compatibility: GPS without IVA for display
-        gps_monthly_no_iva = gps_monthly_fee / (1 + IVA_RATE)  # 350
+        if use_decimal:
+            gps_monthly_no_iva = gps_monthly_fee / iva_divisor
+        else:
+            gps_monthly_no_iva = gps_monthly_fee / iva_divisor
         # GPS installation is now in principal, not in cargos
         cargos_no_iva = gps_monthly_no_iva  # Only monthly fee, no installation
         
         # IVA calculation
         # IVA on interest AND GPS monthly (Excel formula: (Interest + Cargos) * 16%)
         # Note: GPS installation IVA is NOT included separately - it's already in the payment
-        iva_total = (interest_base_total + cargos_no_iva) * IVA_RATE
+        if use_decimal:
+            iva_total = (interest_base_total + cargos_no_iva) * iva_rate
+        else:
+            iva_total = (interest_base_total + cargos_no_iva) * float(iva_rate)
         
         # --- Append detailed row ---
         table.append({
@@ -175,4 +216,26 @@ def generate_amortization_table(offer_details: dict) -> list[dict]:
             "end_balance_total": ending_balance_main + ending_balance_sf + ending_balance_kt + ending_balance_ins,
         })
 
+    # Complete audit logging
+    if config.get_bool("features.enable_audit_logging"):
+        amortization_outputs = {
+            "rows_generated": len(table),
+            "total_payments": sum(float(row["payment"]) for row in table),
+            "total_principal": sum(float(row["principal"]) for row in table),
+            "total_interest": sum(float(row["interest"]) for row in table),
+            "first_payment": float(table[0]["payment"]) if table else 0,
+            "last_payment": float(table[-1]["payment"]) if table else 0
+        }
+        
+        audit_logger.log_calculation(
+            calculation_type=CalculationType.AMORTIZATION,
+            inputs=amortization_inputs,
+            outputs=amortization_outputs,
+            metadata={
+                "monthly_rate": str(monthly_rate),
+                "monthly_rate_with_iva": str(monthly_rate_with_iva),
+                "use_decimal": use_decimal
+            }
+        )
+    
     return table

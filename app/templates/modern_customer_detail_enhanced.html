@@ -530,7 +530,7 @@
             </div>
         </div>
         <div class="stat-card">
-            <div class="stat-value">{{ customer.risk_profile|default('A1') }}</div>
+            <div class="stat-value">{{ customer.risk_profile_name|default('Unknown') }}</div>
             <div class="stat-label">Risk Profile</div>
         </div>
         <div class="stat-card">
@@ -1047,21 +1047,29 @@ function displayOffers(data, mode) {
             ${data.total_offers} viable offers from ${data.cars_tested} cars tested in ${data.processing_time}s
             <br>
             <strong>Breakdown:</strong>
-            Refresh: ${data.offers.Refresh?.length || 0}, 
-            Upgrade: ${data.offers.Upgrade?.length || 0}, 
-            Max Upgrade: ${data.offers['Max Upgrade']?.length || 0}
+            Refresh: ${data.offers.refresh?.length || 0}, 
+            Upgrade: ${data.offers.upgrade?.length || 0}, 
+            Max Upgrade: ${data.offers.max_upgrade?.length || 0}
             ${data.fees_used ? `<br><strong>Fees:</strong> Service ${(data.fees_used.service_fee_pct * 100).toFixed(1)}%, CXA ${(data.fees_used.cxa_pct * 100).toFixed(1)}%, CAC $${data.fees_used.cac_bonus}` : ''}
         </div>
     `;
     
     // Display offers by tier
-    ['Refresh', 'Upgrade', 'Max Upgrade'].forEach(tier => {
-        const tierOffers = data.offers[tier] || [];
+    const tierMapping = {
+        'refresh': 'Refresh',
+        'upgrade': 'Upgrade',
+        'max_upgrade': 'Max Upgrade'
+    };
+    
+    ['refresh', 'upgrade', 'max_upgrade'].forEach(tierKey => {
+        const tierOffers = data.offers[tierKey] || [];
         if (tierOffers.length === 0) return;
+        
+        const tierDisplay = tierMapping[tierKey];
         
         html += `
             <h3 style="margin-top: 2.5rem; margin-bottom: 1.5rem; font-size: 1.5rem;">
-                ${tier} 
+                ${tierDisplay} 
                 <span style="font-size: 1rem; color: var(--gray-600); font-weight: normal;">
                     (${tierOffers.length} offers)
                 </span>
@@ -1069,7 +1077,7 @@ function displayOffers(data, mode) {
             <div class="offer-grid">
         `;
         
-        const tierClass = tier.toLowerCase().replace(' ', '-');
+        const tierClass = tierKey.replace('_', '-');
         
         tierOffers.slice(0, 20).forEach(offer => {
             const paymentChange = offer.payment_delta * 100;
@@ -1077,7 +1085,7 @@ function displayOffers(data, mode) {
             
             html += `
                 <div class="offer-card" onclick="showOfferDetails(${JSON.stringify(offer).replace(/"/g, '&quot;')})">
-                    <span class="offer-tier-badge tier-${tierClass}">${tier}</span>
+                    <span class="offer-tier-badge tier-${tierClass}">${tierDisplay}</span>
                     <h4 style="margin: 0 0 0.5rem 0; padding-right: 4rem;">${offer.car_model}</h4>
                     <p style="font-size: 0.875rem; color: var(--gray-600); margin-bottom: 1rem;">
                         $${offer.new_car_price.toLocaleString()} • ${offer.term} months
@@ -1126,7 +1134,7 @@ function displayOffers(data, mode) {
         if (tierOffers.length > 20) {
             html += `
                 <div style="text-align: center; margin-top: 1rem;">
-                    <p style="color: var(--gray-600);">Showing 20 of ${tierOffers.length} ${tier} offers</p>
+                    <p style="color: var(--gray-600);">Showing 20 of ${tierOffers.length} ${tierDisplay} offers</p>
                 </div>
             `;
         }

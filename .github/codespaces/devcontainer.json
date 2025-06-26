@@ -1,0 +1,29 @@
+{
+  "name": "Trade-Up Engine",
+  "image": "mcr.microsoft.com/devcontainers/python:3.9",
+  "features": {
+    "ghcr.io/devcontainers/features/python:1": {
+      "version": "3.9"
+    }
+  },
+  "postCreateCommand": "pip install -r requirements.txt && chmod +x run_codespaces.sh",
+  "forwardPorts": [8000],
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "dbaeumer.vscode-eslint"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/local/bin/python",
+        "python.linting.enabled": true,
+        "python.linting.pylintEnabled": true
+      }
+    }
+  },
+  "remoteEnv": {
+    "USE_MOCK_DATA": "true",
+    "ENVIRONMENT": "development"
+  }
+}

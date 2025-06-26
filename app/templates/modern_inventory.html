@@ -165,7 +165,7 @@
             <div class="stat-label">Total Vehicles</div>
         </div>
         <div class="stat-card">
-            <div class="stat-value">${{ "{:,.0f}".format(inventory|map(attribute='sales_price')|sum / inventory|length) }}</div>
+            <div class="stat-value">${{ "{:,.0f}".format(inventory|map(attribute='car_price')|sum / inventory|length) }}</div>
             <div class="stat-label">Average Price</div>
         </div>
         <div class="stat-card">
@@ -190,7 +190,7 @@
             </div>
             <div class="car-details">
                 <div class="car-model">{{ car.model|truncate(50) }}</div>
-                <div class="car-price">${{ "{:,.0f}".format(car.sales_price) }}</div>
+                <div class="car-price">${{ "{:,.0f}".format(car.car_price) }}</div>
                 <div class="car-meta">
                     <div class="car-meta-item">
                         <i class="fas fa-tachometer-alt"></i>
@@ -270,7 +270,7 @@ function createCarCard(car) {
         </div>
         <div class="car-details">
             <div class="car-model">${car.model.substring(0, 50)}${car.model.length > 50 ? '...' : ''}</div>
-            <div class="car-price">$${Math.round(car.sales_price).toLocaleString()}</div>
+            <div class="car-price">$${Math.round(car.car_price).toLocaleString()}</div>
             <div class="car-meta">
                 <div class="car-meta-item">
                     <i class="fas fa-tachometer-alt"></i>
@@ -319,7 +319,7 @@ function filterInventory() {
     if (priceRange) {
         const [min, max] = priceRange.split('-').map(x => x === '+' ? Infinity : parseInt(x));
         filtered = filtered.filter(car => {
-            const price = car.sales_price;
+            const price = car.car_price;
             return price >= (min || 0) && price <= (max || Infinity);
         });
     }

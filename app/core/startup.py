@@ -2,30 +2,45 @@
 Application startup events
 """
 import logging
-from data.loader import data_loader
-from . import data
+from data import database
+from data.cache_manager import cache_manager
 
 logger = logging.getLogger(__name__)
 
 
 async def startup_event():
-    """Load data on startup"""
+    """Initialize application - test connections only"""
     logger.info("🚀 Starting Modern Trade-Up Engine...")
     
-    try:
-        # Load customer data
-        data.customers_df = data_loader.load_customers()
-        
-        # Load inventory data  
-        data.inventory_df = data_loader.load_inventory()
-        
-        logger.info(f"✅ Loaded {len(data.customers_df)} customers and {len(data.inventory_df)} inventory items")
-        
-        # Initialize the engine
-        from engine.basic_matcher import basic_matcher
-        logger.info("🎯 Simple engine initialized and ready!")
-        
-    except Exception as e:
-        logger.error(f"❌ Failed to load data: {e}")
-        # Continue running with empty DataFrames
-        pass
+    # Test database connections
+    db_status = database.test_database_connection()
+    
+    # Check customer data
+    if not db_status["customers"]["connected"]:
+        logger.error("❌ CRITICAL: Cannot connect to customer data!")
+        raise RuntimeError("Customer data unavailable")
+    
+    # Check Redshift connection (warning only - not critical)
+    if not db_status["inventory"]["connected"]:
+        logger.warning("⚠️ WARNING: Cannot connect to Redshift!")
+        logger.warning("⚠️ Inventory data will not be available until connection is restored.")
+        logger.warning(f"⚠️ Error: {db_status['inventory'].get('error', 'Unknown')}")
+    
+    logger.info(f"✅ Database connections verified:")
+    logger.info(f"   - Customers: {db_status['customers']['count']} records")
+    logger.info(f"   - Inventory: {db_status['inventory']['count']} cars")
+    
+    # Log cache status
+    cache_status = cache_manager.get_status()
+    logger.info(f"🗄️ Cache: {'Enabled' if cache_status['enabled'] else 'Disabled'} (TTL: {cache_status['default_ttl_hours']}h)")
+    
+    # Initialize the engine
+    from engine.basic_matcher import basic_matcher
+    
+    # Initialize bulk request queue
+    from app.services.bulk_queue import get_bulk_queue
+    queue = get_bulk_queue()
+    await queue.start()
+    logger.info("📋 Bulk request queue initialized")
+    
+    logger.info("🎯 Engine initialized - ready for requests!")

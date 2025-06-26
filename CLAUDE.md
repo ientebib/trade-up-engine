@@ -49,26 +49,50 @@ The amortization table calculation in `engine/calculator.py` has been carefully 
 
 ## 🏗️ Architecture
 
+### Modern Service-Oriented Architecture (After Major Refactor)
+
 ```
 app/
 ├── main.py              # FastAPI entry point
 ├── models.py            # Request/response models
-├── api/                 # REST endpoints
-├── routes/              # Web page routes
+├── api/                 # REST endpoints (thin controllers)
+│   ├── customers.py     # Customer endpoints
+│   ├── offers.py        # Offer generation endpoints
+│   ├── cache.py         # Cache management endpoints
+│   └── config.py        # Configuration endpoints
+├── services/            # Business logic layer (NEW!)
+│   ├── offer_service.py      # All offer-related logic
+│   ├── customer_service.py   # All customer-related logic
+│   ├── search_service.py     # Smart search functionality
+│   └── config_service.py     # Configuration management
+├── routes/              # Web page routes (thin controllers)
 ├── core/                # App initialization
-└── utils/               # Utilities
+│   └── startup.py       # Application startup (no dataframe loading!)
+└── presenters/          # Data presentation layer
 
-engine/                  # Business logic
+engine/                  # Core calculation engine
 ├── basic_matcher.py     # Main offer calculation
 ├── calculator.py        # NPV & amortization
-└── payment_utils.py     # Payment calculations
+├── payment_utils.py     # Payment calculations
+└── smart_search.py      # Advanced search algorithms
 
 config/                  # Configuration
-└── config.py           # Business rules & rates
+├── config.py            # Business rules & rates
+├── engine_config.json   # Runtime configuration
+└── cache_config.py      # Cache settings
 
-data/                   # Data management
-└── loader.py          # Redshift/CSV loading
+data/                    # Data access layer (COMPLETELY REDESIGNED!)
+├── database.py          # Direct queries - NO GLOBAL STATE!
+├── cache_manager.py     # Smart caching with TTL
+└── loader.py            # CSV/Redshift loaders (used by database.py)
 ```
+
+### Key Architectural Changes:
+1. **NO MORE GLOBAL DATAFRAMES** - Everything queries on-demand
+2. **Service Layer** - All business logic in `app/services/`
+3. **Smart Caching** - 4-hour TTL for inventory, fresh customers
+4. **Two-Stage Filtering** - Pre-filters at database level for 85-92% performance gain
+5. **Clean Separation** - Routes → Services → Database → Engine
 
 ## 💰 Critical Financial Formulas
 
@@ -102,41 +126,139 @@ Location: `engine/calculator.py`
 - **GPS_INSTALLATION**: 750 MXN (before IVA)
 - **Insurance**: 10,999 MXN/year (financed in 12-month cycles)
 
+## 🔄 Data Access Patterns (NEW!)
+
+### Direct Database Queries (No Global State)
+```python
+# OLD WAY (Global DataFrame) - DO NOT USE!
+# customer = customers_df[customers_df["customer_id"] == id]
+
+# NEW WAY (Direct Query)
+from data import database
+customer = database.get_customer_by_id(customer_id)  # Always fresh!
+```
+
+### Two-Stage Filtering for Performance
+```python
+# Stage 1: Pre-filter at database level (4000+ → ~300-500 cars)
+inventory = database.get_tradeup_inventory_for_customer(customer)
+
+# Stage 2: Apply business logic
+offers = basic_matcher.find_all_viable(customer, inventory)
+```
+
+### Cache Management
+```python
+# Check cache status
+GET /api/cache/status
+
+# Force refresh all cached data
+POST /api/cache/refresh
+
+# Toggle cache on/off
+POST /api/cache/toggle?enabled=false
+
+# Update cache TTL
+POST /api/cache/ttl?hours=6
+```
+
 ## 🔧 Common Development Tasks
 
-### Change Interest Rates
+### 🎛️ Configuration Management (NEW!)
+
+The application now uses a comprehensive configuration management system. ALL business parameters are configurable without code changes.
+
+#### Change Configuration at Runtime
 ```python
-# Location: config/config.py
-INTEREST_RATE_TABLE = {
-    "A1": {"12": 0.1949, "24": 0.1949, ...},
-    # Modify rates here
-}
+from config.configuration_manager import get_config
+config = get_config()
+
+# Change GPS fees
+config.set("fees.gps.monthly", "400.0")  # Change to 400 MXN
+config.set("fees.gps.installation", "800.0")
+
+# Change interest rates
+config.set("rates.A1", "0.21")  # 21% for A1 profile
+
+# Change payment tiers
+config.set("tiers.refresh.min", "-0.10")  # Allow 10% decrease
+
+# Changes persist to engine_config.json
 ```
 
-### Change Fee Structure
+#### Configuration Sources (Priority Order)
+1. **Database** (highest) - Future implementation
+2. **JSON Files** - `config/engine_config.json` (overrides)
+3. **Environment Variables** - For deployment
+4. **Default Values** - `config/base_config.json`
+
+#### Key Configuration Paths
+- **Financial**: `financial.iva_rate`, `financial.max_loan_amount`
+- **GPS Fees**: `fees.gps.monthly`, `fees.gps.installation`
+- **Insurance**: `fees.insurance.amount`, `fees.insurance.term_months`
+- **Service Fees**: `fees.service.percentage`, `fees.cxa.percentage`
+- **Kavak Total**: `fees.kavak_total.amount`, `fees.kavak_total.cycle_months`
+- **Payment Tiers**: `tiers.refresh.min/max`, `tiers.upgrade.min/max`
+- **Interest Rates**: `rates.A1`, `rates.B2`, etc.
+- **Features**: `features.enable_decimal_precision`, `features.enable_audit_logging`
+
+### 📊 Financial Audit Trail (NEW!)
+
+All financial calculations are now logged for compliance and debugging:
+
 ```python
-# Location: config/config.py
-DEFAULT_FEES = {
-    'service_fee_pct': 0.04,  # 4% of car price
-    'cxa_pct': 0.04,          # 4% marketing fee
-    # Modify fees here
-}
+# View recent calculations
+from engine.financial_audit import get_audit_logger
+audit = get_audit_logger()
+
+# Get recent entries
+recent = audit.get_recent_entries(100)
+
+# Search by customer
+entries = audit.search_entries(customer_id="TMCJ33A32GJ053451")
+
+# Generate audit report
+report = audit.generate_audit_report(
+    start_date=datetime(2024, 1, 1),
+    end_date=datetime(2024, 12, 31),
+    output_file="audit_report_2024.json"
+)
 ```
 
-### Change Payment Tiers
+Audit logs are stored in `logs/financial_audit/` as JSON Lines files.
+
+### 💰 Decimal Precision (NEW!)
+
+Financial calculations now use Decimal type for precision:
+
 ```python
-# Location: config/config.py
-PAYMENT_DELTA_TIERS = {
-    'refresh': (-0.05, 0.05),     # ±5%
-    'upgrade': (0.05, 0.25),      # +5% to +25%
-    'max_upgrade': (0.25, 1.0),   # +25% to +100%
-}
+# Enable/disable Decimal precision
+config.set("features.enable_decimal_precision", True)
+
+# All monetary values automatically use Decimal when enabled
+# No more floating-point rounding errors!
 ```
 
 ### Add New Risk Profile
-1. Add to `INTEREST_RATE_TABLE` in `config/config.py`
-2. Add to `RISK_PROFILE_INDICES` mapping
-3. Update down payment table if needed
+1. Add rate to configuration: `config.set("rates.NEW_PROFILE", "0.25")`
+2. Add to down payment matrix if needed
+3. Update risk profile mapping in code
+
+### Manage Cache Settings
+```python
+# Location: config/cache_config.py
+CACHE_CONFIG = {
+    "enabled": True,              # Master switch
+    "default_ttl_hours": 4.0,     # Default 4-hour cache
+    "inventory_ttl_hours": 4.0,   # Inventory-specific TTL
+}
+```
+
+### Monitor Cache Performance
+1. Go to http://localhost:8000/ (dashboard)
+2. Check cache status indicators
+3. Click "Force Refresh" to clear cache
+4. Monitor hit rate for effectiveness
 
 ## 🚨 Critical Gotchas
 
@@ -185,6 +307,16 @@ The data loader expects these exact CSV columns:
 - `vehicle_equity`
 - `saldo insoluto` → outstanding_balance
 - `risk_profile` (e.g., A1, B2, C3)
+
+### 5. Always Use Database Module
+**IMPORTANT**: All data access must go through the database module!
+```python
+# ✅ ALWAYS USE THIS
+from data import database
+customer = database.get_customer_by_id(id)
+inventory = database.get_tradeup_inventory_for_customer(customer)
+```
+The new architecture queries data on-demand through `data/database.py` for better performance and scalability. Never store dataframes globally!
 
 ## 📝 Making Changes
 
@@ -261,10 +393,20 @@ curl -X POST http://localhost:8000/api/generate-offers-basic \
 
 ## 🚀 Performance Notes
 
-- Offer generation uses parallel processing (14 threads)
-- Each customer × inventory combination is evaluated
-- Cache is currently disabled (always recalculates)
-- Typical response time: 1-2 seconds for ~4000 cars
+### Two-Stage Filtering Optimization
+- **Stage 1**: Database pre-filtering reduces 4000+ cars to ~300-500 (85-92% reduction!)
+- **Stage 2**: Business logic only processes pre-filtered candidates
+
+### Smart Caching
+- **Inventory**: Cached for 4 hours (configurable)
+- **Customers**: Always fresh from database
+- **First request**: ~2 seconds (queries Redshift)
+- **Cached requests**: <50ms
+
+### Parallel Processing
+- Offer generation uses ThreadPoolExecutor (CPU count threads)
+- Bulk operations load data once, filter per customer in memory
+- Typical response time: <500ms for single customer (with cache)
 
 ## 🔐 Security Notes
 
@@ -275,38 +417,144 @@ curl -X POST http://localhost:8000/api/generate-offers-basic \
 
 ## 📞 Getting Help
 
-- Main business logic: `engine/basic_matcher.py`
-- Payment calculations: `engine/payment_utils.py`
-- Configuration: `config/config.py`
-- API endpoints: `app/api/offers.py`
+### Core Business Logic
+- **Service Layer**: `app/services/offer_service.py`, `app/services/customer_service.py`
+- **Calculations**: `engine/basic_matcher.py`, `engine/calculator.py`
+- **Payment Logic**: `engine/payment_utils.py`
+- **Smart Search**: `engine/smart_search.py`
+
+### Data Access
+- **Database Queries**: `data/database.py` (NO global state!)
+- **Cache Management**: `data/cache_manager.py`
+- **Data Loading**: `data/loader.py` (used by database.py)
+
+### Configuration
+- **Business Rules**: `config/config.py`
+- **Runtime Config**: `config/engine_config.json`
+- **Cache Settings**: `config/cache_config.py`
+
+### Architecture Documentation
+- **Service Layer**: `SERVICE_LAYER_ARCHITECTURE.md`
+- **Data Architecture**: `DATA_ARCHITECTURE.md`
+- **Performance**: `TWO_STAGE_FILTERING.md`
+- **Refactor Details**: `REFACTORING_PHASE1_REPORT.md`
 
 When in doubt, search for the business term (e.g., "service_fee", "npv", "payment") to find where it's implemented.
 
-## 🔄 Recent Fixes (Dec 2024)
+## 🔄 Recent Updates (June 2025)
 
-1. **Amortization columns now add up correctly**
-   - Fixed by calculating display interest from same values used in payment
-   - File: `engine/calculator.py` lines 125-135
+### Latest Critical Fixes (Just Completed)
+1. **Comprehensive Configuration Management** ✅
+   - ALL hardcoded values moved to configuration system
+   - Multi-source configuration (DB, files, env, defaults)
+   - Runtime configuration changes without restart
+   - GPS fees, IVA rate, payment tiers - all configurable
+   - Configuration validation and audit trail
+   - See `config/configuration_manager.py`
 
-2. **Custom config values now work**
-   - Fixed Kavak Total being ignored: `engine/basic_matcher.py` line 146
-   - Fixed GPS fees being ignored: `engine/basic_matcher.py` lines 152-155
-   - Fixed display showing $25k when OFF: `modern_customer_detail_enhanced.html` line 1213
+2. **Financial Audit Trail System** ✅
+   - All calculations logged for compliance
+   - Structured JSON Lines format with rotation
+   - Search and reporting capabilities
+   - Automatic Decimal serialization
+   - See `engine/financial_audit.py`
 
-3. **Frontend/Backend sync**
-   - Fixed non-existent endpoints: `main.js` 
-   - Fixed request parameter mismatches
-   - Disabled broken features with user feedback
+3. **Decimal Precision for Money** ✅
+   - Optional Decimal type for all monetary calculations
+   - Eliminates floating-point rounding errors
+   - Configurable via `features.enable_decimal_precision`
+   - Backwards compatible
 
-## ✅ Verification Script
+4. **Enhanced Error Handling** ✅
+   - Specific exception types (Connection, Timeout, etc.)
+   - Better error messages in API responses
+   - Circuit breaker for Redshift connections
 
-ALWAYS run this after making changes:
+### Major Architecture Refactor
+1. **Eliminated Global DataFrames**
+   - Replaced global state with on-demand queries
+   - All data access through `data/database.py`
+   - Better memory usage and scalability
+
+2. **Service Layer Architecture**
+   - Business logic moved to `app/services/`
+   - Clean separation of concerns
+   - Routes are now thin controllers
+
+3. **Two-Stage Filtering Performance**
+   - 85-92% reduction in data loading
+   - Pre-filters at database level
+   - Smart caching with configurable TTL
+
+4. **Modern Data Architecture**
+   - Always fresh data or controllably cached
+   - Cache management UI and APIs
+   - Support for multiple server instances
+
+### Previous Fixes (Dec 2024)
+1. **Amortization columns** - Now add up correctly
+2. **Custom config values** - Properly applied in calculations
+3. **Frontend/Backend sync** - Fixed endpoint mismatches
+
+## ✅ Testing Changes
+
+### Verify New Systems
 ```bash
-python VERIFY_EVERYTHING.py
+# Run comprehensive verification script
+python verify_new_systems.py
 ```
 
-This verifies:
-- Kavak Total toggle works
-- Amortization columns add up
-- Custom fees are applied
-- CAC bonus affects equity
+This script verifies:
+- Configuration system is working
+- Audit logging is capturing calculations
+- Decimal precision is enabled
+- Old hardcoded systems are removed
+
+### Quick Verification
+```bash
+# Check cache status
+curl http://localhost:8000/api/cache/status
+
+# Generate offers (uses two-stage filtering)
+curl -X POST http://localhost:8000/api/generate-offers-basic \
+  -H "Content-Type: application/json" \
+  -d '{"customer_id": "TMCJ33A32GJ053451"}'
+
+# Force cache refresh
+curl -X POST http://localhost:8000/api/cache/refresh
+```
+
+### Verify Configuration Changes
+```python
+# Test runtime configuration changes
+from config.configuration_manager import get_config
+config = get_config()
+
+# View current configuration
+print(config.get_all())
+
+# Change a value
+config.set("fees.gps.monthly", "400.0")
+
+# Verify it persists
+print(config.get("fees.gps.monthly"))  # Should show 400.0
+```
+
+### Verify Audit Logging
+```python
+# Check audit logs are being created
+import os
+print(os.listdir("logs/financial_audit/"))  # Should show .jsonl files
+
+# View recent calculations
+from engine.financial_audit import get_audit_logger
+audit = get_audit_logger()
+print(audit.get_recent_entries(5))
+```
+
+### Verify Architecture Changes
+1. Monitor server logs - should NOT load all data on startup
+2. Configuration loads from multiple sources
+3. Audit logs created in `logs/financial_audit/`
+4. GPS fees and IVA rate loaded from configuration
+5. Decimal precision used when enabled

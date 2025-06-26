@@ -1,4 +1,8 @@
 import pandas as pd
+from .configuration_manager import get_config, get_interest_rate, get_payment_tiers
+
+# Get configuration manager
+_config = get_config()
 
 # --- Hardcoded Financial Parameters ---
 
@@ -58,34 +62,36 @@ def get_term_search_order(priority: str) -> list[int]:
     return TERM_SEARCH_ORDER
 
 # The default fee structure (Max Profit scenario)
-# Updated with actual Kavak values
+# These are now loaded from configuration but kept for backward compatibility
 DEFAULT_FEES = {
-    'service_fee_pct': 0.04,        # 4% of new car value (BASE VALUE)
-    'cxa_pct': 0.04,                # 4% of the new car price (Comisión por Apertura - Opening Fee)
-    'cac_bonus': 0,                 # Customer bonus (starts at 0, can go up to MAX_CAC_BONUS)
-    'kavak_total_amount': 25000.0,  # Fixed 25,000 MXN every two years
-    'insurance_amount': 10999.0,    # Fixed 10,999 MXN (financed over 12 months)
-    'gps_installation_fee': 750.0,  # Upfront GPS installation cost (FIXED)
-    'gps_monthly_fee': 350.0        # Recurring GPS monitoring fee
+    'service_fee_pct': float(_config.get_decimal("fees.service.percentage")),
+    'cxa_pct': float(_config.get_decimal("fees.cxa.percentage")),
+    'cac_bonus': float(_config.get_decimal("fees.cac_bonus.default")),
+    'cac_bonus_range': (
+        float(_config.get_decimal("fees.cac_bonus.min")),
+        float(_config.get_decimal("fees.cac_bonus.max"))
+    ),
+    'kavak_total_amount': float(_config.get_decimal("fees.kavak_total.amount")),
+    'insurance_amount': float(_config.get_decimal("fees.insurance.amount")),
+    'insurance_annual': float(_config.get_decimal("fees.insurance.amount")),
+    'gps_installation': float(_config.get_decimal("fees.gps.installation")),
+    'gps_installation_fee': float(_config.get_decimal("fees.gps.installation")),
+    'gps_monthly': float(_config.get_decimal("fees.gps.monthly")),
+    'gps_monthly_fee': float(_config.get_decimal("fees.gps.monthly"))
 }
 
 # The maximum CAC (Customer Bonus) we are willing to apply
-MAX_CAC_BONUS = 5000.0 # Example: 5,000 MXN
+MAX_CAC_BONUS = float(_config.get_decimal("fees.cac_bonus.max"))
 
 # Payment Delta Tiers to classify the final offer
-PAYMENT_DELTA_TIERS = {
-    'Refresh': (-0.05, 0.05),
-    'Upgrade': (0.0501, 0.25),
-    'Max Upgrade': (0.2501, 1.00) # Cap at 100% increase
-}
+PAYMENT_DELTA_TIERS = get_payment_tiers()
 
-IVA_RATE = 0.16 # 16% IVA tax
+# IVA Rate - loaded from configuration
+IVA_RATE = float(_config.get_decimal("financial.iva_rate"))
 
-# GPS installation fee applied upfront (subject to IVA)
-GPS_INSTALLATION_FEE = 750.0
-
-# Fixed monthly GPS monitoring fee (before IVA)
-GPS_MONTHLY_FEE = 350.0
+# GPS fees - loaded from configuration
+GPS_INSTALLATION_FEE = float(_config.get_decimal("fees.gps.installation"))
+GPS_MONTHLY_FEE = float(_config.get_decimal("fees.gps.monthly"))
 
 # Insurance amount lookup by risk profile. Placeholder values use the default
 # insurance amount for all profiles but allow future customization.

@@ -26,28 +26,28 @@
     <header class="header">
         <div class="container">
             <div class="header-content">
-                <a href="/" class="logo">
+                <a href="{{ url_for('dashboard') }}" class="logo">
                     <img src="/static/images/kavak-logo.svg" alt="Kavak" style="height: 36px;">
                     <span style="font-weight: 600; margin-left: 0.5rem;">Trade-Up Engine</span>
                 </a>
                 
                 <nav class="nav">
-                    <a href="/" class="nav-link {% if active_page == 'dashboard' %}active{% endif %}">
+                    <a href="{{ url_for('dashboard') }}" class="nav-link {% if active_page == 'dashboard' %}active{% endif %}">
                         <i class="fas fa-home"></i> Dashboard
                     </a>
-                    <a href="/customers" class="nav-link {% if active_page == 'customers' %}active{% endif %}">
+                    <a href="{{ url_for('customers_page') }}" class="nav-link {% if active_page == 'customers' %}active{% endif %}">
                         <i class="fas fa-users"></i> Customers
                     </a>
-                    <a href="/inventory" class="nav-link {% if active_page == 'inventory' %}active{% endif %}">
+                    <a href="{{ url_for('inventory_page') }}" class="nav-link {% if active_page == 'inventory' %}active{% endif %}">
                         <i class="fas fa-car"></i> Inventory
                     </a>
-                    <a href="/manual-simulation" class="nav-link {% if active_page == 'simulation' %}active{% endif %}">
+                    <a href="{{ url_for('manual_simulation_page') }}" class="nav-link {% if active_page == 'simulation' %}active{% endif %}">
                         <i class="fas fa-calculator"></i> Simulate
                     </a>
-                    <a href="/config" class="nav-link {% if active_page == 'config' %}active{% endif %}">
+                    <a href="{{ url_for('config_page') }}" class="nav-link {% if active_page == 'config' %}active{% endif %}">
                         <i class="fas fa-cog"></i> Config
                     </a>
-                    <a href="/health" class="nav-link" target="_blank">
+                    <a href="{{ url_for('health_page') }}" class="nav-link" target="_blank">
                         <i class="fas fa-heartbeat"></i> Health
                     </a>
                 </nav>

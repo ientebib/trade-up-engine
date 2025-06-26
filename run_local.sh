@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# Trade-Up Engine launcher - ALWAYS validates first
-# This is the ONLY way to run the server
+# Trade-Up Engine launcher (production mode only)
 
 set -euo pipefail
 
@@ -33,12 +32,17 @@ else
   echo "⚠️  No .env file found - using environment variables for Redshift"
 fi
 
-# Always production mode with Redshift
-export ENVIRONMENT=production
-export DISABLE_EXTERNAL_CALLS=false
-export USE_MOCK_DATA=false
+# Set Python path (project root)
+export PYTHONPATH="$(pwd)"
 
-# Start server
-echo "🚀 Starting Trade-Up Engine at http://localhost:8000..."
-echo "📊 Using Redshift for inventory data"
-python run_server.py
+# Force production environment
+export ENVIRONMENT=production
+
+echo "🚀 Starting Trade-Up Engine (production mode) at http://localhost:8000..."
+
+# Run with multiple workers for better performance
+python -m uvicorn app.main:app \
+  --host 0.0.0.0 \
+  --port 8000 \
+  --workers 4 \
+  --log-level info

@@ -9,169 +9,136 @@ import logging
 from concurrent.futures import ThreadPoolExecutor
 
 from app.models import OfferRequest, BulkOfferRequest
-from app.utils.cache import offer_cache
+from app.middleware.sanitization import sanitize_customer_id, InputSanitizer
+from app.utils.error_handling import handle_api_errors
+from app.utils.validators import Validators, ValidationError
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["offers"])
 
 
 @router.post("/generate-offers-basic")
+@handle_api_errors("generate basic offers")
 async def generate_offers_basic(request: OfferRequest):
-    """Generate ALL viable offers with standard fees - no fancy shit"""
-    from engine.basic_matcher import basic_matcher
-    from app.core.data import customers_df, inventory_df, executor
+    """
+    Generate trade-up offers for a customer with standard fees.
     
-    start_time = time.time()
+    This endpoint analyzes a customer's current loan and financial situation,
+    then generates all viable vehicle upgrade offers categorized by payment change.
     
-    # Check cache first
-    cache_key = offer_cache.get_key(request.customer_id)
-    cached_result = offer_cache.get(cache_key)
-    if cached_result:
-        logger.info(f"🚀 Cache hit for {request.customer_id}")
-        cached_result['from_cache'] = True
-        return cached_result
+    ## Request Body
+    - **customer_id**: Unique customer identifier (e.g., "TMCJ33A32GJ053451")
     
-    # Get customer data
-    customer_mask = customers_df["customer_id"] == request.customer_id
-    if not customer_mask.any():
-        raise HTTPException(status_code=404, detail="Customer not found")
+    ## Response
+    Returns offer data organized by payment tier:
+    - **refresh**: Offers with -5% to +5% payment change
+    - **upgrade**: Offers with +5% to +25% payment change  
+    - **max_upgrade**: Offers with +25% to +100% payment change
     
-    customer = customers_df[customer_mask].iloc[0].to_dict()
+    Each offer includes:
+    - Vehicle details (make, model, year, price)
+    - Financial terms (monthly payment, NPV, interest rate)
+    - Payment comparison with current loan
     
-    # Use basic matcher with parallel processing
-    loop = asyncio.get_event_loop()
-    inventory_records = inventory_df.to_dict("records")
+    ## Example
+    ```json
+    {
+        "customer_id": "TMCJ33A32GJ053451"
+    }
+    ```
     
-    result = await loop.run_in_executor(
-        executor,
-        basic_matcher.find_all_viable,
-        customer,
-        inventory_records
-    )
+    ## Errors
+    - 404: Customer not found
+    - 503: Service unavailable (database issues)
+    """
+    from app.services.offer_service import offer_service
     
-    # Cache the result
-    offer_cache.set(cache_key, result)
+    # Sanitize customer ID
+    clean_customer_id = sanitize_customer_id(request.customer_id)
     
-    logger.info(f"📊 Basic matcher: {result['total_offers']} offers for {request.customer_id} in {result['processing_time']}s")
-    
-    return result
+    # All business logic delegated to service layer
+    return offer_service.generate_offers_for_customer(clean_customer_id)
 
 
 @router.post("/generate-offers-bulk")
+@handle_api_errors("generate bulk offers")
 async def generate_offers_bulk(request: BulkOfferRequest):
-    """Generate offers for multiple customers in parallel"""
-    from app.core.data import customers_df
+    """
+    Generate offers for multiple customers in parallel.
     
-    start_time = time.time()
+    Processes multiple customers concurrently for efficient bulk operations.
+    Results are queued and can be retrieved via the bulk status endpoint.
     
-    # Validate all customers exist
-    valid_customers = []
-    for cid in request.customer_ids[:50]:  # Max 50 at once
-        if cid in customers_df["customer_id"].values:
-            valid_customers.append(cid)
+    ## Request Body
+    - **customer_ids**: List of customer IDs (max 100)
+    - **max_offers_per_customer**: Optional limit on offers per customer (default: 50)
     
-    if not valid_customers:
-        raise HTTPException(status_code=400, detail="No valid customers found")
+    ## Response
+    Returns request status with:
+    - **request_id**: Unique identifier for tracking
+    - **status**: Processing status (queued/processing/completed)
+    - **results**: Offer data for each customer (when completed)
     
-    # Process in parallel
-    tasks = []
-    for customer_id in valid_customers:
-        req = OfferRequest(
-            customer_id=customer_id,
-            max_offers=request.max_offers_per_customer
-        )
-        tasks.append(generate_offers_basic(req))
+    ## Limits
+    - Maximum 100 customers per request
+    - Maximum 3 concurrent bulk requests
+    - 5-minute timeout for processing
     
-    results = await asyncio.gather(*tasks, return_exceptions=True)
-    
-    # Format results
-    successful = []
-    failed = []
-    
-    for i, result in enumerate(results):
-        if isinstance(result, Exception):
-            failed.append({
-                "customer_id": valid_customers[i],
-                "error": str(result)
-            })
-        else:
-            successful.append({
-                "customer_id": valid_customers[i],
-                "offers_count": sum(len(offers) for offers in result["offers"].values()),
-                "best_npv": max(
-                    (offer.get("npv", 0) for tier_offers in result["offers"].values() 
-                     for offer in tier_offers),
-                    default=0
-                )
-            })
-    
-    return {
-        "processed": len(valid_customers),
-        "successful": len(successful),
-        "failed": len(failed),
-        "results": successful,
-        "errors": failed,
-        "processing_time": round(time.time() - start_time, 2)
+    ## Example
+    ```json
+    {
+        "customer_ids": ["CUST001", "CUST002", "CUST003"],
+        "max_offers_per_customer": 20
     }
+    ```
+    """
+    from app.services.offer_service import offer_service
+    
+    # Validate and sanitize bulk request
+    try:
+        validated_ids, max_offers = Validators.validate_bulk_request(
+            request.customer_ids,
+            request.max_offers_per_customer
+        )
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    
+    # All orchestration logic delegated to service layer
+    return await offer_service.generate_for_multiple_customers(
+        customer_ids=validated_ids,
+        max_offers_per_customer=max_offers
+    )
 
 
 @router.post("/generate-offers-custom")
+@handle_api_errors("generate custom offers")
 async def generate_offers_custom(request: Dict):
     """Generate offers with custom configuration per customer"""
-    from engine.basic_matcher import BasicMatcher
-    from app.core.data import customers_df, inventory_df, executor
+    from app.services.offer_service import offer_service
     
-    start_time = time.time()
+    # Sanitize request data
+    request = InputSanitizer.sanitize_dict(request)
     
-    # Get customer
-    customer_id = request.get('customer_id')
-    if not customer_id:
-        raise HTTPException(status_code=400, detail="customer_id required")
+    # Validate offer request
+    try:
+        validated_request = Validators.validate_offer_request(request)
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     
-    customer_mask = customers_df["customer_id"] == customer_id
-    if not customer_mask.any():
-        raise HTTPException(status_code=404, detail="Customer not found")
+    # Process custom configuration
+    custom_config = offer_service.process_custom_config(validated_request)
     
-    customer = customers_df[customer_mask].iloc[0].to_dict()
+    # Generate offers with custom config - all business logic in service
+    result = offer_service.generate_offers_for_customer(validated_request['customer_id'], custom_config)
     
-    # Extract custom configuration
-    kavak_total_enabled = request.get('kavak_total_enabled', True)
-    kavak_total_amount = 25000 if kavak_total_enabled else 0
-    
-    custom_config = {
-        'service_fee_pct': request.get('service_fee_pct', 0.04),
-        'cxa_pct': request.get('cxa_pct', 0.04),
-        'cac_bonus': request.get('cac_bonus', 0),
-        'kavak_total_amount': kavak_total_amount,
-        'gps_monthly_fee': request.get('gps_monthly_fee', 350),
-        'gps_installation_fee': request.get('gps_installation_fee', 750),
-        'insurance_amount': request.get('insurance_amount', 10999),
-        'term_months': request.get('term_months')  # Optional specific term
-    }
-    
-    # Use standard matcher with custom fees passed to find_all_viable
-    from engine.basic_matcher import basic_matcher
-    
-    # Find offers with custom configuration
-    loop = asyncio.get_event_loop()
-    inventory_records = inventory_df.to_dict("records")
-    
-    result = await loop.run_in_executor(
-        executor,
-        basic_matcher.find_all_viable,
-        customer,
-        inventory_records,
-        custom_config  # Pass custom fees as parameter
-    )
-    
+    # Add configuration to response
     result['configuration'] = custom_config
-    
-    logger.info(f"📊 Custom matcher: {result['total_offers']} offers for {customer_id} in {round(time.time() - start_time, 2)}s")
     
     return result
 
 
 @router.post("/amortization")
+@handle_api_errors("generate amortization")
 async def amortization_api(offer: Dict = Body(...)):
     """Return amortization schedule for a given offer.
 
@@ -180,23 +147,10 @@ async def amortization_api(offer: Dict = Body(...)):
       loan_amount, term, interest_rate, service_fee_amount, kavak_total_amount,
       insurance_amount, gps_monthly_fee.
     """
-    from engine.calculator import generate_amortization_table
-    schedule = generate_amortization_table(offer)
-
-    # Fix field names to match frontend expectations
-    for row in schedule:
-        # Frontend expects 'balance' field
-        row['balance'] = row.get('ending_balance', 0)
-
-    return {
-        "schedule": schedule,
-        "table": schedule,  # Frontend expects 'table' field
-        "payment_total": schedule[0]["payment"] if schedule else 0,
-        "principal_month1": schedule[0]["principal"] if schedule else 0,
-        "interest_month1": schedule[0]["interest"] if schedule else 0,
-        "gps_fee": schedule[0]["cargos"] if schedule else 0,
-        "cargos": schedule[0]["cargos"] if schedule else 0,
-    }
+    from app.services.offer_service import offer_service
+    
+    # All formatting logic delegated to service layer
+    return offer_service.format_amortization_for_frontend(offer)
 
 
 @router.post("/amortization-table")
@@ -205,9 +159,18 @@ async def amortization_table_api(offer: Dict = Body(...)):
     return await amortization_api(offer)
 
 
-# REMOVED: manual_simulation_api - calculate_offer_details doesn't exist
-@router.post("/manual-simulation")
-async def manual_simulation_api(request: Dict):
-    """Calculate offers for manual simulation"""
-    # TODO: Re-implement using basic_matcher
-    raise HTTPException(status_code=501, detail="Manual simulation temporarily disabled - needs reimplementation")
+@router.get("/offers/bulk-status/{request_id}")
+@handle_api_errors("get bulk status")
+async def get_bulk_status(request_id: str):
+    """Get status of a bulk offer generation request"""
+    from app.services.offer_service import offer_service
+    
+    # Sanitize request ID (UUIDs)
+    clean_request_id = sanitize_customer_id(request_id)
+    
+    status = offer_service.get_bulk_request_status(clean_request_id)
+    if not status:
+        raise ValueError("Request not found")
+    
+    return status
+

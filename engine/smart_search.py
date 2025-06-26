@@ -6,7 +6,7 @@ from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
 import pandas as pd
 import numpy_financial as npf
-from config import (
+from config.config import (
     IVA_RATE, GPS_INSTALLATION_FEE, GPS_MONTHLY_FEE,
     INSURANCE_TABLE, DEFAULT_FEES, get_hardcoded_financial_parameters
 )

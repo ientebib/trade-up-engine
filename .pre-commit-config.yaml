@@ -1,0 +1,58 @@
+# Pre-commit hooks for code quality and consistency
+# Install with: pip install pre-commit && pre-commit install
+
+repos:
+  # Code formatting with black
+  - repo: https://github.com/psf/black
+    rev: 23.12.1
+    hooks:
+      - id: black
+        language_version: python3.8
+        args: [--line-length=100, --target-version=py38]
+
+  # Import sorting with isort
+  - repo: https://github.com/pycqa/isort
+    rev: 5.13.2
+    hooks:
+      - id: isort
+        args: [--profile=black, --line-length=100, --multi-line=3]
+
+  # Remove trailing whitespace and fix line endings
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+      - id: check-added-large-files
+      - id: check-merge-conflict
+      - id: debug-statements
+
+  # Flake8 for linting (configured to work with black)
+  - repo: https://github.com/pycqa/flake8
+    rev: 7.0.0
+    hooks:
+      - id: flake8
+        args: [
+          --max-line-length=100,
+          --extend-ignore=E203,W503,E501,  # Black compatibility
+          --max-complexity=10,
+          --per-file-ignores=__init__.py:F401  # Allow unused imports in __init__.py
+        ]
+
+  # Security check with bandit
+  - repo: https://github.com/pycqa/bandit
+    rev: 1.7.5
+    hooks:
+      - id: bandit
+        args: [-r, ., -x, tests/, -f, json]
+        exclude: ^tests/
+
+  # Check for common security issues
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.4.0
+    hooks:
+      - id: detect-secrets
+        args: ['--baseline', '.secrets.baseline']
+        exclude: package.lock.json
