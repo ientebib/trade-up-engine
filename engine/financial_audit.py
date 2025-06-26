@@ -404,10 +404,10 @@ def get_audit_logger() -> FinancialAuditLogger:
     if _audit_logger is None:
         with _audit_lock:
             if _audit_logger is None:
-                from config.configuration_manager import get_config
-                config = get_config()
+                from config.facade import get_bool
+                enabled = get_bool("features.enable_audit_logging", True)
                 
-                if config.get_bool("features.enable_audit_logging", True):
+                if enabled:
                     _audit_logger = FinancialAuditLogger()
                     logger.info("Financial audit logger initialized")
     

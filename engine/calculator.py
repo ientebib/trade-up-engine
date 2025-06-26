@@ -1,13 +1,17 @@
 import numpy_financial as npf
 from decimal import Decimal, ROUND_HALF_UP
-from config.configuration_manager import get_config
+import os
 from .payment_utils import calculate_payment_components, calculate_final_npv
 from .financial_audit import get_audit_logger, CalculationType
 from app.utils.data_validator import DataValidator, validate_calculation_input
 import logging
 
 logger = logging.getLogger(__name__)
-config = get_config()
+
+# Use configuration facade
+from config.facade import ConfigProxy
+
+config = ConfigProxy()
 
 
 @validate_calculation_input

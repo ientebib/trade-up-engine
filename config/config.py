@@ -1,8 +1,15 @@
 import pandas as pd
-from .configuration_manager import get_config, get_interest_rate, get_payment_tiers
 
-# Get configuration manager
-_config = get_config()
+# Use facade for configuration
+from .facade import (
+    get_decimal, 
+    get_payment_tiers, 
+    get_interest_rate,
+    ConfigProxy
+)
+
+# Use ConfigProxy instead of duplicate wrapper
+_config = ConfigProxy()
 
 # --- Hardcoded Financial Parameters ---
 

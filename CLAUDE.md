@@ -170,18 +170,16 @@ The application now uses a comprehensive configuration management system. ALL bu
 
 #### Change Configuration at Runtime
 ```python
-from config.configuration_manager import get_config
-config = get_config()
+from config.facade import get, get_decimal, set
 
-# Change GPS fees
-config.set("fees.gps.monthly", "400.0")  # Change to 400 MXN
-config.set("fees.gps.installation", "800.0")
+# Get configuration values
+gps_monthly = get_decimal("fees.gps.monthly")  # Returns Decimal('350.0')
+interest_rate = get("rates.A1")  # Returns "0.1949"
 
-# Change interest rates
-config.set("rates.A1", "0.21")  # 21% for A1 profile
-
-# Change payment tiers
-config.set("tiers.refresh.min", "-0.10")  # Allow 10% decrease
+# Change configuration at runtime
+set("fees.gps.monthly", "400.0")  # Change to 400 MXN
+set("rates.A1", "0.21")  # 21% for A1 profile
+set("tiers.refresh.min", "-0.10")  # Allow 10% decrease
 
 # Changes persist to engine_config.json
 ```
@@ -450,7 +448,7 @@ When in doubt, search for the business term (e.g., "service_fee", "npv", "paymen
    - Runtime configuration changes without restart
    - GPS fees, IVA rate, payment tiers - all configurable
    - Configuration validation and audit trail
-   - See `config/configuration_manager.py`
+   - See `config/facade.py`
 
 2. **Financial Audit Trail System** ✅
    - All calculations logged for compliance
@@ -527,17 +525,16 @@ curl -X POST http://localhost:8000/api/cache/refresh
 ### Verify Configuration Changes
 ```python
 # Test runtime configuration changes
-from config.configuration_manager import get_config
-config = get_config()
+from config.facade import get, set, get_all
 
 # View current configuration
-print(config.get_all())
+print(get_all())
 
 # Change a value
-config.set("fees.gps.monthly", "400.0")
+set("fees.gps.monthly", "400.0")
 
 # Verify it persists
-print(config.get("fees.gps.monthly"))  # Should show 400.0
+print(get("fees.gps.monthly"))  # Should show 400.0
 ```
 
 ### Verify Audit Logging

@@ -12,6 +12,16 @@ async def startup_event():
     """Initialize application - test connections only"""
     logger.info("🚀 Starting Modern Trade-Up Engine...")
     
+    # Initialize configuration system
+    logger.info("🔧 Initializing configuration system...")
+    from config.facade import reload as reload_config, validate as validate_config
+    reload_config()
+    
+    # Validate configuration
+    errors = validate_config()
+    if errors:
+        logger.warning(f"⚠️ Configuration validation warnings: {errors}")
+    
     # Test database connections
     db_status = database.test_database_connection()
     

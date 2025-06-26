@@ -3,16 +3,25 @@ from typing import Dict
 import numpy_financial as npf
 from functools import lru_cache
 from decimal import Decimal, ROUND_HALF_UP
-from config.configuration_manager import get_config
+import os
 import logging
 import json
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
-# Get configuration manager
-config = get_config()
+# Use configuration facade
+from config.facade import ConfigProxy
 
+config = ConfigProxy()
+
+# Precompute frequently used validation bounds (config is now defined)
+MIN_LOAN_AMOUNT = float(config.get_decimal("financial.min_loan_amount"))
+MAX_LOAN_AMOUNT = float(config.get_decimal("financial.max_loan_amount"))
+MIN_INTEREST_RATE = float(config.get_decimal("financial.min_interest_rate"))
+MAX_INTEREST_RATE = float(config.get_decimal("financial.max_interest_rate"))
+MIN_TERM_MONTHS = config.get_int("financial.min_term_months")
+MAX_TERM_MONTHS = config.get_int("financial.max_term_months")
 
 class FinancialValidationError(ValueError):
     """Raised when financial inputs are invalid"""

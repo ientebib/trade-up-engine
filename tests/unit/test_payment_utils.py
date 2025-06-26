@@ -1,6 +1,8 @@
 """
 Unit tests for payment utilities
 """
+import os
+os.environ['USE_NEW_CONFIG'] = 'true'  # Force new configuration system
 import pytest
 from engine.payment_utils import (
     calculate_monthly_payment_with_fees,
