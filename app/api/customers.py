@@ -6,7 +6,7 @@ from typing import Optional
 import logging
 from app.services.customer_service import customer_service
 from app.middleware.sanitization import sanitize_search_term, sanitize_pagination
-from app.utils.validators import validate_customer_search
+from app.utils.validation import validate_customer_search
 from app.utils.error_handling import handle_api_errors
 
 logger = logging.getLogger(__name__)

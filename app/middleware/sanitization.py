@@ -107,7 +107,7 @@ class InputSanitizer:
         Raises:
             ValidationError: If value cannot be converted to a valid number
         """
-        from app.utils.validators import ValidationError
+        from app.utils.validation import ValidationError
         
         try:
             num = float(value)

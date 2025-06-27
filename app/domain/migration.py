@@ -7,10 +7,13 @@ from using dictionaries to strongly-typed domain models.
 from typing import Dict, Any, List, Union, Optional
 import pandas as pd
 from decimal import Decimal
+import logging
 
 from .customer import Customer, CurrentVehicle
 from .vehicle import Vehicle
 from .offer import Offer
+
+logger = logging.getLogger(__name__)
 
 
 class DomainMigrationHelper:
@@ -54,7 +57,7 @@ class DomainMigrationHelper:
                 customers.append(customer)
             except Exception as e:
                 # Log error but continue processing
-                print(f"Error converting customer {row.get('customer_id', 'unknown')}: {e}")
+                logger.warning(f"Error converting customer {row.get('customer_id', 'unknown')}: {e}")
                 continue
         return customers
     
@@ -68,7 +71,7 @@ class DomainMigrationHelper:
                 vehicles.append(vehicle)
             except Exception as e:
                 # Log error but continue processing
-                print(f"Error converting vehicle {row.get('car_id', 'unknown')}: {e}")
+                logger.warning(f"Error converting vehicle {row.get('car_id', 'unknown')}: {e}")
                 continue
         return vehicles
     

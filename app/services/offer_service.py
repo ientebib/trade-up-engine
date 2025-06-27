@@ -7,7 +7,7 @@ from typing import Dict, List, Optional, Any
 from engine.basic_matcher import basic_matcher
 from engine.calculator import generate_amortization_table
 from data import database
-from app.utils.data_validator import DataValidator, DataIntegrityError
+from app.utils.validation import UnifiedValidator as DataValidator, DataIntegrityError
 
 logger = logging.getLogger(__name__)
 

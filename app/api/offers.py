@@ -11,7 +11,7 @@ from concurrent.futures import ThreadPoolExecutor
 from app.models import OfferRequest, BulkOfferRequest
 from app.middleware.sanitization import sanitize_customer_id, InputSanitizer
 from app.utils.error_handling import handle_api_errors
-from app.utils.validators import Validators, ValidationError
+from app.utils.validation import UnifiedValidator as Validators, ValidationError
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["offers"])

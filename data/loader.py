@@ -13,7 +13,7 @@ import time
 from tenacity import retry, wait_exponential, stop_after_attempt
 from app.utils.logging import setup_logging
 from .connection_pool import get_connection_pool
-from app.utils.data_validator import DataValidator, DataIntegrityError
+from app.utils.validation import UnifiedValidator as DataValidator, DataIntegrityError
 RISK_PROFILE_MAPPING = {
     'AAA': 0, 'AA': 1, 'A': 2, 'A1': 3, 'A2': 4,
     'B': 5, 'C1': 6, 'C2': 7, 'C3': 8,
