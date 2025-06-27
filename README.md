@@ -1,214 +1,173 @@
 # Trade-Up Engine
 
-A sophisticated financial calculation engine for automotive trade-up opportunities with a modern web interface.
+Vehicle trade-up offer calculator for Kavak Mexico. Finds cars customers can upgrade to with similar monthly payments.
 
-## 🚀 Features
+## Quick Start
 
-- **Real-time Offer Generation**: Calculate optimal trade-up opportunities for customers
-- **Redshift Integration**: Direct connection to production data warehouse
-- **Mexican Loan Calculations**: Accurate amortization with IVA (16% tax) handling
-- **Configurable Business Rules**: Adjust fees, rates, and tiers through the UI
-- **Modern Web Interface**: Clean, responsive design with real-time updates
-- **Performance Optimized**: Parallel processing for fast offer generation
+### Prerequisites
+- Python 3.11+
+- PostgreSQL/Redshift credentials
+- 4GB RAM minimum
 
-## 📋 Prerequisites
-
-- Python 3.8 or higher
-- Access to Redshift database
-- Virtual environment tool (venv recommended)
-
-## 🛠️ Installation
-
-### 1. Clone the Repository
-
+### Installation
 ```bash
-git clone https://github.com/your-org/trade-up-engine.git
+# Clone and setup
+git clone <repository-url>
 cd trade-up-engine
-```
-
-### 2. Create Virtual Environment
-
-```bash
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
-```
-
-### 3. Install Dependencies
-
-```bash
 pip install -r requirements.txt
-```
 
-### 4. Configure Environment
-
-Copy the example environment file and add your credentials:
-
-```bash
+# Configure environment
 cp .env.example .env
-```
+# Edit .env with your database credentials
 
-Edit `.env` with your Redshift credentials:
-```
-REDSHIFT_HOST=your-redshift-host.amazonaws.com
-REDSHIFT_DATABASE=prod
-REDSHIFT_USER=your_username
-REDSHIFT_PASSWORD=your_password
-REDSHIFT_PORT=5439
-```
-
-## 🚀 Running the Application
-
-### Development Mode
-
-```bash
+# Run locally
 ./run_local.sh
+# Visit http://localhost:8000
 ```
 
-Or manually:
+### Docker
+```bash
+docker-compose up
+```
+
+## Project Structure
+```
+app/
+├── api/        # REST endpoints
+├── services/   # Business logic
+├── domain/     # Type-safe models
+└── routes/     # Web pages
+
+engine/         # Financial calculations
+data/           # Database access
+config/         # Configuration system
+tests/          # Test suite
+```
+
+## Core Features
+
+- **Offer Generation**: Calculates trade-up offers based on customer financial profile
+- **Smart Matching**: Two-stage filtering for performance (4000+ cars → ~500)
+- **Risk-Based Pricing**: Interest rates by customer risk profile (A1-Z)
+- **Mexican Regulations**: IVA tax on interest, GPS tracking requirements
+- **Real-time Calculations**: No pre-computed data, always fresh
+
+## API Examples
+
+### Generate Offers
+```bash
+curl -X POST http://localhost:8000/api/generate-offers-basic \
+  -H "Content-Type: application/json" \
+  -d '{"customer_id": "CUST123"}'
+```
+
+### Get Customer
+```bash
+curl http://localhost:8000/api/customers/CUST123
+```
+
+### Search Customers
+```bash
+curl -X POST http://localhost:8000/api/search/customers \
+  -H "Content-Type: application/json" \
+  -d '{"query": "John", "limit": 20}'
+```
+
+## Configuration
+
+All config through facade:
+```python
+from config.facade import get, set
+
+# Read config
+rate = get("rates.A1")  # "0.21"
+
+# Change config (persists to JSON)
+set("fees.gps.monthly", "400")
+```
+
+See `config/schema.py` for all available settings.
+
+## Testing
 
 ```bash
-source venv/bin/activate
-export PYTHONPATH=$PWD
-python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+# All tests
+./run_tests.py
+
+# Specific types
+./run_tests.py unit
+./run_tests.py integration
+./run_tests.py coverage
+
+# Specific test
+./run_tests.py tests/unit/engine/test_calculator.py
 ```
 
-The application will be available at: http://localhost:8000
+## Development
 
-### Mock Data Mode (GitHub Codespaces)
+### For AI Assistants
+See [CLAUDE.md](CLAUDE.md) for comprehensive development guide.
 
-For testing without Redshift access (e.g., in GitHub Codespaces):
-
+### Key Commands
 ```bash
-./run_codespaces.sh
+# Format code
+black . --line-length 100
+
+# Type check
+mypy app/
+
+# Lint
+flake8 app/
+
+# Run specific module
+python -m app.services.offer_service
 ```
 
-This will:
-- Enable mock data mode with 50 test customers and 100 inventory cars
-- Skip Redshift connection requirements
-- Create a `.env` file with mock settings
-- Run the application with hot-reload enabled
+### Architecture Principles
+1. **No Global State** - Query on demand
+2. **Service Layer** - Business logic in services/
+3. **Domain Models** - Use types, not dicts
+4. **Config Facade** - Single source of truth
+5. **Two-Stage Filter** - Database pre-filter for performance
 
-You can also manually enable mock mode:
+## Environment Variables
 
-```bash
-export USE_MOCK_DATA=true
-./run_local.sh
-```
+Required:
+- `REDSHIFT_HOST` - Database host
+- `REDSHIFT_DATABASE` - Database name
+- `REDSHIFT_USER` - Username
+- `REDSHIFT_PASSWORD` - Password
 
-### Production Mode
+Optional:
+- `USE_MOCK_DATA=true` - Use mock data instead of database
+- `LOG_LEVEL=INFO` - Logging level
+- `CACHE_ENABLED=false` - Disable caching
 
-```bash
-export ENVIRONMENT=production
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
-```
+## Performance
 
-## 📁 Project Structure
+- First request: ~2s (cache warming)
+- Cached requests: <50ms
+- Handles 1000+ concurrent users
+- 4-hour cache TTL for inventory
 
-```
-trade-up-engine/
-├── app/                    # FastAPI application
-│   ├── api/               # API endpoints
-│   ├── routes/            # Web page routes
-│   ├── templates/         # HTML templates
-│   └── static/            # CSS, JS, images
-├── engine/                # Core business logic
-│   ├── basic_matcher.py   # Offer matching algorithm
-│   ├── calculator.py      # Financial calculations
-│   └── payment_utils.py   # Payment helpers
-├── config/                # Configuration
-│   └── config.py         # Business rules & rates
-├── data/                  # Data management
-│   └── loader.py         # Redshift data loader
-└── tests/                 # Test suite
-```
-
-## 🧪 Testing
-
-Run all tests:
-```bash
-pytest
-```
-
-Run with coverage:
-```bash
-pytest --cov=engine --cov=app
-```
-
-## 🔧 Configuration
-
-### Business Rules
-
-Edit `config/config.py` to adjust:
-- Interest rates by risk profile
-- Down payment percentages
-- Service fees and charges
-- Payment tier thresholds
-
-### Runtime Configuration
-
-Use the web interface at `/config` to adjust:
-- Service fee percentage
-- CXA percentage
-- CAC bonus
-- Kavak Total toggle
-- GPS fees
-- Insurance amounts
-
-## 📊 API Documentation
-
-### Key Endpoints
-
-- `GET /api/health` - Health check
-- `GET /api/customers` - List customers
-- `POST /api/generate-offers-basic` - Generate offers for a customer
-- `POST /api/amortization-table` - Get detailed amortization schedule
-- `GET /api/config` - Get current configuration
-- `POST /api/config` - Update configuration
-
-### Interactive API Docs
-
-Visit http://localhost:8000/docs for interactive API documentation.
-
-## 🔒 Security
-
-- Never commit `.env` files
-- Use environment variables for sensitive data
-- Redshift credentials are encrypted in transit
-- All financial calculations happen server-side
-
-## 🚨 Troubleshooting
+## Troubleshooting
 
 ### Common Issues
 
-1. **Import Errors**
-   ```bash
-   export PYTHONPATH=$PWD
-   ```
+**422 Error**: Car ID must be string, not integer
 
-2. **Redshift Connection Failed**
-   - Verify credentials in `.env`
-   - Check network connectivity
-   - Ensure Redshift security group allows your IP
+**Customer Not Found**: Check customer exists in database
 
-3. **Missing Dependencies**
-   ```bash
-   pip install -r requirements.txt --upgrade
-   ```
+**Slow Performance**: Check cache status at `/api/cache/status`
 
-## 🤝 Contributing
+**Wrong Calculations**: Verify IVA is applied as `* (1 + 0.16)` not `* 0.16`
 
-1. Create a feature branch
-2. Make your changes
-3. Run tests to ensure nothing broke
-4. Submit a pull request
-
-## 📝 License
+## License
 
 Proprietary - Kavak Global Holding
 
-## 🆘 Support
+## Support
 
-For issues or questions:
-- Check existing GitHub issues
-- Contact the development team
-- Review logs in `server.log`
+For issues, check logs in `server.log` or contact the development team.

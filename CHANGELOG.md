@@ -1,55 +1,59 @@
 # Changelog
 
-All notable changes to the Trade-Up Engine project will be documented in this file.
-
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-
-## [2.0.0] - 2024-06-25
+## [2.1.0] - 2025-06-27
 
 ### Added
-- Comprehensive test structure with unit and integration tests
-- Professional README with detailed setup instructions
-- API documentation in `docs/API.md`
-- Setup script for easy installation
-- `.env.example` template for configuration
-- Proper error handling with JSON responses for API endpoints
-- Development dependencies (pytest, black, isort, mypy)
-- Changelog to track version history
+- Comprehensive AI assistant guide (CLAUDE.md)
+- Domain models for type safety (Customer, Vehicle, Offer)
+- Complete test suite with unit and integration tests
+- Test runner script (`run_tests.py`)
+- Migration helpers for transitioning from dictionaries to domain models
+- Circuit breaker monitoring API endpoints
+- Configuration migration guide
 
 ### Changed
-- Updated all dependencies to latest stable versions
-- Reorganized test files into proper test directory structure
-- Improved error handling across the application
-- Enhanced .gitignore to exclude sensitive and generated files
-- Standardized import patterns throughout the codebase
+- Consolidated all configuration to single source (config/schema.py)
+- Simplified README to be more concise and actionable
+- Updated all documentation to be clear and non-redundant
+- Improved constants.py to use config facade
 
 ### Fixed
-- Config page now works correctly with proper key mappings
-- Inventory page template rendering issues
-- Import consistency issues across modules
-- Security issue with .env file in version control
+- IVA calculation bug in smart_search.py (was multiplying by 0.16 instead of 1.16)
+- Completed SearchRequest model definition
+- Added missing newlines to files
+- Config value inconsistencies across files
 
 ### Removed
-- Test and debug files from root directory
-- Duplicate `api/` directory at root level
-- Unnecessary config files (scenario_results.json, unified_config.py)
-- All `__pycache__` directories and `.pyc` files
-- Oddly named files from automated PRs
+- Duplicate API documentation files
+- Outdated refactoring reports
+- Confusing architecture documentation (consolidated into single file)
 
-### Security
-- Removed credentials from version control
-- Added .env to .gitignore
-- Created .env.example with placeholder values
+## [2.0.0] - 2024-12-15
 
-## [1.5.0] - 2024-06-24
+### Added
+- Service layer architecture
+- Two-stage filtering for performance
+- Smart caching with TTL
+- Domain models foundation
+- Comprehensive configuration system
+- Financial audit trail
+- Decimal precision support
 
 ### Changed
-- Major refactoring of amortization calculations
-- Updated to use audited calculation formula from risk team
-- Separated IVA calculation for better accuracy
+- Eliminated global DataFrames
+- Moved to on-demand data queries
+- Refactored to service-oriented architecture
 
-### Fixed
-- Amortization table columns now add up correctly
-- Custom configuration values properly applied
-- Frontend/backend API synchronization issues
+### Removed
+- Legacy global state
+- Pre-loaded dataframes
+- Hardcoded configuration values
+
+## [1.0.0] - 2024-06-25
+
+### Added
+- Initial release
+- Basic offer generation
+- Customer management
+- Payment calculations
+- Web interface
