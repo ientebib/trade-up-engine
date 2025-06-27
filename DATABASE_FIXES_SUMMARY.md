@@ -33,19 +33,19 @@
 
 ## Files Modified
 
-1. `/Users/isaacentebi/Desktop/Trade-Up-Engine/data/database.py`
+1. `data/database.py`
    - Fixed column references from 'final_price' to 'sales_price'
    - Added column existence checks for 'make' vs 'car_brand'
    - Fixed empty dataframe handling in aggregates
 
-2. `/Users/isaacentebi/Desktop/Trade-Up-Engine/data/loader.py`
+2. `data/loader.py`
    - Added missing columns to inventory transformation: car_brand, make, year
 
-3. `/Users/isaacentebi/Desktop/Trade-Up-Engine/app/services/config_service.py`
+3. `app/services/config_service.py`
    - Removed dependency on non-existent cac_bonus_range key
    - Added fallback values for CAC min/max
 
-4. `/Users/isaacentebi/Desktop/Trade-Up-Engine/config/config.py`
+4. `config/config.py`
    - Added missing DEFAULT_FEES keys: cac_bonus_range, insurance_annual, gps_monthly, gps_installation
    - Fixed PAYMENT_DELTA_TIERS keys to lowercase
 
