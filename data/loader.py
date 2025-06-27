@@ -88,8 +88,12 @@ class DataLoader:
             with open("data/inventory_query.sql", "r") as file:
                 query = file.read()
         except FileNotFoundError:
+            from app.utils.exceptions import DataLoadError
             logger.error("❌ inventory_query.sql file not found in data/ folder.")
-            return pd.DataFrame()
+            raise DataLoadError(
+                source="inventory_query.sql",
+                reason="Query file not found in data/ folder"
+            )
 
         # Chaos testing mode (only runs in non-production environments)
         if os.getenv("ENV") != "production":
@@ -119,12 +123,18 @@ class DataLoader:
 
         except Exception as e:
             import traceback
+            from app.utils.exceptions import DataLoadError
 
             logger.error(
                 f"❌ Failed to load inventory from Redshift: {type(e).__name__}"
             )
             logger.error(f"Full Traceback:\n{traceback.format_exc()}")
-            return pd.DataFrame()
+            
+            # Raise a proper exception instead of returning empty DataFrame
+            raise DataLoadError(
+                source="Redshift",
+                reason=f"{type(e).__name__}: {str(e)}"
+            )
 
     def transform_inventory_data(self, raw_df):
         """
@@ -314,8 +324,12 @@ class DataLoader:
             return customers_df
 
         except Exception as e:
+            from app.utils.exceptions import DataLoadError
             logger.error(f"❌ Failed to load customer data: {str(e)}")
-            return pd.DataFrame()
+            raise DataLoadError(
+                source="customers_data_tradeup.csv",
+                reason=str(e)
+            )
 
     # ------------------------------------------------------------------
     # Public helper methods
@@ -721,8 +735,12 @@ class DataLoader:
             with open("data/filtered_inventory_query.sql", "r") as file:
                 query = file.read()
         except FileNotFoundError:
+            from app.utils.exceptions import DataLoadError
             logger.error("❌ filtered_inventory_query.sql not found")
-            return pd.DataFrame()
+            raise DataLoadError(
+                source="filtered_inventory_query.sql",
+                reason="Query file not found in data/ folder"
+            )
         
         try:
             pool = get_connection_pool()
@@ -742,8 +760,12 @@ class DataLoader:
                 return inventory_df
                 
         except Exception as e:
+            from app.utils.exceptions import DataLoadError
             logger.error(f"❌ Failed to load filtered inventory: {type(e).__name__}: {e}")
-            return pd.DataFrame()
+            raise DataLoadError(
+                source="Redshift (filtered)",
+                reason=f"{type(e).__name__}: {str(e)}"
+            )
     
     def load_single_car_from_redshift(self, car_id: str):
         """Load a single car from Redshift using WHERE clause - TRUE optimization."""

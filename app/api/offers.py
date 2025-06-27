@@ -116,11 +116,12 @@ async def generate_offers_custom(request: Dict):
     """Generate offers with custom configuration per customer"""
     from app.services.offer_service import offer_service
     
-    # Sanitize request data
-    request = InputSanitizer.sanitize_dict(request)
-    
-    # Validate offer request
+    # Sanitize and validate request data
     try:
+        # Sanitize request data (may raise ValidationError)
+        request = InputSanitizer.sanitize_dict(request)
+        
+        # Validate offer request
         validated_request = Validators.validate_offer_request(request)
     except ValidationError as e:
         raise HTTPException(status_code=400, detail=str(e))

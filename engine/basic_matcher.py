@@ -5,6 +5,7 @@ import numpy_financial as npf
 import numpy as np
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import multiprocessing
+import atexit
 
 from app.constants import (
     REFRESH_TIER_MIN, REFRESH_TIER_MAX,
@@ -57,12 +58,30 @@ class BasicMatcher:
     def __init__(self):
         self.cpu_count = multiprocessing.cpu_count()
         self.executor = ThreadPoolExecutor(max_workers=self.cpu_count)
+        self._shutdown = False
         logger.info(f"🚀 BasicMatcher initialized with {self.cpu_count} workers")
         
+    def cleanup(self):
+        """Explicit cleanup method for thread pool"""
+        if not self._shutdown and hasattr(self, 'executor'):
+            logger.info("🧹 Shutting down BasicMatcher thread pool...")
+            self.executor.shutdown(wait=True)
+            self._shutdown = True
+            logger.info("✅ BasicMatcher thread pool shutdown complete")
+    
+    def __enter__(self):
+        """Context manager support"""
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager cleanup"""
+        self.cleanup()
+        return False
+        
     def __del__(self):
-        """Clean up thread pool on destruction"""
-        if hasattr(self, 'executor'):
-            self.executor.shutdown(wait=False)
+        """Fallback cleanup on destruction"""
+        if not self._shutdown:
+            self.cleanup()
     
     def find_all_viable(self, customer: Dict, inventory: List[Dict], custom_fees: Optional[Dict] = None) -> Dict:
         """
@@ -351,4 +370,8 @@ class BasicMatcher:
             "interest_rate": interest_rate
         }
 
+# Create singleton instance with proper cleanup
 basic_matcher = BasicMatcher()
+
+# Register cleanup on interpreter exit
+atexit.register(basic_matcher.cleanup)

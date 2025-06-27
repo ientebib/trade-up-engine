@@ -58,6 +58,9 @@ class CacheManager:
             "force_refreshes": 0,
             "last_refresh": {}
         }
+        # Track in-progress fetches to prevent stampede
+        self._fetch_locks: Dict[str, threading.Event] = {}
+        self._fetch_results: Dict[str, Any] = {}
         logger.info(f"🗄️ Cache manager initialized: TTL={default_ttl_hours}h, Enabled={enabled}")
     
     def get(self, key: str, fetch_func=None, ttl_seconds: Optional[int] = None):
@@ -96,19 +99,75 @@ class CacheManager:
         
         # Cache miss or expired - fetch new data
         if fetch_func:
-            logger.info(f"🔄 Cache miss: {key} - fetching fresh data")
-            start_time = time.time()
-            data = fetch_func()
-            fetch_time = time.time() - start_time
+            # Check if another thread is already fetching this key
+            fetch_event = None
+            should_fetch = False
             
-            # Store in cache
-            ttl = ttl_seconds or self.default_ttl_seconds
             with self._lock:
-                self._cache[key] = CacheEntry(data, ttl)
-                self._stats["last_refresh"][key] = datetime.now()
+                if key in self._fetch_locks:
+                    # Another thread is fetching, wait for it
+                    fetch_event = self._fetch_locks[key]
+                    logger.info(f"⏳ Cache miss: {key} - waiting for in-progress fetch")
+                else:
+                    # We'll do the fetching
+                    self._fetch_locks[key] = threading.Event()
+                    should_fetch = True
+                    logger.info(f"🔄 Cache miss: {key} - fetching fresh data")
             
-            logger.info(f"💾 Cached {key} (fetch took {fetch_time:.2f}s, TTL: {ttl}s)")
-            return data, False
+            if should_fetch:
+                # We're responsible for fetching
+                try:
+                    start_time = time.time()
+                    data = fetch_func()
+                    fetch_time = time.time() - start_time
+                    
+                    # Store in cache
+                    ttl = ttl_seconds or self.default_ttl_seconds
+                    with self._lock:
+                        self._cache[key] = CacheEntry(data, ttl)
+                        self._stats["last_refresh"][key] = datetime.now()
+                        # Store result for waiting threads
+                        self._fetch_results[key] = data
+                        # Signal waiting threads
+                        self._fetch_locks[key].set()
+                    
+                    logger.info(f"💾 Cached {key} (fetch took {fetch_time:.2f}s, TTL: {ttl}s)")
+                    return data, False
+                    
+                except Exception as e:
+                    # On error, still notify waiting threads
+                    with self._lock:
+                        self._fetch_results[key] = None
+                        self._fetch_locks[key].set()
+                    raise
+                finally:
+                    # Clean up after some time
+                    def cleanup():
+                        time.sleep(5)  # Wait 5 seconds before cleanup
+                        with self._lock:
+                            self._fetch_locks.pop(key, None)
+                            self._fetch_results.pop(key, None)
+                    
+                    import threading
+                    cleanup_thread = threading.Thread(target=cleanup, daemon=True)
+                    cleanup_thread.start()
+            else:
+                # Wait for the other thread to finish fetching
+                fetch_event.wait(timeout=30)  # Wait max 30 seconds
+                
+                # Get the result
+                with self._lock:
+                    if key in self._fetch_results:
+                        data = self._fetch_results[key]
+                        if data is not None:
+                            logger.info(f"✅ Got {key} from parallel fetch")
+                            return data, False
+                
+                # If we get here, the fetch failed or timed out
+                logger.warning(f"⚠️ Parallel fetch failed or timed out for {key}")
+                # Try fetching ourselves as fallback
+                data = fetch_func()
+                return data, False
         
         return None, False
     

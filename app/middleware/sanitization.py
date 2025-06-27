@@ -101,7 +101,14 @@ class InputSanitizer:
     
     @staticmethod
     def sanitize_number(value: Any, min_val: float = None, max_val: float = None) -> float:
-        """Sanitize and validate numeric input"""
+        """
+        Sanitize and validate numeric input
+        
+        Raises:
+            ValidationError: If value cannot be converted to a valid number
+        """
+        from app.utils.validators import ValidationError
+        
         try:
             num = float(value)
             
@@ -110,22 +117,30 @@ class InputSanitizer:
                 raise ValueError("Number out of range")
                 
             if min_val is not None and num < min_val:
-                logger.warning(f"Number {num} below minimum {min_val}")
+                logger.warning(f"Number {num} below minimum {min_val}, clamping to minimum")
                 num = min_val
                 
             if max_val is not None and num > max_val:
-                logger.warning(f"Number {num} above maximum {max_val}")
+                logger.warning(f"Number {num} above maximum {max_val}, clamping to maximum")
                 num = max_val
                 
             return num
             
-        except (ValueError, TypeError):
+        except (ValueError, TypeError) as e:
             logger.warning(f"Invalid numeric value: {value}")
-            return 0.0
+            raise ValidationError(
+                field="numeric_input",
+                message=f"Invalid numeric value: {value}"
+            )
     
     @staticmethod
     def sanitize_dict(data: Dict[str, Any]) -> Dict[str, Any]:
-        """Recursively sanitize dictionary values"""
+        """
+        Recursively sanitize dictionary values
+        
+        Raises:
+            ValidationError: If any numeric value is invalid
+        """
         sanitized = {}
         
         for key, value in data.items():
@@ -140,6 +155,7 @@ class InputSanitizer:
             elif isinstance(value, list):
                 sanitized[clean_key] = InputSanitizer.sanitize_list(value)
             elif isinstance(value, (int, float)):
+                # This might raise ValidationError which will propagate up
                 sanitized[clean_key] = InputSanitizer.sanitize_number(value)
             else:
                 sanitized[clean_key] = value

@@ -3,6 +3,7 @@ from typing import Dict
 import numpy_financial as npf
 from functools import lru_cache
 from decimal import Decimal, ROUND_HALF_UP
+from .decimal_config import to_decimal, quantize_currency
 import os
 import logging
 import json
@@ -124,6 +125,7 @@ def calculate_payment_components(
     term_months: int,
     period: int,
     insurance_term: int = 12,
+    use_decimal: bool = None,
 ) -> Dict[str, float]:
     """
     Core payment calculation logic - SINGLE SOURCE OF TRUTH
@@ -147,8 +149,20 @@ def calculate_payment_components(
     if not isinstance(insurance_term, int) or insurance_term < 1 or insurance_term > 60:
         raise FinancialValidationError(f"insurance_term must be between 1 and 60, got {insurance_term}")
     
+    # Determine if we should use Decimal precision
+    if use_decimal is None:
+        use_decimal = config.get_bool("features.enable_decimal_precision", False)
+    
+    # Convert inputs to Decimal if enabled
+    if use_decimal:
+        loan_base = to_decimal(loan_base)
+        service_fee_amount = to_decimal(service_fee_amount)
+        kavak_total_amount = to_decimal(kavak_total_amount)
+        insurance_amount = to_decimal(insurance_amount)
+        annual_rate_nominal = to_decimal(annual_rate_nominal)
+    
     # Get IVA rate from configuration
-    iva_rate = float(config.get_decimal("financial.iva_rate"))
+    iva_rate = config.get_decimal("financial.iva_rate") if use_decimal else float(config.get_decimal("financial.iva_rate"))
     
     # Log calculation for audit trail
     if config.get_bool("features.enable_audit_logging"):
@@ -164,7 +178,8 @@ def calculate_payment_components(
             "term_months": term_months,
             "period": period,
             "insurance_term": insurance_term,
-            "iva_rate": str(iva_rate)
+            "iva_rate": str(iva_rate),
+            "use_decimal": use_decimal
         }
     
     # Define rates exactly as in the audited Excel sheet
@@ -197,6 +212,23 @@ def calculate_payment_components(
     interest_kt = abs(npf.ipmt(monthly_rate_float, period, term_months, -float(kavak_total_amount))) * iva_multiplier if kavak_total_amount > 0 else 0.0
     interest_ins = abs(npf.ipmt(monthly_rate_float, insurance_period, insurance_term, -float(insurance_amount))) * iva_multiplier if insurance_amount > 0 and insurance_period <= insurance_term else 0.0
     
+    # Calculate totals
+    total_principal = principal_main + principal_sf + principal_kt + principal_ins
+    total_interest = interest_main + interest_sf + interest_kt + interest_ins
+    
+    # Convert results to float if not using decimal (for backward compatibility)
+    if not use_decimal:
+        principal_main = float(principal_main)
+        principal_sf = float(principal_sf)
+        principal_kt = float(principal_kt)
+        principal_ins = float(principal_ins)
+        interest_main = float(interest_main)
+        interest_sf = float(interest_sf)
+        interest_kt = float(interest_kt)
+        interest_ins = float(interest_ins)
+        total_principal = float(total_principal)
+        total_interest = float(total_interest)
+    
     results = {
         "principal_main": principal_main,
         "principal_sf": principal_sf,
@@ -206,8 +238,8 @@ def calculate_payment_components(
         "interest_sf": interest_sf,
         "interest_kt": interest_kt,
         "interest_ins": interest_ins,
-        "total_principal": principal_main + principal_sf + principal_kt + principal_ins,
-        "total_interest": interest_main + interest_sf + interest_kt + interest_ins,
+        "total_principal": total_principal,
+        "total_interest": total_interest,
     }
     
     # Log outputs for audit trail
@@ -236,6 +268,7 @@ def calculate_monthly_payment(
     annual_rate_nominal: float,
     term_months: int,
     gps_install_fee: float = 0.0,
+    use_decimal: bool = None,
 ) -> Dict[str, float]:
     """
     Calculates the first month's payment using the EXACT audited logic.
@@ -275,7 +308,8 @@ def calculate_monthly_payment(
         insurance_amount=insurance_amount,
         annual_rate_nominal=annual_rate_nominal,
         term_months=term_months,
-        period=1  # First month
+        period=1,  # First month
+        use_decimal=use_decimal
     )
     
     # Total payment - INCLUDING GPS install fee (as per Excel)

@@ -3,7 +3,7 @@
 ## Current Status
 - ✅ Offer generation is working (generates 2578 offers from 1000 cars)
 - ✅ Customer details page is functional
-- ✅ Inventory page is working
+- Inventory page is not working
 - ❌ Dashboard page shows KeyError: 'sales_price'
 
 ## The Problem

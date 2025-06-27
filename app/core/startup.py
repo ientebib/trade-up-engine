@@ -12,6 +12,11 @@ async def startup_event():
     """Initialize application - test connections only"""
     logger.info("🚀 Starting Modern Trade-Up Engine...")
     
+    # Configure decimal precision for financial calculations
+    logger.info("💰 Configuring decimal precision...")
+    from engine.decimal_config import configure_decimal_context
+    configure_decimal_context()
+    
     # Initialize configuration system
     logger.info("🔧 Initializing configuration system...")
     from config.facade import reload as reload_config, validate as validate_config
