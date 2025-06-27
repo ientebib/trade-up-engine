@@ -5,11 +5,18 @@ Handles connection pooling to prevent connection exhaustion
 import os
 import logging
 import threading
+import time
+import random
 from queue import Queue, Empty
 from contextlib import contextmanager
 import redshift_connector
 from typing import Optional
-from .circuit_breaker import get_redshift_breaker, CircuitBreakerOpenError
+from .circuit_breaker_factory import get_redshift_breaker, CircuitBreakerOpenError
+from .exceptions import (
+    PoolExhaustedError,
+    ConnectionCreationError,
+    ConnectionValidationError
+)
 from app.utils.metrics import metrics_collector
 from app.constants import (
     MIN_CONNECTIONS,
@@ -53,6 +60,12 @@ class RedshiftConnectionPool:
         self._lock = threading.Lock()
         self._created_connections = 0
         
+        # SAFETY: Backoff strategy for connection failures
+        self._consecutive_failures = 0
+        self._last_failure_time = None
+        self._backoff_base = 2.0  # Base for exponential backoff
+        self._max_backoff = 60.0  # Maximum backoff time in seconds
+        
         # Initialize minimum connections
         self._initialize_pool()
     
@@ -66,9 +79,17 @@ class RedshiftConnectionPool:
                 logger.error(f"Failed to create initial connection: {e}")
     
     def _create_connection(self):
-        """Create a new Redshift connection with circuit breaker"""
+        """Create a new Redshift connection with circuit breaker and backoff"""
         if not all([self.host, self.port, self.database, self.user, self.password]):
-            raise ValueError("Incomplete Redshift configuration")
+            raise ConnectionCreationError("Incomplete Redshift configuration")
+        
+        # SAFETY: Apply backoff strategy
+        if self._should_backoff():
+            wait_time = self._get_backoff_time()
+            raise ConnectionCreationError(
+                f"Connection creation in backoff period. Wait {wait_time:.1f}s before retry.",
+                original_error=None
+            )
         
         # Check circuit breaker
         breaker = get_redshift_breaker()
@@ -85,9 +106,19 @@ class RedshiftConnectionPool:
         
         try:
             conn = breaker.call(connect)
-        except Exception as e:
-            logger.error(f"Failed to create connection: {e}")
+            # Reset backoff on success
+            self._reset_backoff()
+        except CircuitBreakerOpenError:
+            # Circuit is open, don't count as backoff failure
             raise
+        except Exception as e:
+            # Record failure for backoff
+            self._record_failure()
+            logger.error(f"Failed to create connection: {e}")
+            raise ConnectionCreationError(
+                f"Failed to connect to Redshift",
+                original_error=e
+            )
         
         with self._lock:
             self._all_connections.add(conn)
@@ -128,13 +159,17 @@ class RedshiftConnectionPool:
                         connection = self._create_connection()
                         metrics_collector.track_connection_pool_miss()
                     else:
-                        raise Exception(f"Connection pool exhausted (max: {self.max_connections})")
+                        raise PoolExhaustedError(
+                            timeout=timeout,
+                            max_connections=self.max_connections
+                        )
             
             except Exception as e:
                 # Connection is dead, remove it and create new one
                 logger.warning(f"Dead connection detected: {e}")
                 if connection:
                     self._remove_connection(connection)
+                    raise ConnectionValidationError(connection_id=str(id(connection)))
                 connection = self._create_connection()
             
             yield connection
@@ -188,8 +223,57 @@ class RedshiftConnectionPool:
             "total_connections": self._created_connections,
             "available_connections": self._pool.qsize(),
             "in_use_connections": self._created_connections - self._pool.qsize(),
-            "max_connections": self.max_connections
+            "max_connections": self.max_connections,
+            "consecutive_failures": self._consecutive_failures,
+            "in_backoff": self._should_backoff()
         }
+    
+    def _should_backoff(self) -> bool:
+        """Check if we should apply backoff strategy"""
+        if self._consecutive_failures == 0:
+            return False
+            
+        if self._last_failure_time is None:
+            return False
+            
+        elapsed = time.time() - self._last_failure_time
+        backoff_time = self._get_backoff_time()
+        
+        return elapsed < backoff_time
+    
+    def _get_backoff_time(self) -> float:
+        """Calculate exponential backoff time with jitter"""
+        # Exponential backoff: 2^failures * base
+        backoff = min(
+            self._backoff_base * (2 ** (self._consecutive_failures - 1)),
+            self._max_backoff
+        )
+        
+        # Add jitter to prevent thundering herd
+        jitter = random.uniform(0, backoff * 0.1)
+        
+        return backoff + jitter
+    
+    def _record_failure(self):
+        """Record a connection failure"""
+        with self._lock:
+            self._consecutive_failures += 1
+            self._last_failure_time = time.time()
+            logger.warning(
+                f"Connection failure #{self._consecutive_failures}. "
+                f"Next retry in {self._get_backoff_time():.1f}s"
+            )
+    
+    def _reset_backoff(self):
+        """Reset backoff state after successful connection"""
+        with self._lock:
+            if self._consecutive_failures > 0:
+                logger.info(
+                    f"Connection successful after {self._consecutive_failures} failures. "
+                    f"Resetting backoff."
+                )
+            self._consecutive_failures = 0
+            self._last_failure_time = None
 
 
 # Global connection pool instance

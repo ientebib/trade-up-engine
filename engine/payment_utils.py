@@ -184,6 +184,11 @@ def calculate_payment_components(
     
     # Define rates exactly as in the audited Excel sheet
     # Handle both Decimal and float types
+    # SAFETY: Guard against zero or invalid rates
+    if annual_rate_nominal <= 0:
+        logger.warning(f"Invalid annual rate {annual_rate_nominal}, using minimum rate")
+        annual_rate_nominal = to_decimal(MIN_INTEREST_RATE) if use_decimal else MIN_INTEREST_RATE
+    
     if isinstance(annual_rate_nominal, Decimal):
         monthly_rate = annual_rate_nominal / Decimal("12")
         rate_with_iva = annual_rate_nominal * (Decimal("1") + Decimal(str(iva_rate)))

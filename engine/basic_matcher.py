@@ -182,15 +182,33 @@ class BasicMatcher:
                 )
                 tasks.append(task)
         
+        # MEMORY OPTIMIZATION: Process futures as they complete to free memory
+        completed_count = 0
+        total_tasks = len(tasks)
+        
         for future in as_completed(tasks):
             try:
                 offer = future.result()
                 if offer:
                     offers.append(offer)
+                
+                # Free the future's resources immediately
+                del future
+                
+                # Log progress periodically for large batches
+                completed_count += 1
+                if completed_count % 100 == 0 and total_tasks > 100:
+                    logger.debug(f"Processed {completed_count}/{total_tasks} offers")
+                    
             except Exception as e:
+                # Only log first few errors to avoid spam
                 if len(offers) < 10:
                     logger.warning(f"Error generating offer: {e}")
+                completed_count += 1
                 continue
+        
+        # Clear the tasks list to free memory
+        tasks.clear()
         
         organized = {
             "Refresh": [],

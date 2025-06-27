@@ -22,6 +22,7 @@ class TransactionManager:
     
     def __init__(self):
         self._local = threading.local()
+        self._savepoint_counter = 0  # For generating unique savepoint names
     
     @property
     def in_transaction(self) -> bool:
@@ -41,9 +42,9 @@ class TransactionManager:
                 # If anything fails, everything is rolled back
         """
         if self.in_transaction:
-            # Already in a transaction, just yield
-            logger.debug("Already in transaction, nesting not supported")
-            yield self
+            # Already in a transaction, create a savepoint for nested transaction
+            logger.debug("Already in transaction, creating savepoint")
+            yield from self._nested_transaction(connection)
             return
         
         self._local.in_transaction = True
@@ -73,9 +74,20 @@ class TransactionManager:
             raise
         
         finally:
-            self._local.in_transaction = False
-            self._local.operations = []
-            self._local.connection = None
+            # SAFETY: Ensure thread-local state is always cleaned up
+            try:
+                self._local.in_transaction = False
+                self._local.operations = []
+                self._local.connection = None
+            except Exception as cleanup_error:
+                logger.error(f"Failed to clean up thread-local state: {cleanup_error}")
+                # Force cleanup by deleting attributes
+                try:
+                    delattr(self._local, 'in_transaction')
+                    delattr(self._local, 'operations')
+                    delattr(self._local, 'connection')
+                except:
+                    pass  # Ignore if attributes don't exist
             
             # Reset autocommit if connection provided
             if connection:
@@ -146,6 +158,78 @@ class TransactionManager:
                     logger.debug(f"Rolled back operation successfully")
                 except Exception as e:
                     logger.error(f"Failed to rollback operation: {e}")
+    
+    @contextmanager
+    def _nested_transaction(self, connection=None):
+        """
+        Handle nested transactions using savepoints.
+        
+        PostgreSQL/Redshift support savepoints for nested transactions.
+        """
+        # Use existing connection or the one from parent transaction
+        conn = connection or getattr(self._local, 'connection', None)
+        if not conn:
+            # No connection available, just yield without savepoint
+            logger.warning("No connection available for savepoint")
+            yield self
+            return
+        
+        # Generate unique savepoint name
+        self._savepoint_counter += 1
+        savepoint_name = f"sp_{threading.get_ident()}_{self._savepoint_counter}"
+        
+        try:
+            # Create savepoint
+            with conn.cursor() as cursor:
+                cursor.execute(f"SAVEPOINT {savepoint_name}")
+                logger.debug(f"Created savepoint: {savepoint_name}")
+            
+            # Track operations for this nested transaction
+            nested_operations = []
+            original_operations = getattr(self._local, 'operations', [])
+            self._local.operations = nested_operations
+            
+            yield self
+            
+            # If we get here, nested transaction succeeded
+            logger.debug(f"Nested transaction succeeded, keeping savepoint {savepoint_name}")
+            
+            # Merge nested operations back to parent
+            self._local.operations = original_operations + nested_operations
+            
+        except Exception as e:
+            # Rollback to savepoint
+            logger.error(f"Nested transaction failed: {e}")
+            try:
+                with conn.cursor() as cursor:
+                    cursor.execute(f"ROLLBACK TO SAVEPOINT {savepoint_name}")
+                    logger.info(f"Rolled back to savepoint: {savepoint_name}")
+                
+                # Execute rollback operations for nested transaction
+                for op in reversed(nested_operations):
+                    if op.get('completed') and op.get('rollback'):
+                        try:
+                            op['rollback']()
+                        except Exception as rollback_error:
+                            logger.error(f"Failed to rollback nested operation: {rollback_error}")
+                
+                # Restore original operations
+                self._local.operations = original_operations
+                
+            except Exception as rollback_error:
+                logger.error(f"Failed to rollback to savepoint: {rollback_error}")
+            
+            raise
+        
+        finally:
+            # Release savepoint (if it still exists)
+            try:
+                with conn.cursor() as cursor:
+                    cursor.execute(f"RELEASE SAVEPOINT {savepoint_name}")
+                    logger.debug(f"Released savepoint: {savepoint_name}")
+            except Exception:
+                # Savepoint may have been rolled back already
+                pass
 
 
 # Global transaction manager instance

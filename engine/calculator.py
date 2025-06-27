@@ -20,6 +20,9 @@ def generate_amortization_table(offer_details: dict) -> list[dict]:
     gps_install_fee = float(offer_details.get("gps_install_fee", 0.0) or 0.0)
 
     # CRITICAL: Apply IVA to the rate once (as per audited logic)
+    # SAFETY: Guard against zero or invalid rates
+    if rate <= 0:
+        rate = 0.01  # Use 1% as minimum rate to avoid division by zero
     monthly_rate = rate / 12
     rate_with_iva = rate * (1 + IVA_RATE)
     monthly_rate_with_iva = rate_with_iva / 12
@@ -107,16 +110,20 @@ def generate_amortization_table(offer_details: dict) -> list[dict]:
 
         # Calculate interest components for display
         # Extract base interest from what we already calculated (remove IVA)
-        interest_base_main = interest_main / (1 + IVA_RATE)
-        interest_base_sf = interest_sf / (1 + IVA_RATE)
-        interest_base_kt = interest_kt / (1 + IVA_RATE)
-        interest_base_ins = interest_ins / (1 + IVA_RATE) if insurance_amt > 0 else 0.0
+        # SAFETY: Ensure IVA divisor is never zero
+        iva_divisor = 1 + IVA_RATE
+        if iva_divisor == 0:
+            iva_divisor = 1.16  # Default to 16% IVA
+        interest_base_main = interest_main / iva_divisor
+        interest_base_sf = interest_sf / iva_divisor
+        interest_base_kt = interest_kt / iva_divisor
+        interest_base_ins = interest_ins / iva_divisor if insurance_amt > 0 else 0.0
         
         # Total base interest
         interest_base_total = interest_base_main + interest_base_sf + interest_base_kt + interest_base_ins
         
         # For Excel compatibility: GPS without IVA for display
-        gps_monthly_no_iva = gps_monthly_fee / (1 + IVA_RATE)  # 350
+        gps_monthly_no_iva = gps_monthly_fee / iva_divisor  # 350
         # GPS installation is now in principal, not in cargos
         cargos_no_iva = gps_monthly_no_iva  # Only monthly fee, no installation
         

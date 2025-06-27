@@ -11,7 +11,7 @@ from fastapi.templating import Jinja2Templates
 from app.utils.logging import setup_logging
 
 # Import routers
-from .api import cache, config, customers, health, metrics, offers, search
+from .api import cache, circuit_breaker, config, customers, health, metrics, offers, search
 from .core.error_handlers import internal_error_handler, not_found_handler
 from .core.startup import startup_event
 from .middleware.request_id import RequestIDMiddleware
@@ -83,6 +83,10 @@ app = FastAPI(
             "description": "Performance metrics and monitoring"
         },
         {
+            "name": "monitoring",
+            "description": "Circuit breaker and system monitoring"
+        },
+        {
             "name": "pages",
             "description": "Web interface pages"
         }
@@ -105,6 +109,7 @@ app.include_router(search.router, prefix="/v1")
 app.include_router(config.router, prefix="/v1")
 app.include_router(cache.router, prefix="/v1")
 app.include_router(metrics.router, prefix="/v1")
+app.include_router(circuit_breaker.router, prefix="/v1")
 
 # Keep unversioned endpoints for backward compatibility
 app.include_router(customers.router)
@@ -114,6 +119,7 @@ app.include_router(search.router)
 app.include_router(config.router)
 app.include_router(cache.router)
 app.include_router(metrics.router)
+app.include_router(circuit_breaker.router)
 
 # Pages don't need versioning
 app.include_router(pages.router)

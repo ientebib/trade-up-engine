@@ -1,4 +1,5 @@
 import pandas as pd
+import logging
 
 # Use facade for configuration
 from .facade import (
@@ -7,6 +8,8 @@ from .facade import (
     get_interest_rate,
     ConfigProxy
 )
+
+logger = logging.getLogger(__name__)
 
 # Use ConfigProxy instead of duplicate wrapper
 _config = ConfigProxy()
@@ -70,35 +73,56 @@ def get_term_search_order(priority: str) -> list[int]:
 
 # The default fee structure (Max Profit scenario)
 # These are now loaded from configuration but kept for backward compatibility
+# SAFETY: All config loads wrapped with try/catch and defaults to prevent startup crashes
+def _safe_get_decimal(key: str, default: float) -> float:
+    """Safely get decimal config value with fallback"""
+    try:
+        value = _config.get_decimal(key)
+        if value is None:
+            logger.warning(f"Config key '{key}' returned None, using default: {default}")
+            return default
+        return float(value)
+    except Exception as e:
+        logger.error(f"Failed to load config '{key}': {e}, using default: {default}")
+        return default
+
 DEFAULT_FEES = {
-    'service_fee_pct': float(_config.get_decimal("fees.service.percentage")),
-    'cxa_pct': float(_config.get_decimal("fees.cxa.percentage")),
-    'cac_bonus': float(_config.get_decimal("fees.cac_bonus.default")),
+    'service_fee_pct': _safe_get_decimal("fees.service.percentage", 0.03),
+    'cxa_pct': _safe_get_decimal("fees.cxa.percentage", 0.01),
+    'cac_bonus': _safe_get_decimal("fees.cac_bonus.default", 0.0),
     'cac_bonus_range': (
-        float(_config.get_decimal("fees.cac_bonus.min")),
-        float(_config.get_decimal("fees.cac_bonus.max"))
+        _safe_get_decimal("fees.cac_bonus.min", 0.0),
+        _safe_get_decimal("fees.cac_bonus.max", 20000.0)
     ),
-    'kavak_total_amount': float(_config.get_decimal("fees.kavak_total.amount")),
-    'insurance_amount': float(_config.get_decimal("fees.insurance.amount")),
-    'insurance_annual': float(_config.get_decimal("fees.insurance.amount")),
-    'gps_installation': float(_config.get_decimal("fees.gps.installation")),
-    'gps_installation_fee': float(_config.get_decimal("fees.gps.installation")),
-    'gps_monthly': float(_config.get_decimal("fees.gps.monthly")),
-    'gps_monthly_fee': float(_config.get_decimal("fees.gps.monthly"))
+    'kavak_total_amount': _safe_get_decimal("fees.kavak_total.amount", 25000.0),
+    'insurance_amount': _safe_get_decimal("fees.insurance.amount", 10999.0),
+    'insurance_annual': _safe_get_decimal("fees.insurance.amount", 10999.0),
+    'gps_installation': _safe_get_decimal("fees.gps.installation", 750.0),
+    'gps_installation_fee': _safe_get_decimal("fees.gps.installation", 750.0),
+    'gps_monthly': _safe_get_decimal("fees.gps.monthly", 350.0),
+    'gps_monthly_fee': _safe_get_decimal("fees.gps.monthly", 350.0)
 }
 
 # The maximum CAC (Customer Bonus) we are willing to apply
-MAX_CAC_BONUS = float(_config.get_decimal("fees.cac_bonus.max"))
+MAX_CAC_BONUS = _safe_get_decimal("fees.cac_bonus.max", 20000.0)
 
 # Payment Delta Tiers to classify the final offer
-PAYMENT_DELTA_TIERS = get_payment_tiers()
+try:
+    PAYMENT_DELTA_TIERS = get_payment_tiers()
+except Exception as e:
+    logger.error(f"Failed to load payment tiers: {e}, using defaults")
+    PAYMENT_DELTA_TIERS = {
+        'refresh': {'min': -0.05, 'max': 0.05},
+        'upgrade': {'min': 0.05, 'max': 0.25},
+        'max_upgrade': {'min': 0.25, 'max': 1.0}
+    }
 
 # IVA Rate - loaded from configuration
-IVA_RATE = float(_config.get_decimal("financial.iva_rate"))
+IVA_RATE = _safe_get_decimal("financial.iva_rate", 0.16)
 
 # GPS fees - loaded from configuration
-GPS_INSTALLATION_FEE = float(_config.get_decimal("fees.gps.installation"))
-GPS_MONTHLY_FEE = float(_config.get_decimal("fees.gps.monthly"))
+GPS_INSTALLATION_FEE = _safe_get_decimal("fees.gps.installation", 750.0)
+GPS_MONTHLY_FEE = _safe_get_decimal("fees.gps.monthly", 350.0)
 
 # Insurance amount lookup by risk profile. Placeholder values use the default
 # insurance amount for all profiles but allow future customization.

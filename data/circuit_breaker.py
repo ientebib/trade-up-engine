@@ -48,6 +48,10 @@ class CircuitBreaker:
         self._failure_count = 0
         self._last_failure_time = None
         self._lock = Lock()
+        
+        # SAFETY: Initialize with current time to prevent stuck OPEN state
+        # This ensures recovery timeout works even if no failure time is set
+        self._circuit_opened_time = None
     
     @property
     def state(self) -> CircuitState:
@@ -55,8 +59,10 @@ class CircuitBreaker:
         with self._lock:
             if self._state == CircuitState.OPEN:
                 # Check if we should transition to half-open
-                if self._last_failure_time and \
-                   time.time() - self._last_failure_time >= self.recovery_timeout:
+                # SAFETY: Use circuit opened time to prevent stuck OPEN state
+                check_time = self._circuit_opened_time or self._last_failure_time
+                if check_time is not None and \
+                   time.time() - check_time >= self.recovery_timeout:
                     self._state = CircuitState.HALF_OPEN
                     logger.info("Circuit breaker transitioning to HALF_OPEN")
             return self._state
@@ -110,9 +116,11 @@ class CircuitBreaker:
             if self._state == CircuitState.HALF_OPEN:
                 logger.warning("Circuit breaker: Test call failed, reopening circuit")
                 self._state = CircuitState.OPEN
+                self._circuit_opened_time = time.time()  # Track when circuit opened
             elif self._failure_count >= self.failure_threshold:
                 logger.error(f"Circuit breaker: Opening circuit after {self._failure_count} failures")
                 self._state = CircuitState.OPEN
+                self._circuit_opened_time = time.time()  # Track when circuit opened
     
     def reset(self):
         """Manually reset circuit breaker"""
@@ -120,6 +128,7 @@ class CircuitBreaker:
             self._state = CircuitState.CLOSED
             self._failure_count = 0
             self._last_failure_time = None
+            self._circuit_opened_time = None
             logger.info("Circuit breaker manually reset")
     
     def get_status(self) -> dict:
