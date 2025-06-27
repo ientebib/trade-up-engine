@@ -1,4 +1,7 @@
 {
+  "features": {
+    "enable_decimal_precision": false
+  },
   "fees": {
     "service_fee_pct": 0.04,
     "cxa_pct": 0.04,

@@ -4,6 +4,7 @@ import os
 from .payment_utils import calculate_payment_components, calculate_final_npv
 from .financial_audit import get_audit_logger, CalculationType
 from app.utils.data_validator import DataValidator, validate_calculation_input
+from .type_utils import to_numeric, safe_add, zero_value
 import logging
 
 logger = logging.getLogger(__name__)
@@ -126,13 +127,16 @@ def generate_amortization_table(offer_details: dict) -> list[dict]:
 
         # --- Aggregate payment ---
         # Add GPS install fee only to first month
-        gps_install_this_month = gps_install_fee if month == 1 else 0.0
+        gps_install_this_month = gps_install_fee if month == 1 else zero_value(use_decimal)
         
         # For Excel compatibility: GPS installation WITH IVA is part of principal in month 1
-        gps_install_principal = gps_install_fee if month == 1 else 0.0  # 870 with IVA
+        gps_install_principal = gps_install_fee if month == 1 else zero_value(use_decimal)  # 870 with IVA
         
         # Calculate total principal for DISPLAY (including GPS install in month 1 per Excel)
-        total_principal_display = principal_main + principal_sf + principal_kt + principal_ins + gps_install_principal
+        total_principal_display = safe_add(
+            principal_main, principal_sf, principal_kt, principal_ins, gps_install_principal,
+            use_decimal=use_decimal
+        )
         
         # Use totals from the single source of truth
         total_principal = components["total_principal"]

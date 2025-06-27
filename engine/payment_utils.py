@@ -168,24 +168,34 @@ def calculate_payment_components(
         }
     
     # Define rates exactly as in the audited Excel sheet
-    monthly_rate = annual_rate_nominal / 12.0
-    rate_with_iva = annual_rate_nominal * (1 + iva_rate)
-    monthly_rate_with_iva = rate_with_iva / 12.0
+    # Handle both Decimal and float types
+    if isinstance(annual_rate_nominal, Decimal):
+        monthly_rate = annual_rate_nominal / Decimal("12")
+        rate_with_iva = annual_rate_nominal * (Decimal("1") + Decimal(str(iva_rate)))
+        monthly_rate_with_iva = rate_with_iva / Decimal("12")
+    else:
+        monthly_rate = annual_rate_nominal / 12.0
+        rate_with_iva = annual_rate_nominal * (1 + iva_rate)
+        monthly_rate_with_iva = rate_with_iva / 12.0
     
     # Principal calculations (using IVA-inclusive rate)
-    principal_main = abs(npf.ppmt(monthly_rate_with_iva, period, term_months, -loan_base)) if loan_base > 0 else 0.0
-    principal_sf = abs(npf.ppmt(monthly_rate_with_iva, period, term_months, -service_fee_amount)) if service_fee_amount > 0 else 0.0
-    principal_kt = abs(npf.ppmt(monthly_rate_with_iva, period, term_months, -kavak_total_amount)) if kavak_total_amount > 0 else 0.0
+    # Convert to float for numpy_financial functions
+    rate_float = float(monthly_rate_with_iva)
+    principal_main = abs(npf.ppmt(rate_float, period, term_months, -float(loan_base))) if loan_base > 0 else 0.0
+    principal_sf = abs(npf.ppmt(rate_float, period, term_months, -float(service_fee_amount))) if service_fee_amount > 0 else 0.0
+    principal_kt = abs(npf.ppmt(rate_float, period, term_months, -float(kavak_total_amount))) if kavak_total_amount > 0 else 0.0
     
     # Insurance uses special period calculation (resets every 12 months)
     insurance_period = ((period - 1) % 12) + 1 if insurance_amount > 0 else 0
-    principal_ins = abs(npf.ppmt(monthly_rate_with_iva, insurance_period, insurance_term, -insurance_amount)) if insurance_amount > 0 and insurance_period <= insurance_term else 0.0
+    principal_ins = abs(npf.ppmt(rate_float, insurance_period, insurance_term, -float(insurance_amount))) if insurance_amount > 0 and insurance_period <= insurance_term else 0.0
     
     # Interest calculations WITH IVA (using contractual rate then applying IVA)
-    interest_main = abs(npf.ipmt(monthly_rate, period, term_months, -loan_base)) * (1 + iva_rate) if loan_base > 0 else 0.0
-    interest_sf = abs(npf.ipmt(monthly_rate, period, term_months, -service_fee_amount)) * (1 + iva_rate) if service_fee_amount > 0 else 0.0
-    interest_kt = abs(npf.ipmt(monthly_rate, period, term_months, -kavak_total_amount)) * (1 + iva_rate) if kavak_total_amount > 0 else 0.0
-    interest_ins = abs(npf.ipmt(monthly_rate, insurance_period, insurance_term, -insurance_amount)) * (1 + iva_rate) if insurance_amount > 0 and insurance_period <= insurance_term else 0.0
+    monthly_rate_float = float(monthly_rate)
+    iva_multiplier = 1 + float(iva_rate)
+    interest_main = abs(npf.ipmt(monthly_rate_float, period, term_months, -float(loan_base))) * iva_multiplier if loan_base > 0 else 0.0
+    interest_sf = abs(npf.ipmt(monthly_rate_float, period, term_months, -float(service_fee_amount))) * iva_multiplier if service_fee_amount > 0 else 0.0
+    interest_kt = abs(npf.ipmt(monthly_rate_float, period, term_months, -float(kavak_total_amount))) * iva_multiplier if kavak_total_amount > 0 else 0.0
+    interest_ins = abs(npf.ipmt(monthly_rate_float, insurance_period, insurance_term, -float(insurance_amount))) * iva_multiplier if insurance_amount > 0 and insurance_period <= insurance_term else 0.0
     
     results = {
         "principal_main": principal_main,

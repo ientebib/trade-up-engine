@@ -95,7 +95,8 @@ def handle_api_errors(operation_name: str = "operation", include_customer_id: bo
             except Exception as e:
                 # Unexpected errors
                 error_type = type(e).__name__
-                logger.error(f"Unexpected error in {operation_name} (request: {request_id}): {error_type}: {e}")
+                import traceback
+                logger.error(f"Unexpected error in {operation_name} (request: {request_id}): {error_type}: {e}\n{traceback.format_exc()}")
                 raise HTTPException(
                     status_code=500, 
                     detail=f"Internal error: {error_type}",
