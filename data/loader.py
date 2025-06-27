@@ -336,6 +336,191 @@ class DataLoader:
         customers_df = self.load_customers_from_csv(csv_path)
         return customers_df
 
+    def _map_column_names(self, raw_df):
+        """Map Spanish column names to English equivalents."""
+        column_mapping = {
+            # Contract and IDs
+            "CONTRATO": "contract_id",
+            "STOCK ID": "current_stock_id",
+            
+            # Personal info
+            "NOMBRE": "first_name",
+            "APELLIDO": "last_name", 
+            "MAIL": "email",
+            
+            # Financial info
+            "MONTO DE LA MENSUALIDAD": "current_monthly_payment",
+            "SALDO INSOLUTO": "outstanding_balance",
+            "PRECIO AUTO": "current_car_price",
+            "TASA": "original_interest_rate",
+            "MONTO A FINANCIAR": "original_loan_amount",
+            
+            # Contract details
+            "FECHA DE CONTRATO": "contract_date",
+            "PLAZO REMANENTE": "remaining_months",
+            "TIENE KT": "has_kavak_total",
+            
+            # Car details
+            "MARCA": "current_car_brand",
+            "MODELO": "current_car_model_name",
+            "ANO AUTO": "current_car_year",
+            "KILOMETRAJE": "current_car_km",
+            "AGING": "aging",
+            
+            # Risk profile
+            "risk_profile": "risk_profile_name"
+        }
+        
+        # Rename columns using the mapping
+        for old_col, new_col in column_mapping.items():
+            if old_col in raw_df.columns:
+                raw_df[new_col] = raw_df[old_col]
+        
+        return raw_df
+
+    def _process_risk_profiles(self, raw_df):
+        """Map risk profile names to indices and handle unmapped profiles."""
+        # Map risk profile names to indices
+        raw_df["risk_profile_index"] = raw_df["risk_profile_name"].map(
+            self.risk_profile_mapping
+        )
+
+        # Handle any unmapped risk profiles
+        unmapped = raw_df[raw_df["risk_profile_index"].isna()]
+        if len(unmapped) > 0:
+            logger.warning(
+                f"⚠️ Found {len(unmapped)} customers with unmapped risk profiles: {unmapped['risk_profile_name'].unique()}"
+            )
+            # Default unmapped profiles to highest risk index
+            raw_df.loc[raw_df["risk_profile_index"].isna(), "risk_profile_index"] = 25
+        
+        return raw_df
+
+    def _process_dates(self, raw_df):
+        """Parse and process date fields with error handling."""
+        # Parse contract date with explicit format to avoid warning
+        # The CSV uses M/D/YY format
+        try:
+            raw_df["contract_date"] = pd.to_datetime(raw_df["contract_date"], format="%m/%d/%y", errors="coerce")
+        except:
+            # Fallback to automatic parsing if format doesn't match
+            raw_df["contract_date"] = pd.to_datetime(raw_df["contract_date"], errors="coerce")
+        
+        return raw_df
+
+    def _calculate_derived_fields(self, raw_df):
+        """Calculate derived fields like equity and full model string."""
+        # Use CONTRATO as the customer_id directly (it's already unique)
+        raw_df["customer_id"] = raw_df["contract_id"]
+        
+        # Calculate vehicle equity (if not provided in data)
+        if "vehicle_equity" not in raw_df.columns:
+            # Simple calculation: current car price - outstanding balance
+            raw_df["vehicle_equity"] = (
+                pd.to_numeric(raw_df["current_car_price"], errors="coerce") - 
+                pd.to_numeric(raw_df["outstanding_balance"], errors="coerce")
+            )
+        
+        # Create full car model string
+        raw_df["current_car_model"] = raw_df.apply(
+            lambda row: f"{row.get('current_car_brand', '')} {row.get('current_car_model_name', '')} {row.get('current_car_year', '')}".strip(),
+            axis=1
+        )
+        
+        return raw_df
+
+    def _clean_data_types(self, customers_df):
+        """Convert columns to proper data types with error handling."""
+        # Calculate derived fields
+        customers_df["months_since_contract"] = (
+            (pd.Timestamp.now() - customers_df["contract_date"]).dt.days / 30
+        ).fillna(0).astype(int)
+        
+        # The aging field from CSV tells us how old the car was when purchased
+        customers_df["car_age_at_purchase"] = pd.to_numeric(
+            customers_df["aging"], errors="coerce"
+        ).fillna(0).astype(int)
+        
+        return customers_df
+
+    def _build_final_dataframe(self, raw_df):
+        """Assemble the final dataframe with all required fields."""
+        customers_df = pd.DataFrame({
+            # IDs
+            "customer_id": raw_df["customer_id"],
+            "contract_id": raw_df["contract_id"],
+            "current_stock_id": raw_df["current_stock_id"],
+            
+            # Personal info
+            "first_name": raw_df["first_name"],
+            "last_name": raw_df["last_name"],
+            "full_name": raw_df["first_name"] + " " + raw_df["last_name"],
+            "name": raw_df["first_name"] + " " + raw_df["last_name"],  # Add 'name' for validator
+            "email": raw_df["email"],
+            
+            # Financial info
+            "current_monthly_payment": pd.to_numeric(
+                raw_df["current_monthly_payment"], errors="coerce"
+            ),
+            "vehicle_equity": pd.to_numeric(
+                raw_df["vehicle_equity"], errors="coerce"
+            ),
+            "outstanding_balance": pd.to_numeric(
+                raw_df["outstanding_balance"], errors="coerce"
+            ),
+            "current_car_price": pd.to_numeric(
+                raw_df["current_car_price"], errors="coerce"
+            ),
+            "original_loan_amount": pd.to_numeric(
+                raw_df["original_loan_amount"], errors="coerce"
+            ),
+            "original_interest_rate": pd.to_numeric(
+                raw_df["original_interest_rate"], errors="coerce"
+            ),
+            
+            # Contract details
+            "contract_date": raw_df["contract_date"],
+            "remaining_months": pd.to_numeric(
+                raw_df["remaining_months"], errors="coerce"
+            ).fillna(0).astype(int),
+            "has_kavak_total": raw_df["has_kavak_total"].astype(bool),
+            
+            # Car details
+            "current_car_brand": raw_df["current_car_brand"],
+            "current_car_model_name": raw_df["current_car_model_name"],
+            "current_car_year": pd.to_numeric(
+                raw_df["current_car_year"], errors="coerce"
+            ).fillna(0).astype(int),
+            "current_car_km": pd.to_numeric(
+                raw_df["current_car_km"], errors="coerce"
+            ).fillna(0).astype(int),
+            "current_car_model": raw_df["current_car_model"],
+            "aging": raw_df["aging"],  # How old the car was when purchased
+            
+            # Risk profile
+            "risk_profile_name": raw_df["risk_profile_name"],
+            "risk_profile": raw_df["risk_profile_name"],  # Add 'risk_profile' for validator
+            "risk_profile_index": raw_df["risk_profile_index"].astype(int),
+        })
+        
+        return customers_df
+
+    def _validate_and_filter(self, customers_df):
+        """Validate data and filter out invalid records."""
+        # Clean up and validate
+        customers_df = customers_df.dropna(
+            subset=[
+                "customer_id",
+                "current_monthly_payment", 
+                "vehicle_equity",
+                "current_car_price",
+            ]
+        )
+        customers_df = customers_df[customers_df["current_monthly_payment"] > 0]
+        customers_df = customers_df[customers_df["current_car_price"] > 0]
+        
+        return customers_df
+
     def transform_customer_data(self, raw_df):
         """
         Transform raw customer CSV data to standardized application format.
@@ -407,165 +592,26 @@ class DataLoader:
             - Handles missing or malformed dates gracefully
             - Provides fallback values for optional fields
         """
+        # Step 1: Map column names from Spanish to English
+        raw_df = self._map_column_names(raw_df)
         
-        # First, normalize column names to handle variations
-        column_mapping = {
-            # Contract and IDs
-            "CONTRATO": "contract_id",
-            "STOCK ID": "current_stock_id",
-            
-            # Personal info
-            "NOMBRE": "first_name",
-            "APELLIDO": "last_name", 
-            "MAIL": "email",
-            
-            # Financial info
-            "MONTO DE LA MENSUALIDAD": "current_monthly_payment",
-            "SALDO INSOLUTO": "outstanding_balance",
-            "PRECIO AUTO": "current_car_price",
-            "TASA": "original_interest_rate",
-            "MONTO A FINANCIAR": "original_loan_amount",
-            
-            # Contract details
-            "FECHA DE CONTRATO": "contract_date",
-            "PLAZO REMANENTE": "remaining_months",
-            "TIENE KT": "has_kavak_total",
-            
-            # Car details
-            "MARCA": "current_car_brand",
-            "MODELO": "current_car_model_name",
-            "ANO AUTO": "current_car_year",
-            "KILOMETRAJE": "current_car_km",
-            "AGING": "aging",
-            
-            # Risk profile
-            "risk_profile": "risk_profile_name"
-        }
+        # Step 2: Process risk profiles
+        raw_df = self._process_risk_profiles(raw_df)
         
-        # Rename columns using the mapping
-        for old_col, new_col in column_mapping.items():
-            if old_col in raw_df.columns:
-                raw_df[new_col] = raw_df[old_col]
+        # Step 3: Process dates
+        raw_df = self._process_dates(raw_df)
         
-        # Map risk profile names to indices
-        raw_df["risk_profile_index"] = raw_df["risk_profile_name"].map(
-            self.risk_profile_mapping
-        )
-
-        # Handle any unmapped risk profiles
-        unmapped = raw_df[raw_df["risk_profile_index"].isna()]
-        if len(unmapped) > 0:
-            logger.warning(
-                f"⚠️ Found {len(unmapped)} customers with unmapped risk profiles: {unmapped['risk_profile_name'].unique()}"
-            )
-            # Default unmapped profiles to highest risk index
-            raw_df.loc[raw_df["risk_profile_index"].isna(), "risk_profile_index"] = 25
-
-        # Use CONTRATO as the customer_id directly (it's already unique)
-        raw_df["customer_id"] = raw_df["contract_id"]
+        # Step 4: Calculate derived fields
+        raw_df = self._calculate_derived_fields(raw_df)
         
-        # Parse contract date with explicit format to avoid warning
-        # The CSV uses M/D/YY format
-        try:
-            raw_df["contract_date"] = pd.to_datetime(raw_df["contract_date"], format="%m/%d/%y", errors="coerce")
-        except:
-            # Fallback to automatic parsing if format doesn't match
-            raw_df["contract_date"] = pd.to_datetime(raw_df["contract_date"], errors="coerce")
+        # Step 5: Build final dataframe
+        customers_df = self._build_final_dataframe(raw_df)
         
-        # Calculate vehicle equity (if not provided in data)
-        if "vehicle_equity" not in raw_df.columns:
-            # Simple calculation: current car price - outstanding balance
-            raw_df["vehicle_equity"] = (
-                pd.to_numeric(raw_df["current_car_price"], errors="coerce") - 
-                pd.to_numeric(raw_df["outstanding_balance"], errors="coerce")
-            )
+        # Step 6: Clean data types
+        customers_df = self._clean_data_types(customers_df)
         
-        # Create full car model string
-        raw_df["current_car_model"] = raw_df.apply(
-            lambda row: f"{row.get('current_car_brand', '')} {row.get('current_car_model_name', '')} {row.get('current_car_year', '')}".strip(),
-            axis=1
-        )
-
-        # Create the final customers DataFrame with all fields
-        customers_df = pd.DataFrame({
-            # IDs
-            "customer_id": raw_df["customer_id"],
-            "contract_id": raw_df["contract_id"],
-            "current_stock_id": raw_df["current_stock_id"],
-            
-            # Personal info
-            "first_name": raw_df["first_name"],
-            "last_name": raw_df["last_name"],
-            "full_name": raw_df["first_name"] + " " + raw_df["last_name"],
-            "name": raw_df["first_name"] + " " + raw_df["last_name"],  # Add 'name' for validator
-            "email": raw_df["email"],
-            
-            # Financial info
-            "current_monthly_payment": pd.to_numeric(
-                raw_df["current_monthly_payment"], errors="coerce"
-            ),
-            "vehicle_equity": pd.to_numeric(
-                raw_df["vehicle_equity"], errors="coerce"
-            ),
-            "outstanding_balance": pd.to_numeric(
-                raw_df["outstanding_balance"], errors="coerce"
-            ),
-            "current_car_price": pd.to_numeric(
-                raw_df["current_car_price"], errors="coerce"
-            ),
-            "original_loan_amount": pd.to_numeric(
-                raw_df["original_loan_amount"], errors="coerce"
-            ),
-            "original_interest_rate": pd.to_numeric(
-                raw_df["original_interest_rate"], errors="coerce"
-            ),
-            
-            # Contract details
-            "contract_date": raw_df["contract_date"],
-            "remaining_months": pd.to_numeric(
-                raw_df["remaining_months"], errors="coerce"
-            ).fillna(0).astype(int),
-            "has_kavak_total": raw_df["has_kavak_total"].astype(bool),
-            
-            # Car details
-            "current_car_brand": raw_df["current_car_brand"],
-            "current_car_model_name": raw_df["current_car_model_name"],
-            "current_car_year": pd.to_numeric(
-                raw_df["current_car_year"], errors="coerce"
-            ).fillna(0).astype(int),
-            "current_car_km": pd.to_numeric(
-                raw_df["current_car_km"], errors="coerce"
-            ).fillna(0).astype(int),
-            "current_car_model": raw_df["current_car_model"],
-            "aging": raw_df["aging"],  # How old the car was when purchased
-            
-            # Risk profile
-            "risk_profile_name": raw_df["risk_profile_name"],
-            "risk_profile": raw_df["risk_profile_name"],  # Add 'risk_profile' for validator
-            "risk_profile_index": raw_df["risk_profile_index"].astype(int),
-        })
-
-        # Calculate derived fields
-        customers_df["months_since_contract"] = (
-            (pd.Timestamp.now() - customers_df["contract_date"]).dt.days / 30
-        ).fillna(0).astype(int)
-        
-        # The aging field from CSV tells us how old the car was when purchased
-        customers_df["car_age_at_purchase"] = pd.to_numeric(
-            customers_df["aging"], errors="coerce"
-        ).fillna(0).astype(int)
-
-        # Clean up and validate
-        customers_df = customers_df.dropna(
-            subset=[
-                "customer_id",
-                "current_monthly_payment", 
-                "vehicle_equity",
-                "current_car_price",
-            ]
-        )
-        customers_df = customers_df[customers_df["current_monthly_payment"] > 0]
-        customers_df = customers_df[customers_df["current_car_price"] > 0]
+        # Step 7: Validate and filter
+        customers_df = self._validate_and_filter(customers_df)
         
         logger.info(f"📊 Transformed customer data with {len(customers_df.columns)} fields")
 

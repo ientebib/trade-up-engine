@@ -95,16 +95,38 @@ async def health_check():
 @handle_api_errors("get metrics")
 async def get_metrics():
     """Get real-time metrics for dashboard"""
-    # TODO: Implement real metrics collection
-    # For now, return mock data
+    from app.utils.metrics import metrics_collector
+    
+    # Get real metrics from the metrics collector
+    metrics = metrics_collector.get_metrics()
+    
+    # Extract key metrics for dashboard
+    offers_data = metrics.get("offers", {})
+    cache_data = metrics.get("cache", {})
+    requests_data = metrics.get("requests", {})
+    
+    # Calculate cache hit rate
+    cache_total = cache_data.get("hits", 0) + cache_data.get("misses", 0)
+    cache_hit_rate = (cache_data.get("hits", 0) / cache_total * 100) if cache_total > 0 else 0
+    
+    # Calculate average response time
+    response_times = requests_data.get("response_times", [])
+    avg_response_time = sum(response_times[-100:]) / len(response_times[-100:]) if response_times else 0
+    
+    # Get top customers (this would need to be tracked separately)
+    # For now, return the endpoint usage as a proxy
+    by_endpoint = requests_data.get("by_endpoint", {})
+    
     return {
-        "offers_generated_today": 342,
-        "average_response_time": 1.2,
-        "cache_hit_rate": 68,
-        "active_sessions": 3,
-        "top_customers": [
-            {"id": "TMCJ33A32GJ053451", "offers": 28},
-            {"id": "KAVA12345678901234", "offers": 24},
-            {"id": "CUST98765432109876", "offers": 19}
-        ]
+        "offers_generated_today": offers_data.get("generated", 0),
+        "average_response_time": round(avg_response_time, 3),
+        "cache_hit_rate": round(cache_hit_rate, 1),
+        "active_sessions": metrics.get("system", {}).get("active_requests", 0),
+        "total_requests": requests_data.get("total", 0),
+        "offers_by_tier": offers_data.get("by_tier", {}),
+        "cache_stats": {
+            "hits": cache_data.get("hits", 0),
+            "misses": cache_data.get("misses", 0)
+        },
+        "errors": metrics.get("errors", {}).get("total", 0)
     }
