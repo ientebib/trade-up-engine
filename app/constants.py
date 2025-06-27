@@ -3,31 +3,43 @@ Application-wide constants to eliminate magic numbers and improve code clarity.
 """
 
 # =============================================================================
-# FINANCIAL CONSTANTS
+# FINANCIAL CONSTANTS - MOVED TO CONFIG/SCHEMA.PY
 # =============================================================================
+# All financial constants have been moved to the centralized configuration system.
+# Use the config facade to access these values:
+#
+# from config.facade import get, get_decimal
+#
+# Examples:
+# - Payment tiers: get('tiers.refresh.min'), get('tiers.refresh.max')
+# - Service fees: get_decimal('fees.service.percentage')
+# - Kavak Total: get_decimal('fees.kavak_total.amount')
+#
+# The following imports provide backward compatibility during migration:
+from config.facade import get, get_decimal
 
-# Payment Delta Tiers (for offer categorization)
-REFRESH_TIER_MIN = -0.05        # -5% minimum payment change for refresh tier
-REFRESH_TIER_MAX = 0.05         # +5% maximum payment change for refresh tier
-UPGRADE_TIER_MIN = 0.05         # +5% minimum payment change for upgrade tier  
-UPGRADE_TIER_MAX = 0.25         # +25% maximum payment change for upgrade tier
-MAX_UPGRADE_TIER_MIN = 0.25     # +25% minimum payment change for max upgrade tier
-MAX_UPGRADE_TIER_MAX = 1.0      # +100% maximum payment change for max upgrade tier
+# Payment Delta Tiers (backward compatibility)
+REFRESH_TIER_MIN = float(get_decimal('tiers.refresh.min', -0.05))
+REFRESH_TIER_MAX = float(get_decimal('tiers.refresh.max', 0.05))
+UPGRADE_TIER_MIN = float(get_decimal('tiers.upgrade.min', 0.05))
+UPGRADE_TIER_MAX = float(get_decimal('tiers.upgrade.max', 0.25))
+MAX_UPGRADE_TIER_MIN = float(get_decimal('tiers.max_upgrade.min', 0.25))
+MAX_UPGRADE_TIER_MAX = float(get_decimal('tiers.max_upgrade.max', 1.0))
 
 # Interest Rate Adjustments by Term
-TERM_60_RATE_ADJUSTMENT = 0.01   # 1% additional interest for 60-month terms
-TERM_72_RATE_ADJUSTMENT = 0.015  # 1.5% additional interest for 72-month terms
+TERM_60_RATE_ADJUSTMENT = float(get_decimal('terms.rate_adjustment_60', 0.01))
+TERM_72_RATE_ADJUSTMENT = float(get_decimal('terms.rate_adjustment_72', 0.015))
 
 # NPV Calculation Constants
-NPV_BASE_MARGIN_DEDUCTION = 2000  # Base amount deducted from margin for NPV
+NPV_BASE_MARGIN_DEDUCTION = float(get_decimal('financial.npv_base_margin_deduction', 2000))
 
-# Default Fee Percentages (fallback values)
-DEFAULT_SERVICE_FEE_PCT = 0.04   # 4% service fee percentage
-DEFAULT_CXA_PCT = 0.04           # 4% CXA (opening) fee percentage
-DEFAULT_CAC_BONUS = 0            # No CAC bonus by default
+# Default Fee Percentages (backward compatibility)
+DEFAULT_SERVICE_FEE_PCT = float(get_decimal('fees.service.percentage', 0.04))
+DEFAULT_CXA_PCT = float(get_decimal('fees.cxa.percentage', 0.04))
+DEFAULT_CAC_BONUS = float(get_decimal('fees.cac_bonus.default', 0))
 
 # Kavak Total Default Amount
-KAVAK_TOTAL_DEFAULT_AMOUNT = 25000  # Default Kavak Total amount in MXN
+KAVAK_TOTAL_DEFAULT_AMOUNT = float(get_decimal('fees.kavak_total.amount', 25000))
 
 # =============================================================================
 # VALIDATION CONSTANTS
@@ -151,20 +163,20 @@ class LogLevels:
 # =============================================================================
 
 # Connection pool settings for Redshift
-MIN_CONNECTIONS = 2                     # Minimum connections in pool
-MAX_CONNECTIONS = 10                    # Maximum connections in pool
-CONNECTION_TIMEOUT = 30                 # Connection timeout in seconds
-DATABASE_QUERY_TIMEOUT = 60             # Query execution timeout in seconds
-POOL_RECYCLE_TIME = 3600                # Recycle connections after 1 hour
+MIN_CONNECTIONS = int(get('database.pool.min_connections', 2))
+MAX_CONNECTIONS = int(get('database.pool.max_connections', 10))
+CONNECTION_TIMEOUT = int(get('database.pool.connection_timeout', 30))
+DATABASE_QUERY_TIMEOUT = int(get('database.pool.query_timeout', 60))
+POOL_RECYCLE_TIME = int(get('database.pool.recycle_time', 3600))
 
 # =============================================================================
 # CACHE MANAGEMENT CONSTANTS
 # =============================================================================
 
-# Cache TTL settings
-DEFAULT_CACHE_TTL_HOURS = 4.0           # Default cache TTL in hours
-INVENTORY_CACHE_TTL_HOURS = 4.0         # Inventory-specific cache TTL
-CUSTOMER_CACHE_TTL_HOURS = 0.5          # Customer data cache TTL (30 minutes)
+# Cache TTL settings (backward compatibility)
+DEFAULT_CACHE_TTL_HOURS = float(get('cache.default_ttl_hours', 4.0))
+INVENTORY_CACHE_TTL_HOURS = float(get('cache.inventory_ttl_hours', 4.0))
+CUSTOMER_CACHE_TTL_HOURS = float(get('cache.customer_ttl_hours', 0.5))
 
 # =============================================================================
 # REQUEST TIMEOUT CONSTANTS

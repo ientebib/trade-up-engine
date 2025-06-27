@@ -42,6 +42,20 @@ class BulkOfferRequest(BaseModel):
 
 
 class SearchRequest(BaseModel):
-    query: str
-    limit: int = Field(default=20, le=100)
-    filters: Optional[Dict] = None
+    """Request model for searching customers"""
+    query: str = Field(
+        ...,
+        description="Search query string",
+        example="John Doe"
+    )
+    limit: int = Field(
+        default=20,
+        le=100,
+        description="Maximum number of results to return",
+        example=20
+    )
+    filters: Optional[Dict] = Field(
+        default=None,
+        description="Additional filters to apply",
+        example={"risk_profile": "A1", "min_equity": 50000}
+    )

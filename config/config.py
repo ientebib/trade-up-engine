@@ -86,13 +86,15 @@ def _safe_get_decimal(key: str, default: float) -> float:
         logger.error(f"Failed to load config '{key}': {e}, using default: {default}")
         return default
 
+# DEFAULT_FEES dictionary is dynamically loaded from configuration
+# Use config.facade.get_decimal() directly for individual values
 DEFAULT_FEES = {
-    'service_fee_pct': _safe_get_decimal("fees.service.percentage", 0.03),
-    'cxa_pct': _safe_get_decimal("fees.cxa.percentage", 0.01),
+    'service_fee_pct': _safe_get_decimal("fees.service.percentage", 0.04),
+    'cxa_pct': _safe_get_decimal("fees.cxa.percentage", 0.04),
     'cac_bonus': _safe_get_decimal("fees.cac_bonus.default", 0.0),
     'cac_bonus_range': (
         _safe_get_decimal("fees.cac_bonus.min", 0.0),
-        _safe_get_decimal("fees.cac_bonus.max", 20000.0)
+        _safe_get_decimal("fees.cac_bonus.max", 5000.0)
     ),
     'kavak_total_amount': _safe_get_decimal("fees.kavak_total.amount", 25000.0),
     'insurance_amount': _safe_get_decimal("fees.insurance.amount", 10999.0),
@@ -103,8 +105,8 @@ DEFAULT_FEES = {
     'gps_monthly_fee': _safe_get_decimal("fees.gps.monthly", 350.0)
 }
 
-# The maximum CAC (Customer Bonus) we are willing to apply
-MAX_CAC_BONUS = _safe_get_decimal("fees.cac_bonus.max", 20000.0)
+# The maximum CAC (Customer Bonus) - loaded from configuration
+MAX_CAC_BONUS = _safe_get_decimal("fees.cac_bonus.max", 5000.0)
 
 # Payment Delta Tiers to classify the final offer
 try:
@@ -120,7 +122,8 @@ except Exception as e:
 # IVA Rate - loaded from configuration
 IVA_RATE = _safe_get_decimal("financial.iva_rate", 0.16)
 
-# GPS fees - loaded from configuration
+# GPS fees - dynamically loaded from configuration
+# These are kept for backward compatibility but should use config.facade directly
 GPS_INSTALLATION_FEE = _safe_get_decimal("fees.gps.installation", 750.0)
 GPS_MONTHLY_FEE = _safe_get_decimal("fees.gps.monthly", 350.0)
 

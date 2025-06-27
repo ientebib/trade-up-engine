@@ -325,8 +325,8 @@ class SmartSearchEngine:
         else:
             interest_rate = base_interest_rate
         
-        # Apply IVA once
-        interest_rate_with_iva = interest_rate * IVA_RATE
+        # Apply IVA to interest rate
+        interest_rate_with_iva = interest_rate * (1 + IVA_RATE)
         monthly_rate = interest_rate_with_iva / 12
         
         # Check down payment requirement
@@ -350,8 +350,8 @@ class SmartSearchEngine:
         insurance_amount = INSURANCE_TABLE.get(customer.get('risk_profile_name', 'A'), 10999)
         
         # GPS fees with IVA
-        gps_install_with_iva = GPS_INSTALLATION_FEE * IVA_RATE
-        gps_monthly_with_iva = GPS_MONTHLY_FEE * IVA_RATE
+        gps_install_with_iva = GPS_INSTALLATION_FEE * (1 + IVA_RATE)
+        gps_monthly_with_iva = GPS_MONTHLY_FEE * (1 + IVA_RATE)
         
         # Calculate effective equity
         effective_equity = (
@@ -409,9 +409,9 @@ class SmartSearchEngine:
             "kavak_total_amount": kavak_total,
             "insurance_amount": insurance_amount,
             "gps_install_fee": gps_install_with_iva,
-            "gps_monthly_fee": GPS_MONTHLY_FEE * IVA_RATE,
+            "gps_monthly_fee": gps_monthly_with_iva,
             "gps_monthly_fee_base": GPS_MONTHLY_FEE,
-            "gps_monthly_fee_iva": GPS_MONTHLY_FEE * (IVA_RATE - 1),
+            "gps_monthly_fee_iva": GPS_MONTHLY_FEE * IVA_RATE,
             "iva_on_interest": payment_components["iva_on_interest"],
             "npv": npv,
             "interest_rate": interest_rate
