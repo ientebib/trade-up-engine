@@ -7,6 +7,9 @@ from datetime import datetime
 import json
 import uuid
 from pathlib import Path
+import fcntl
+import time
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -29,22 +32,83 @@ class ScenarioService:
             self.scenarios_file.parent.mkdir(parents=True, exist_ok=True)
             self.scenarios_file.write_text("[]")
     
+    def _acquire_lock(self, file_handle, exclusive=True):
+        """Acquire file lock with retry logic"""
+        max_retries = 10
+        retry_delay = 0.1  # 100ms
+        
+        for i in range(max_retries):
+            try:
+                # Try to acquire lock
+                if exclusive:
+                    fcntl.flock(file_handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                else:
+                    fcntl.flock(file_handle, fcntl.LOCK_SH | fcntl.LOCK_NB)
+                return True
+            except IOError:
+                if i < max_retries - 1:
+                    time.sleep(retry_delay)
+                    continue
+                else:
+                    logger.error(f"Failed to acquire lock after {max_retries} attempts")
+                    return False
+    
+    def _release_lock(self, file_handle):
+        """Release file lock"""
+        try:
+            fcntl.flock(file_handle, fcntl.LOCK_UN)
+        except Exception as e:
+            logger.error(f"Error releasing lock: {e}")
+    
     def _load_scenarios(self) -> List[Dict]:
-        """Load all scenarios from file"""
+        """Load all scenarios from file with shared lock"""
         try:
             with open(self.scenarios_file, 'r') as f:
-                return json.load(f)
+                # Acquire shared lock for reading
+                if self._acquire_lock(f, exclusive=False):
+                    try:
+                        return json.load(f)
+                    finally:
+                        self._release_lock(f)
+                else:
+                    logger.error("Could not acquire lock for reading scenarios")
+                    return []
+        except FileNotFoundError:
+            return []
         except Exception as e:
             logger.error(f"Error loading scenarios: {e}")
             return []
     
     def _save_scenarios(self, scenarios: List[Dict]):
-        """Save scenarios to file"""
+        """Save scenarios to file with exclusive lock"""
+        temp_file = self.scenarios_file.with_suffix('.tmp')
+        
         try:
-            with open(self.scenarios_file, 'w') as f:
-                json.dump(scenarios, f, indent=2, default=str)
+            # Write to temporary file first
+            with open(temp_file, 'w') as f:
+                # Acquire exclusive lock for writing
+                if self._acquire_lock(f, exclusive=True):
+                    try:
+                        json.dump(scenarios, f, indent=2, default=str)
+                        f.flush()
+                        os.fsync(f.fileno())  # Ensure data is written to disk
+                    finally:
+                        self._release_lock(f)
+                else:
+                    raise Exception("Could not acquire lock for writing scenarios")
+            
+            # Atomic rename to replace original file
+            temp_file.replace(self.scenarios_file)
+            
         except Exception as e:
             logger.error(f"Error saving scenarios: {e}")
+            # Clean up temporary file if it exists
+            if temp_file.exists():
+                try:
+                    temp_file.unlink()
+                except:
+                    pass
+            raise
     
     def save_scenario(
         self,

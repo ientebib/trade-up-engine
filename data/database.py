@@ -48,6 +48,12 @@ def search_customers(
     offset: int = 0
 ) -> tuple[List[Dict], int]:
     """Search customers with filtering - returns (results, total_count)"""
+    # Validate inputs to prevent slice object errors
+    if not isinstance(limit, int) or limit < 0:
+        raise ValueError(f"limit must be a non-negative integer, got {type(limit).__name__}: {limit}")
+    if not isinstance(offset, int) or offset < 0:
+        raise ValueError(f"offset must be a non-negative integer, got {type(offset).__name__}: {offset}")
+    
     logger.info(f"🔍 Searching customers: term='{search_term}', limit={limit}, offset={offset}")
     
     # Use mock data if enabled
@@ -317,6 +323,12 @@ def search_customers_with_filters(
     offset: int = 0
 ) -> tuple[List[Dict], int]:
     """Search customers with risk filtering at database level"""
+    # Validate inputs to prevent slice object errors
+    if not isinstance(limit, int) or limit < 0:
+        raise ValueError(f"limit must be a non-negative integer, got {type(limit).__name__}: {limit}")
+    if not isinstance(offset, int) or offset < 0:
+        raise ValueError(f"offset must be a non-negative integer, got {type(offset).__name__}: {offset}")
+    
     logger.info(f"🔍 Searching customers: term='{search_term}', risk='{risk_filter}', limit={limit}")
     
     # Load customer data

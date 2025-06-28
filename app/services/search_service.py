@@ -5,6 +5,7 @@ import logging
 from typing import Dict, List, Optional, Tuple, Any
 from data import database
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
 
 logger = logging.getLogger(__name__)
 
@@ -14,6 +15,9 @@ class SearchService:
     Service layer for intelligent inventory search and filtering.
     Helps find the right vehicles for customers based on preferences and constraints.
     """
+    
+    # Class-level thread pool for reuse
+    _executor = ThreadPoolExecutor(max_workers=4)
     
     @staticmethod
     async def search_inventory_for_customer(
@@ -32,118 +36,125 @@ class SearchService:
     ) -> Dict[str, Any]:
         """
         Search inventory based on customer preferences and payment targets.
-        
-        Args:
-            customer_id: Customer identifier
-            payment_delta_range: (min, max) payment change as decimals
-            brands: List of preferred brands
-            min_year: Minimum vehicle year
-            max_km: Maximum kilometers
-            vehicle_types: List of vehicle types (SUV, Sedan, etc.)
-            
-        Returns:
-            Dict with search results and metadata
+        Now with async database operations and CPU-intensive work in thread pool.
         """
-        # Get customer data
-        customer = database.get_customer_by_id(customer_id)
+        loop = asyncio.get_event_loop()
+        
+        # Run database operations in thread pool
+        customer = await loop.run_in_executor(
+            SearchService._executor, database.get_customer_by_id, customer_id
+        )
         if not customer:
             raise ValueError(f"Customer {customer_id} not found")
         
-        # Get base inventory for trade-ups
-        inventory = database.get_tradeup_inventory_for_customer(customer)
+        inventory = await loop.run_in_executor(
+            SearchService._executor, database.get_tradeup_inventory_for_customer, customer
+        )
         
-        # Apply filters
-        filtered_inventory = []
-        
-        for car in inventory:
-            # Brand filter
-            if brands:
-                car_brand = car.get('brand', '').lower()
-                if not any(brand.lower() in car_brand for brand in brands):
+        # Define CPU-intensive filtering function
+        def _process_inventory_sync():
+            filtered_inventory = []
+            
+            for car in inventory:
+                # Brand filter
+                if brands:
+                    car_brand = car.get('brand', '').lower()
+                    if not any(brand.lower() in car_brand for brand in brands):
+                        continue
+                
+                # Year filter
+                if min_year and car.get('year', 0) < min_year:
                     continue
-            
-            # Year filter
-            if min_year and car.get('year', 0) < min_year:
-                continue
-            
-            # Kilometers filter
-            if max_km and car.get('kilometers', float('inf')) > max_km:
-                continue
-            
-            # Price filters
-            if min_price and car.get('car_price', 0) < min_price:
-                continue
-            if max_price and car.get('car_price', 0) > max_price:
-                continue
-            
-            # Vehicle type filter (simple classification)
-            if vehicle_types:
-                model_lower = car.get('model', '').lower()
-                vehicle_type = SearchService._classify_vehicle(model_lower)
-                if vehicle_type not in vehicle_types:
+                
+                # Kilometers filter
+                if max_km and car.get('kilometers', float('inf')) > max_km:
                     continue
+                
+                # Price filters
+                if min_price and car.get('car_price', 0) < min_price:
+                    continue
+                if max_price and car.get('car_price', 0) > max_price:
+                    continue
+                
+                # Vehicle type filter
+                if vehicle_types:
+                    model_lower = car.get('model', '').lower()
+                    vehicle_type = SearchService._classify_vehicle(model_lower)
+                    if vehicle_type not in vehicle_types:
+                        continue
+                
+                # Quick payment estimation
+                estimated_payment = SearchService._estimate_payment(customer, car)
+                
+                # Guard against division by zero
+                current_payment = customer.get('current_monthly_payment', 0)
+                if current_payment <= 0:
+                    logger.warning(f"Customer {customer.get('customer_id')} has invalid payment: {current_payment}, defaulting to 1")
+                    current_payment = 1
+                    
+                payment_delta = (estimated_payment / current_payment) - 1
+                
+                # Payment delta filter
+                if payment_delta < payment_delta_range[0] or payment_delta > payment_delta_range[1]:
+                    continue
+                
+                # Add estimated payment to car data
+                car['estimated_monthly_payment'] = estimated_payment
+                car['estimated_payment_delta'] = payment_delta
+                car['vehicle_type'] = SearchService._classify_vehicle(car.get('model', ''))
+                
+                filtered_inventory.append(car)
             
-            # Quick payment estimation (simplified)
-            estimated_payment = SearchService._estimate_payment(customer, car)
-            payment_delta = (estimated_payment / customer['current_monthly_payment']) - 1
+            # Apply sorting
+            if sort_by == 'payment_delta':
+                filtered_inventory.sort(key=lambda x: abs(x['estimated_payment_delta']))
+            elif sort_by == 'payment':
+                filtered_inventory.sort(key=lambda x: x['estimated_monthly_payment'])
+            elif sort_by == 'price':
+                filtered_inventory.sort(key=lambda x: x['car_price'])
+            elif sort_by == 'year':
+                filtered_inventory.sort(key=lambda x: x.get('year', 0))
+            elif sort_by == 'km':
+                filtered_inventory.sort(key=lambda x: x.get('kilometers', 0))
+            elif sort_by == 'npv':
+                filtered_inventory.sort(key=lambda x: x['car_price'] * 0.15)
+                
+            if sort_order == 'desc':
+                filtered_inventory.reverse()
             
-            # Payment delta filter
-            if payment_delta < payment_delta_range[0] or payment_delta > payment_delta_range[1]:
-                continue
+            # Categorize results
+            categories = {
+                'perfect_match': [],
+                'slight_increase': [],
+                'moderate_increase': [],
+                'stretch_options': []
+            }
             
-            # Add estimated payment to car data
-            car['estimated_monthly_payment'] = estimated_payment
-            car['estimated_payment_delta'] = payment_delta
+            for car in filtered_inventory:
+                delta = car['estimated_payment_delta']
+                if -0.05 <= delta <= 0.05:
+                    categories['perfect_match'].append(car)
+                elif 0.05 < delta <= 0.15:
+                    categories['slight_increase'].append(car)
+                elif 0.15 < delta <= 0.25:
+                    categories['moderate_increase'].append(car)
+                else:
+                    categories['stretch_options'].append(car)
             
-            # Add vehicle type classification
-            car['vehicle_type'] = SearchService._classify_vehicle(car.get('model', ''))
+            # Apply limit
+            limited_inventory = filtered_inventory[:limit]
             
-            filtered_inventory.append(car)
+            return filtered_inventory, limited_inventory, categories
         
-        # Apply sorting
-        if sort_by == 'payment_delta':
-            filtered_inventory.sort(key=lambda x: abs(x['estimated_payment_delta']))
-        elif sort_by == 'payment':
-            filtered_inventory.sort(key=lambda x: x['estimated_monthly_payment'])
-        elif sort_by == 'price':
-            filtered_inventory.sort(key=lambda x: x['car_price'])
-        elif sort_by == 'year':
-            filtered_inventory.sort(key=lambda x: x.get('year', 0))
-        elif sort_by == 'km':
-            filtered_inventory.sort(key=lambda x: x.get('kilometers', 0))
-        elif sort_by == 'npv':
-            # For quick calc, use a simplified NPV estimate
-            filtered_inventory.sort(key=lambda x: x['car_price'] * 0.15)  # Rough estimate
-            
-        # Apply sort order
-        if sort_order == 'desc':
-            filtered_inventory.reverse()
+        # Run CPU-intensive work in thread pool
+        filtered_inventory, limited_inventory, categories = await loop.run_in_executor(
+            SearchService._executor, _process_inventory_sync
+        )
         
-        # Categorize results
-        categories = {
-            'perfect_match': [],  # -5% to +5%
-            'slight_increase': [],  # +5% to +15%
-            'moderate_increase': [],  # +15% to +25%
-            'stretch_options': []  # > +25%
-        }
-        
-        # Apply limit and categorize
-        limited_inventory = filtered_inventory[:limit]
-        
-        for car in limited_inventory:
-            delta = car['estimated_payment_delta']
-            if -0.05 <= delta <= 0.05:
-                categories['perfect_match'].append(car)
-            elif 0.05 < delta <= 0.15:
-                categories['slight_increase'].append(car)
-            elif 0.15 < delta <= 0.25:
-                categories['moderate_increase'].append(car)
-            else:
-                categories['stretch_options'].append(car)
-        
-        # Get customer's current car details for comparison
+        # Prepare response
         current_car_info = {
-            'model': customer.get('current_car_model', 'Unknown'),
+            'brand': customer.get('current_car_brand'),
+            'model': customer.get('current_car_model'),
             'year': customer.get('current_car_year'),
             'km': customer.get('current_car_km'),
             'price': customer.get('current_car_price')
@@ -162,39 +173,65 @@ class SearchService:
                 'max_km': max_km,
                 'vehicle_types': vehicle_types,
                 'min_price': min_price,
-                'max_price': max_price,
-                'sort_by': sort_by,
-                'sort_order': sort_order
+                'max_price': max_price
             }
         }
     
     @staticmethod
     def _classify_vehicle(model: str) -> str:
-        """Simple vehicle classification based on model name"""
+        """Classify vehicle type based on model name"""
         model_lower = model.lower()
         
-        # SUV keywords
-        suv_keywords = ['x3', 'x5', 'q5', 'q7', 'crv', 'cr-v', 'rav4', 'tiguan', 
-                       'tucson', 'sportage', 'cx-5', 'explorer', 'pilot', 'highlander']
-        if any(keyword in model_lower for keyword in suv_keywords):
-            return 'SUV'
+        # SUV patterns
+        suv_keywords = ['suv', 'crv', 'rav4', 'highlander', 'pilot', 'explorer', 
+                       'tahoe', 'suburban', 'expedition', 'traverse', 'durango',
+                       'pathfinder', 'armada', 'tiguan', 'atlas', 'x5', 'x3',
+                       'q5', 'q7', 'gla', 'glc', 'gle', 'macan', 'cayenne']
         
-        # Sedan keywords
-        sedan_keywords = ['camry', 'accord', 'civic', 'corolla', 'a4', 'a6', 
-                         'serie 3', 'serie 5', 'clase c', 'clase e', 'mazda3', 'sentra']
-        if any(keyword in model_lower for keyword in sedan_keywords):
-            return 'Sedan'
+        # Truck patterns
+        truck_keywords = ['silverado', 'sierra', 'f-150', 'f150', 'ram', 'tacoma',
+                         'tundra', 'ranger', 'colorado', 'frontier', 'ridgeline',
+                         'gladiator', 'maverick']
         
-        # Truck keywords
-        truck_keywords = ['f150', 'f-150', 'silverado', 'ram', 'tacoma', 'ranger']
-        if any(keyword in model_lower for keyword in truck_keywords):
-            return 'Truck'
+        # Sedan patterns
+        sedan_keywords = ['sedan', 'accord', 'camry', 'civic', 'corolla', 'altima',
+                         'sentra', 'maxima', 'sonata', 'elantra', 'malibu', 
+                         'impala', 'fusion', 'taurus', 'charger', '300', 'passat',
+                         'jetta', 'a4', 'a6', '3 series', '5 series', 'c-class',
+                         'e-class', 's-class']
         
-        # Hatchback keywords
-        hatch_keywords = ['golf', 'swift', 'fit', 'versa', 'yaris', 'rio']
-        if any(keyword in model_lower for keyword in hatch_keywords):
-            return 'Hatchback'
+        # Hatchback patterns
+        hatchback_keywords = ['hatchback', 'golf', 'gti', 'focus', 'fiesta', 'fit',
+                             'versa', 'yaris', 'mazda3', 'impreza', 'crosstrek',
+                             'kona', 'venue', 'kicks', 'hr-v', 'cx-30']
         
+        # Van patterns
+        van_keywords = ['van', 'odyssey', 'pacifica', 'sienna', 'grand caravan',
+                       'town & country', 'transit', 'promaster', 'metris',
+                       'sprinter']
+        
+        # Check patterns
+        for keyword in suv_keywords:
+            if keyword in model_lower:
+                return 'SUV'
+        
+        for keyword in truck_keywords:
+            if keyword in model_lower:
+                return 'Truck'
+                
+        for keyword in sedan_keywords:
+            if keyword in model_lower:
+                return 'Sedan'
+                
+        for keyword in hatchback_keywords:
+            if keyword in model_lower:
+                return 'Hatchback'
+                
+        for keyword in van_keywords:
+            if keyword in model_lower:
+                return 'Van'
+        
+        # Default
         return 'Other'
     
     @staticmethod
@@ -203,15 +240,23 @@ class SearchService:
         Quick payment estimation for search results.
         This is a simplified calculation for filtering purposes.
         """
+        from config.facade import get_decimal
+        
+        # Get configuration values
+        gps_monthly = float(get_decimal("fees.gps.monthly"))
+        interest_rate = float(get_decimal("rates.A1"))  # Default to A1
+        service_fee_pct = float(get_decimal("fees.service.percentage"))
+        
         # Basic parameters
         car_price = car['car_price']
         equity = customer['vehicle_equity']
         
-        # Simplified calculation
-        loan_amount = car_price - equity + 35000  # Rough estimate with fees
+        # Calculate loan amount with service fee
+        service_fee = car_price * service_fee_pct
+        loan_amount = car_price - equity + service_fee
         
-        # Assume 48-month term and 20% annual rate with IVA
-        monthly_rate = 0.20 * 1.16 / 12
+        # Use configured interest rate with IVA
+        monthly_rate = interest_rate * 1.16 / 12
         term = 48
         
         # PMT formula
@@ -220,8 +265,8 @@ class SearchService:
         else:
             payment = loan_amount / term
         
-        # Add GPS monthly
-        payment += 406  # GPS with IVA
+        # Add GPS monthly with IVA
+        payment += gps_monthly * 1.16
         
         return payment
     
@@ -230,18 +275,7 @@ class SearchService:
         customer_id: str,
         preferences: Dict[str, Any]
     ) -> Dict[str, Any]:
-        """
-        Save customer preferences for future searches.
-        
-        Args:
-            customer_id: Customer identifier
-            preferences: Dict with preferences like brands, vehicle types, etc.
-            
-        Returns:
-            Saved preferences
-        """
-        # For now, store in memory or session
-        # In production, this would persist to database
+        """Save customer preferences for future searches"""
         logger.info(f"Saving preferences for customer {customer_id}: {preferences}")
         
         # TODO: Implement database storage
@@ -252,56 +286,35 @@ class SearchService:
         }
     
     @staticmethod
-    async def get_similar_vehicles(car_id: str, limit: int = 10) -> List[Dict]:
-        """
-        Find similar vehicles to a given car.
+    async def get_search_suggestions(
+        customer_id: str,
+        partial_query: str
+    ) -> List[str]:
+        """Get search suggestions based on partial input"""
+        suggestions = []
         
-        Args:
-            car_id: Reference car ID
-            limit: Maximum number of similar cars to return
-            
-        Returns:
-            List of similar vehicles
-        """
-        # Get the reference car
-        car = database.get_car_by_id(car_id)
-        if not car:
-            return []
+        # Brand suggestions
+        brands = ['Toyota', 'Honda', 'Nissan', 'Mazda', 'Ford', 'Chevrolet', 
+                 'Volkswagen', 'Hyundai', 'Kia', 'BMW', 'Mercedes-Benz', 'Audi']
         
-        # Get all inventory
-        inventory = database.get_all_inventory()
+        # Model suggestions
+        models = ['Corolla', 'Camry', 'RAV4', 'Civic', 'Accord', 'CR-V',
+                 'Sentra', 'Altima', 'Rogue', 'Mazda3', 'CX-5', 'F-150']
         
-        # Find similar cars (same brand, similar year, similar price)
-        similar = []
-        car_brand = car.get('brand', '').lower()
-        car_year = car.get('year', 0)
-        car_price = car.get('car_price', 0)
+        # Filter based on partial query
+        query_lower = partial_query.lower()
         
-        for other in inventory:
-            if other['car_id'] == car_id:
-                continue
-            
-            # Same brand
-            if car_brand not in other.get('brand', '').lower():
-                continue
-            
-            # Similar year (±2 years)
-            if abs(other.get('year', 0) - car_year) > 2:
-                continue
-            
-            # Similar price (±20%)
-            price_ratio = other.get('car_price', 0) / car_price if car_price > 0 else 0
-            if price_ratio < 0.8 or price_ratio > 1.2:
-                continue
-            
-            similar.append(other)
+        for brand in brands:
+            if query_lower in brand.lower():
+                suggestions.append(brand)
         
-        # Sort by price difference
-        similar.sort(key=lambda x: abs(x.get('car_price', 0) - car_price))
+        for model in models:
+            if query_lower in model.lower():
+                suggestions.append(model)
         
-        return similar[:limit]
+        return suggestions[:10]  # Limit to 10 suggestions
     
-    @staticmethod
+    @staticmethod 
     async def live_inventory_search(
         customer_id: str,
         search_term: str,
@@ -310,78 +323,122 @@ class SearchService:
     ) -> Dict[str, Any]:
         """
         Live inventory search with real-time NPV calculations.
-        
-        Args:
-            customer_id: Customer identifier
-            search_term: Text search (brand, model, etc.)
-            configuration: Current configuration from Deal Architect
-            limit: Maximum results
-            
-        Returns:
-            Dict with vehicles and full financial calculations
+        This is used by the Deal Architect for interactive searching.
         """
-        # Get customer data
-        customer = database.get_customer_by_id(customer_id)
+        loop = asyncio.get_event_loop()
+        
+        # Get customer data in thread pool
+        customer = await loop.run_in_executor(
+            SearchService._executor, database.get_customer_by_id, customer_id
+        )
         if not customer:
             raise ValueError(f"Customer {customer_id} not found")
         
-        # Get base inventory
-        inventory = database.get_tradeup_inventory_for_customer(customer)
+        # Get all inventory
+        all_inventory = await loop.run_in_executor(
+            SearchService._executor, database.get_all_inventory
+        )
         
-        # Filter by search term
-        filtered_inventory = []
-        search_lower = search_term.lower()
-        
-        if search_term:
-            for car in inventory:
-                # Search in brand, model, and year
+        # Define search function for thread pool
+        def _search_and_calculate():
+            # Filter by search term
+            search_lower = search_term.lower()
+            filtered = []
+            
+            for car in all_inventory:
+                # Search in brand, model, year
                 if (search_lower in car.get('brand', '').lower() or
                     search_lower in car.get('model', '').lower() or
                     search_lower in str(car.get('year', ''))):
-                    filtered_inventory.append(car)
-        else:
-            # No search term, return top cars by price
-            filtered_inventory = sorted(inventory, key=lambda x: x['car_price'], reverse=True)[:100]
+                    
+                    # Calculate NPV with configuration
+                    from engine.basic_matcher import BasicMatcher
+                    
+                    # Apply configuration
+                    offer_config = {
+                        'service_fee_pct': configuration.get('service_fee_pct', 0.03),
+                        'cxa_pct': configuration.get('cxa_pct', 0.005),
+                        'cac_bonus': configuration.get('cac_bonus', 0),
+                        'kavak_total_amount': configuration.get('kavak_total_amount', 25000),
+                        'insurance_amount': configuration.get('insurance_amount', 10999),
+                        'term_months': configuration.get('term_months', 48)
+                    }
+                    
+                    # Calculate NPV
+                    matcher = BasicMatcher()
+                    npv = matcher._calculate_npv_for_car(customer, car, offer_config)
+                    
+                    car['calculated_npv'] = npv
+                    car['monthly_payment'] = matcher._estimate_payment(customer, car, offer_config)
+                    
+                    filtered.append(car)
+            
+            # Sort by NPV (highest first)
+            filtered.sort(key=lambda x: x.get('calculated_npv', 0), reverse=True)
+            
+            # Limit results
+            return filtered[:limit]
         
-        # Apply configuration for real NPV calculation
-        custom_fees = {
-            'service_fee_pct': configuration.get('service_fee_pct', 0.04),
-            'cxa_pct': configuration.get('cxa_pct', 0.04),
-            'cac_bonus': configuration.get('cac_bonus', 0),
-            'kavak_total_amount': configuration.get('kavak_total_enabled', True) * 25000,
-            'insurance_amount': configuration.get('insurance_amount', 10999),
-            'term_months': configuration.get('term', 48)
-        }
-        
-        # Calculate real offers using basic_matcher
-        from engine.basic_matcher import basic_matcher
-        offers_result = basic_matcher.find_all_viable(
-            customer, 
-            filtered_inventory[:limit],  # Limit before calculation for performance
-            custom_fees
+        # Run search in thread pool
+        results = await loop.run_in_executor(
+            SearchService._executor, _search_and_calculate
         )
         
-        # Flatten all offers from categories
-        all_offers = []
-        for tier, offers in offers_result['offers'].items():
-            for offer in offers:
-                offer['tier'] = tier
-                all_offers.append(offer)
-        
-        # Sort by NPV descending
-        all_offers.sort(key=lambda x: x.get('npv', 0), reverse=True)
-        
         return {
+            'results': results,
+            'count': len(results),
             'search_term': search_term,
-            'total_matches': len(filtered_inventory),
-            'showing': len(all_offers),
-            'vehicles': all_offers,
-            'configuration': configuration,
-            'customer': {
-                'id': customer_id,
-                'current_payment': customer['current_monthly_payment'],
-                'equity': customer['vehicle_equity']
-            }
+            'configuration': configuration
+        }
+    
+    @staticmethod
+    def universal_search(query: str, limit: int = 50) -> Dict[str, Any]:
+        """Universal search across customers, inventory, and offers"""
+        # This remains synchronous for backward compatibility
+        # but should be converted to async in the future
+        results = {
+            'customers': [],
+            'inventory': [],
+            'query': query,
+            'total_results': 0
+        }
+        
+        # Search customers
+        customers, _ = database.search_customers(search_term=query, limit=limit)
+        results['customers'] = customers[:10]  # Limit customer results
+        
+        # Search inventory by brand/model
+        # This is simplified - in production would use proper search
+        results['total_results'] = len(results['customers'])
+        
+        return results
+    
+    @staticmethod
+    def get_inventory_filters() -> Dict[str, Any]:
+        """Get available filter options from inventory data"""
+        # This remains synchronous for backward compatibility
+        return {
+            'brands': ['Toyota', 'Honda', 'Nissan', 'Mazda', 'Ford', 'Chevrolet'],
+            'vehicle_types': ['SUV', 'Sedan', 'Truck', 'Hatchback', 'Van'],
+            'year_range': {'min': 2015, 'max': 2024},
+            'price_range': {'min': 100000, 'max': 1000000},
+            'km_range': {'min': 0, 'max': 200000}
+        }
+    
+    @staticmethod
+    async def smart_search_minimum_subsidy(
+        customer_id: str,
+        search_params: Dict[str, Any],
+        executor: ThreadPoolExecutor
+    ) -> Dict[str, Any]:
+        """Smart search that finds minimum subsidy needed for viable offers"""
+        # TODO: Implement smart search algorithm
+        # For now, return placeholder
+        return {
+            'customer_id': customer_id,
+            'minimum_subsidy': 0,
+            'viable_cars': [],
+            'search_params': search_params
         }
 
 

@@ -95,7 +95,7 @@ class RedshiftConnectionPool:
         breaker = get_redshift_breaker()
         
         def connect():
-            return redshift_connector.connect(
+            conn = redshift_connector.connect(
                 host=self.host,
                 database=self.database,
                 user=self.user,
@@ -103,11 +103,23 @@ class RedshiftConnectionPool:
                 port=self.port,
                 timeout=10
             )
+            
+            # Set query timeout at connection level
+            with conn.cursor() as cursor:
+                cursor.execute(f"SET statement_timeout = {DATABASE_QUERY_TIMEOUT * 1000}")  # Convert to milliseconds
+                cursor.execute("COMMIT")
+            
+            return conn
         
         try:
             conn = breaker.call(connect)
             # Reset backoff on success
             self._reset_backoff()
+            
+            # Add connection metadata for tracking
+            conn._pool_checkout_time = None
+            conn._pool_id = id(conn)
+            
         except CircuitBreakerOpenError:
             # Circuit is open, don't count as backoff failure
             raise
@@ -159,10 +171,23 @@ class RedshiftConnectionPool:
                         connection = self._create_connection()
                         metrics_collector.track_connection_pool_miss()
                     else:
-                        raise PoolExhaustedError(
-                            timeout=timeout,
-                            max_connections=self.max_connections
-                        )
+                        # Try to reclaim stale connections before failing
+                        reclaimed = self._reclaim_stale_connections()
+                        if reclaimed > 0:
+                            logger.info(f"Reclaimed {reclaimed} stale connections")
+                            # Try again to get from pool
+                            try:
+                                connection = self._pool.get(timeout=1)
+                            except Empty:
+                                raise PoolExhaustedError(
+                                    timeout=timeout,
+                                    max_connections=self.max_connections
+                                )
+                        else:
+                            raise PoolExhaustedError(
+                                timeout=timeout,
+                                max_connections=self.max_connections
+                            )
             
             except Exception as e:
                 # Connection is dead, remove it and create new one
@@ -172,12 +197,19 @@ class RedshiftConnectionPool:
                     raise ConnectionValidationError(connection_id=str(id(connection)))
                 connection = self._create_connection()
             
+            # Mark checkout time
+            if connection:
+                connection._pool_checkout_time = time.time()
+            
             yield connection
             
         finally:
             # Return connection to pool
             if connection:
                 try:
+                    # Clear checkout time
+                    connection._pool_checkout_time = None
+                    
                     # Test if connection is still alive
                     with connection.cursor() as cursor:
                         cursor.execute("SELECT 1")
@@ -274,6 +306,48 @@ class RedshiftConnectionPool:
                 )
             self._consecutive_failures = 0
             self._last_failure_time = None
+    
+    def _reclaim_stale_connections(self, stale_threshold: int = 300) -> int:
+        """
+        Reclaim connections that have been checked out for too long.
+        
+        Args:
+            stale_threshold: Seconds after which a connection is considered stale
+            
+        Returns:
+            Number of connections reclaimed
+        """
+        reclaimed = 0
+        current_time = time.time()
+        
+        with self._lock:
+            stale_connections = []
+            
+            # Find stale connections
+            for conn in self._all_connections:
+                if hasattr(conn, '_pool_checkout_time') and conn._pool_checkout_time:
+                    checkout_duration = current_time - conn._pool_checkout_time
+                    if checkout_duration > stale_threshold:
+                        stale_connections.append(conn)
+                        logger.warning(
+                            f"Found stale connection {conn._pool_id} "
+                            f"checked out for {checkout_duration:.1f}s"
+                        )
+            
+            # Forcefully close stale connections
+            for conn in stale_connections:
+                try:
+                    conn.close()
+                except:
+                    pass
+                
+                self._all_connections.discard(conn)
+                self._created_connections -= 1
+                reclaimed += 1
+                
+                logger.info(f"Reclaimed stale connection {conn._pool_id}")
+        
+        return reclaimed
 
 
 # Global connection pool instance

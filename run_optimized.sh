@@ -5,9 +5,24 @@ echo "============================================"
 
 # 1. Kill any existing servers
 echo "🛑 Stopping any existing servers..."
+
+# Check if lsof is available for better port cleanup
+if command -v lsof &> /dev/null; then
+    lsof -ti:8000 | xargs kill -9 2>/dev/null
+else
+    echo "⚠️  lsof not found, using fallback method..."
+fi
+
 pkill -f "uvicorn" 2>/dev/null || true
 pkill -f "python.*app.main" 2>/dev/null || true
 sleep 2
+
+# Verify port is free
+if command -v lsof &> /dev/null && lsof -i:8000 &> /dev/null; then
+    echo "❌ Error: Port 8000 is still in use!"
+    echo "Please manually kill the process and try again."
+    exit 1
+fi
 
 # 2. Set environment for REAL data with optimizations
 export USE_MOCK_DATA=false
