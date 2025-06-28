@@ -5,6 +5,8 @@ from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from app.services.customer_service import customer_service
+from app.services.scenario_service import scenario_service
+from app.exceptions import CustomerNotFoundError, DatabaseError
 import logging
 
 logger = logging.getLogger(__name__)
@@ -23,10 +25,12 @@ async def deal_architect_workspace(request: Request, customer_id: str):
         # Get customer data
         customer = customer_service.get_customer_details(customer_id)
         if not customer:
-            raise HTTPException(status_code=404, detail="Customer not found")
+            raise CustomerNotFoundError(
+                f"Customer {customer_id} not found",
+                details={"customer_id": customer_id}
+            )
         
         # Get saved scenarios for this customer
-        from app.services.scenario_service import scenario_service
         scenarios = scenario_service.get_customer_scenarios(customer_id)
         
         return templates.TemplateResponse(
@@ -37,9 +41,21 @@ async def deal_architect_workspace(request: Request, customer_id: str):
                 "saved_scenarios": scenarios
             }
         )
+    except CustomerNotFoundError as e:
+        logger.warning(f"Customer not found: {e.message}")
+        raise HTTPException(status_code=404, detail=e.message)
+    except DatabaseError as e:
+        logger.error(f"Database error in deal architect: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=503, 
+            detail="Database temporarily unavailable. Please try again later."
+        )
     except Exception as e:
-        logger.error(f"Error loading deal architect: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Unexpected error in deal architect: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail="An unexpected error occurred. Please contact support if this persists."
+        ) from e
 
 
 @router.get("/deal-architect", response_class=HTMLResponse)
@@ -53,7 +69,6 @@ async def deal_architect_home(request: Request):
         customers = customers_result.get("customers", [])
         
         # Get recent scenarios
-        from app.services.scenario_service import scenario_service
         recent_scenarios = scenario_service.get_recent_activity(limit=5)
         
         # Get basic statistics - use empty defaults if no scenarios exist
@@ -73,6 +88,21 @@ async def deal_architect_home(request: Request):
                 "active_page": "architect"
             }
         )
+    except DatabaseError as e:
+        logger.error(f"Database error in Deal Architect home: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=503,
+            detail="Database temporarily unavailable. Please try again later."
+        )
+    except ValueError as e:
+        logger.error(f"Invalid data in Deal Architect home: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid data format. Please refresh the page."
+        )
     except Exception as e:
-        logger.error(f"Error loading Deal Architect home: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Unexpected error in Deal Architect home: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail="An unexpected error occurred. Please contact support if this persists."
+        ) from e

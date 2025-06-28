@@ -35,3 +35,6 @@ pytest-cov==6.0.0
 black==24.10.0
 isort==5.13.2
 mypy==1.11.0
+# Async performance dependencies
+aioredis==2.0.1
+ujson==5.8.0

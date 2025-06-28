@@ -23,8 +23,7 @@ if command -v lsof &> /dev/null && lsof -i:8000 &> /dev/null; then
     exit 1
 fi
 
-# Use real data
-export USE_MOCK_DATA=false
+# Production mode - no mock data
 
 echo "✅ Port 8000 is now free"
 echo "🚀 Starting server..."

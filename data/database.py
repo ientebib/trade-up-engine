@@ -12,24 +12,16 @@ from .cache_manager import cache_manager
 
 logger = logging.getLogger(__name__)
 
-# Check if we're in mock mode
-USE_MOCK_DATA = os.getenv("USE_MOCK_DATA", "false").lower() == "true"
-
-if USE_MOCK_DATA:
-    from .mock_data_loader import generate_mock_customers, generate_mock_inventory
-    logger.info("🎭 Running in MOCK DATA mode")
+# Production mode only - no mock data
+# Mock data has been removed for production use
 
 
 def get_customer_by_id(customer_id: str) -> Optional[Dict]:
     """Get a single customer by ID - fresh from database"""
     logger.info(f"🔍 Fetching customer {customer_id}")
     
-    # Use mock data if enabled
-    if USE_MOCK_DATA:
-        customers_df = generate_mock_customers(50)
-    else:
-        # For CSV-based customers (your current setup)
-        customers_df = data_loader.load_customers_data()
+    # Load fresh customer data - no mock data in production
+    customers_df = data_loader.load_customers_data()
     
     if customers_df.empty:
         logger.error("❌ No customer data available")
@@ -56,12 +48,8 @@ def search_customers(
     
     logger.info(f"🔍 Searching customers: term='{search_term}', limit={limit}, offset={offset}")
     
-    # Use mock data if enabled
-    if USE_MOCK_DATA:
-        customers_df = generate_mock_customers(50)
-    else:
-        # Load fresh customer data
-        customers_df = data_loader.load_customers_data()
+    # Load fresh customer data - no mock data in production
+    customers_df = data_loader.load_customers_data()
     
     if customers_df.empty:
         return [], 0
@@ -78,8 +66,11 @@ def search_customers(
     
     total_count = len(filtered_df)
     
-    # Apply pagination
-    results = filtered_df.iloc[offset:offset + limit].to_dict("records")
+    # Apply pagination - ensure indices are integers
+    start_idx = int(offset) if offset is not None else 0
+    end_idx = start_idx + int(limit) if limit is not None else len(filtered_df)
+    
+    results = filtered_df.iloc[start_idx:end_idx].to_dict("records")
     
     return results, total_count
 
@@ -88,17 +79,8 @@ def get_all_inventory() -> List[Dict]:
     """Get entire inventory from Redshift - with smart caching"""
     
     def fetch_inventory():
-        if USE_MOCK_DATA:
-            logger.info("🎭 Fetching mock inventory...")
-            inventory_df = generate_mock_inventory(100)
-            if inventory_df.empty:
-                logger.error("❌ No mock inventory data!")
-                return []
-            logger.info(f"✅ Generated {len(inventory_df)} mock cars")
-            return inventory_df.to_dict("records")
-        else:
-            logger.info("🔍 Fetching inventory from Redshift...")
-            _, inventory_df = data_loader.load_all_data()
+        logger.info("🔍 Fetching inventory from Redshift...")
+        _, inventory_df = data_loader.load_all_data()
             
             if inventory_df.empty:
                 logger.error("❌ No inventory data from Redshift!")
@@ -116,12 +98,8 @@ def get_inventory_stats() -> Dict:
     """Get inventory statistics - with smart caching"""
     
     def calculate_stats():
-        if USE_MOCK_DATA:
-            logger.info("📊 Calculating mock inventory stats...")
-            inventory_df = generate_mock_inventory(100)
-        else:
-            logger.info("📊 Calculating inventory stats from Redshift...")
-            _, inventory_df = data_loader.load_all_data()
+        logger.info("📊 Calculating inventory stats from Redshift...")
+        _, inventory_df = data_loader.load_all_data()
         
         if inventory_df.empty:
             return {
@@ -133,7 +111,7 @@ def get_inventory_stats() -> Dict:
             }
         
         # Use car_price for mock data, sales_price for real data
-        price_col = "car_price" if USE_MOCK_DATA else "sales_price"
+        price_col = "sales_price"  # Production column name
         brand_col = "brand" if USE_MOCK_DATA else "car_brand"
         
         stats = {
@@ -155,16 +133,8 @@ def get_car_by_id(car_id: str) -> Optional[Dict]:
     """Get a single car by ID - TRUE optimization with WHERE clause"""
     logger.info(f"🔍 Fetching car {car_id}")
     
-    if USE_MOCK_DATA:
-        # In mock mode, directly search in mock inventory
-        logger.info("🎭 Using mock data for car lookup")
-        inventory_df = generate_mock_inventory(100)
-        
-        if inventory_df.empty:
-            logger.error("❌ No mock inventory data available")
-            return None
-        
-        # Ensure car_id is string for comparison
+    # Production mode - always use real data
+    # Ensure car_id is string for comparison
         car_id_str = str(car_id)
         mask = inventory_df["car_id"].astype(str) == car_id_str
         
@@ -252,7 +222,7 @@ def search_inventory(
         filtered_df = filtered_df[filtered_df["year"] <= year_max]
     
     # Price range
-    price_col = "car_price" if USE_MOCK_DATA else "sales_price"
+    price_col = "sales_price"  # Production column name
     if price_min is not None:
         filtered_df = filtered_df[filtered_df[price_col] >= price_min]
     if price_max is not None:
@@ -291,7 +261,7 @@ def get_inventory_aggregates() -> Dict:
         years = sorted(inventory_df["year"].dropna().unique().astype(int).tolist())
         
         # Get price range
-        price_col = "car_price" if USE_MOCK_DATA else "sales_price"
+        price_col = "sales_price"  # Production column name
         prices = inventory_df[price_col].dropna()
         if len(prices) > 0:
             price_range = {
@@ -378,8 +348,11 @@ def search_customers_with_filters(
     # Get total count AFTER filtering
     total_count = len(filtered_df)
     
-    # Apply pagination
-    results = filtered_df.iloc[offset:offset + limit].to_dict("records")
+    # Apply pagination - ensure indices are integers
+    start_idx = int(offset) if offset is not None else 0
+    end_idx = start_idx + int(limit) if limit is not None else len(filtered_df)
+    
+    results = filtered_df.iloc[start_idx:end_idx].to_dict("records")
     
     logger.info(f"✅ Found {total_count} customers, returning {len(results)} for page")
     return results, total_count
@@ -421,12 +394,8 @@ def get_tradeup_inventory_for_customer(customer_car_details: Dict) -> List[Dict]
     
     logger.info(f"📊 Customer car: Year={current_year}, Price=${current_price:,.0f}, KM={current_km:,.0f}")
     
-    # If using mock data, skip Redshift query
-    if USE_MOCK_DATA:
-        logger.info("🎭 Using mock data - skipping Redshift query")
-    else:
-        # Try to load pre-filtered inventory from database (efficient)
-        try:
+    # Try to load pre-filtered inventory from database (efficient)
+    try:
             filtered_df = data_loader.load_filtered_inventory_from_redshift(
                 year=current_year,
                 price=current_price,
@@ -438,33 +407,15 @@ def get_tradeup_inventory_for_customer(customer_car_details: Dict) -> List[Dict]
                 logger.info(f"✅ Pre-filtered inventory: {filtered_count} cars from database")
                 return filtered_df.to_dict("records")
         except Exception as e:
-            logger.warning(f"⚠️ Filtered query failed, falling back to full inventory: {e}")
+            logger.error(f"❌ Filtered query failed: {e}")
+            # Don't fall back to loading all inventory - it's too expensive
+            logger.warning("⚠️ Returning empty inventory to prevent memory exhaustion")
+            return []
     
-    # Fallback: Load all inventory and filter in memory
-    logger.info("📦 Loading all inventory for in-memory filtering")
-    all_inventory = get_all_inventory()
-    
-    if not all_inventory:
-        logger.warning("⚠️ No inventory available")
-        return []
-    
-    # Apply filters in memory
-    filtered_inventory = []
-    for car in all_inventory:
-        try:
-            car_year = int(car.get('year', 0))
-            car_price = float(car.get('car_price', 0))
-            car_km = float(car.get('kilometers', float('inf')))
-            
-            if (car_year >= current_year and 
-                car_price > current_price and 
-                car_km < current_km):
-                filtered_inventory.append(car)
-        except (ValueError, TypeError):
-            continue
-    
-    logger.info(f"✅ Filtered {len(filtered_inventory)} cars from {len(all_inventory)} total")
-    return filtered_inventory
+    # NO FALLBACK - If we can't get filtered inventory, return empty
+    # Loading all inventory is too expensive and causes performance issues
+    logger.warning("⚠️ Unable to get filtered inventory, returning empty list")
+    return []
 
 
 def get_customer_statistics() -> Dict:

@@ -24,8 +24,7 @@ if command -v lsof &> /dev/null && lsof -i:8000 &> /dev/null; then
     exit 1
 fi
 
-# 2. Set environment for REAL data with optimizations
-export USE_MOCK_DATA=false
+# 2. Set environment for production with optimizations
 export DISABLE_EXTERNAL_CALLS=false
 export PYTHONUNBUFFERED=1
 
