@@ -2,7 +2,8 @@
 Pydantic models for request/response validation
 """
 from pydantic import BaseModel, Field
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
+from datetime import datetime
 
 
 class OfferRequest(BaseModel):
@@ -59,3 +60,40 @@ class SearchRequest(BaseModel):
         description="Additional filters to apply",
         example={"risk_profile": "A1", "min_equity": 50000}
     )
+
+
+class DealScenario(BaseModel):
+    """Deal scenario configuration for saving/loading"""
+    id: Optional[str] = Field(None, description="Scenario ID")
+    name: str = Field(..., description="Scenario name")
+    customer_id: str = Field(..., description="Customer ID")
+    car_id: str = Field(..., description="Car ID")
+    created_at: Optional[datetime] = Field(None, description="Creation timestamp")
+    configuration: Dict[str, Any] = Field(..., description="Deal configuration")
+    notes: Optional[str] = Field(None, description="User notes")
+    
+    class Config:
+        json_encoders = {
+            datetime: lambda v: v.isoformat()
+        }
+
+
+class SaveScenarioRequest(BaseModel):
+    """Request to save a deal scenario"""
+    customer_id: str = Field(..., description="Customer ID")
+    car_id: str = Field(..., description="Car ID")
+    name: str = Field(..., description="Scenario name")
+    configuration: Dict[str, Any] = Field(..., description="Deal configuration")
+    notes: Optional[str] = Field(None, description="Optional notes")
+
+
+class CustomerPreferences(BaseModel):
+    """Customer preferences for vehicle search"""
+    customer_id: str = Field(..., description="Customer ID")
+    preferred_brands: Optional[List[str]] = Field(None, description="Preferred car brands")
+    vehicle_types: Optional[List[str]] = Field(None, description="Preferred vehicle types")
+    max_payment_increase: Optional[float] = Field(None, description="Max payment increase %")
+    min_year: Optional[int] = Field(None, description="Minimum vehicle year")
+    max_km: Optional[float] = Field(None, description="Maximum kilometers")
+    color_preferences: Optional[List[str]] = Field(None, description="Preferred colors")
+    must_have_features: Optional[List[str]] = Field(None, description="Required features")

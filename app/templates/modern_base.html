@@ -20,6 +20,57 @@
     <link rel="icon" type="image/png" href="https://www.kavak.com/favicon-32x32.png">
     
     {% block extra_css %}{% endblock %}
+    
+    <style>
+        /* Navigation Dropdown Styles */
+        .nav-dropdown {
+            position: relative;
+            display: inline-block;
+        }
+        
+        .dropdown-menu {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            background: white;
+            min-width: 200px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            border-radius: 8px;
+            margin-top: 0.5rem;
+            overflow: hidden;
+            z-index: 1000;
+        }
+        
+        .dropdown-menu.show {
+            display: block;
+        }
+        
+        .dropdown-item {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem 1rem;
+            color: #333;
+            text-decoration: none;
+            transition: all 0.2s;
+        }
+        
+        .dropdown-item:hover {
+            background: #f8f9fa;
+            color: #1451EC;
+        }
+        
+        .nav-link i.fa-caret-down {
+            font-size: 0.75rem;
+            margin-left: 0.25rem;
+            transition: transform 0.2s;
+        }
+        
+        .nav-dropdown.open .nav-link i.fa-caret-down {
+            transform: rotate(180deg);
+        }
+    </style>
 </head>
 <body>
     <!-- Header -->
@@ -38,6 +89,22 @@
                     <a href="{{ url_for('customers_page') }}" class="nav-link {% if active_page == 'customers' %}active{% endif %}">
                         <i class="fas fa-users"></i> Customers
                     </a>
+                    <a href="{{ url_for('deal_architect_home') }}" class="nav-link {% if active_page == 'architect' %}active{% endif %}">
+                        <i class="fas fa-drafting-compass"></i> Deal Architect
+                    </a>
+                    <div class="nav-dropdown">
+                        <a href="#" class="nav-link {% if active_page in ['scenarios', 'pipeline'] %}active{% endif %}" onclick="toggleDropdown(event)">
+                            <i class="fas fa-briefcase"></i> Deals <i class="fas fa-caret-down"></i>
+                        </a>
+                        <div class="dropdown-menu">
+                            <a href="{{ url_for('scenario_center') }}" class="dropdown-item">
+                                <i class="fas fa-layer-group"></i> Scenarios
+                            </a>
+                            <a href="{{ url_for('deal_pipeline') }}" class="dropdown-item">
+                                <i class="fas fa-funnel-dollar"></i> Pipeline
+                            </a>
+                        </div>
+                    </div>
                     <a href="{{ url_for('inventory_page') }}" class="nav-link {% if active_page == 'inventory' %}active{% endif %}">
                         <i class="fas fa-car"></i> Inventory
                     </a>
@@ -46,9 +113,6 @@
                     </a>
                     <a href="{{ url_for('config_page') }}" class="nav-link {% if active_page == 'config' %}active{% endif %}">
                         <i class="fas fa-cog"></i> Config
-                    </a>
-                    <a href="{{ url_for('health_page') }}" class="nav-link" target="_blank">
-                        <i class="fas fa-heartbeat"></i> Health
                     </a>
                 </nav>
             </div>
@@ -67,6 +131,36 @@
     
     <!-- Scripts -->
     <script>
+        // Dropdown functionality
+        function toggleDropdown(event) {
+            event.preventDefault();
+            const dropdown = event.target.closest('.nav-dropdown');
+            const menu = dropdown.querySelector('.dropdown-menu');
+            const isOpen = menu.classList.contains('show');
+            
+            // Close all other dropdowns
+            document.querySelectorAll('.dropdown-menu').forEach(m => {
+                m.classList.remove('show');
+                m.parentElement.classList.remove('open');
+            });
+            
+            // Toggle this dropdown
+            if (!isOpen) {
+                menu.classList.add('show');
+                dropdown.classList.add('open');
+            }
+        }
+        
+        // Close dropdowns when clicking outside
+        document.addEventListener('click', function(event) {
+            if (!event.target.closest('.nav-dropdown')) {
+                document.querySelectorAll('.dropdown-menu').forEach(menu => {
+                    menu.classList.remove('show');
+                    menu.parentElement.classList.remove('open');
+                });
+            }
+        });
+        
         // Global functions for modern UI
         function showToast(message, type = 'info') {
             const toast = document.createElement('div');

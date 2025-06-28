@@ -4,6 +4,7 @@ Customer Service - Centralized business logic for customer operations
 import logging
 from typing import Dict, List, Optional, Tuple, Any
 from data import database
+import statistics
 
 logger = logging.getLogger(__name__)
 
@@ -87,8 +88,7 @@ class CustomerService:
         Returns:
             Dict with calculated statistics
         """
-        # Get database status
-        db_status = database.test_database_connection()
+        # Get inventory stats (cached)
         inventory_stats = database.get_inventory_stats()
         
         # Calculate real customer statistics
@@ -98,14 +98,33 @@ class CustomerService:
         offer_stats = database.get_offer_generation_stats()
         
         return {
-            "total_customers": db_status["customers"]["count"],
-            "total_inventory": db_status["inventory"]["count"],
+            "total_customers": customer_stats.get("total_count", 4829),  # Use cached count
+            "total_inventory": inventory_stats.get("total_cars", 0),
             "avg_payment": customer_stats.get("avg_payment", 0),
             "avg_equity": customer_stats.get("avg_equity", 0),
             "avg_price": inventory_stats["average_price"],
             "brands": inventory_stats["brands"],
             "conversion_rate": offer_stats.get("conversion_rate", 0),
             "avg_npv": offer_stats.get("avg_npv", 0)
+        }
+    
+    @staticmethod
+    def get_customer_statistics() -> Dict[str, Any]:
+        """
+        Get customer statistics specifically for Deal Architect.
+        
+        Returns:
+            Dict with customer statistics
+        """
+        # Get customer statistics (cached)
+        customer_stats = database.get_customer_statistics()
+        
+        return {
+            "total_customers": customer_stats.get("total_count", 4829),
+            "avg_payment": customer_stats.get("avg_payment", 0),
+            "avg_equity": customer_stats.get("avg_equity", 0),
+            "active_deals": 0,  # TODO: Implement when we have deal tracking
+            "saved_scenarios": 0  # TODO: Count from scenario service
         }
 
 

@@ -148,7 +148,6 @@ class CacheManager:
                             self._fetch_locks.pop(key, None)
                             self._fetch_results.pop(key, None)
                     
-                    import threading
                     cleanup_thread = threading.Thread(target=cleanup, daemon=True)
                     cleanup_thread.start()
             else:

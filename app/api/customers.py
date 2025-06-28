@@ -40,3 +40,10 @@ async def get_customers(
         page=validated['page'],
         limit=validated['limit']
     )
+
+
+@router.get("/customers/stats")
+@handle_api_errors("get customer statistics")
+async def get_customer_stats():
+    """Get aggregate statistics about customers"""
+    return customer_service.get_customer_statistics()

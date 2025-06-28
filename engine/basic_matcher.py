@@ -168,9 +168,19 @@ class BasicMatcher:
         eligible_cars = [car for car in inventory if car['car_price'] > customer['current_car_price']]
         cars_tested = len(eligible_cars)
         
+        # Determine which terms to evaluate
+        if custom_fees and 'term_months' in custom_fees and custom_fees['term_months'] is not None:
+            # Use only the specified term
+            terms_to_evaluate = [custom_fees['term_months']]
+            logger.info(f"   Using specific term: {custom_fees['term_months']} months")
+        else:
+            # Use all valid terms
+            terms_to_evaluate = VALID_LOAN_TERMS
+            logger.info(f"   Evaluating all terms: {terms_to_evaluate}")
+        
         tasks = []
         for car in eligible_cars:
-            for term in VALID_LOAN_TERMS:
+            for term in terms_to_evaluate:
                 task = self.executor.submit(
                     self._generate_offer,
                     customer=customer,

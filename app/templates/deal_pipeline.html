@@ -1,0 +1,830 @@
+{% extends "modern_base.html" %}
+{% block title %}Deal Pipeline - Kavak{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Pipeline Layout */
+    .pipeline-container {
+        padding: 2rem;
+        background: #f8f9fa;
+        min-height: 100vh;
+    }
+    
+    .pipeline-header {
+        background: white;
+        border-radius: 12px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    
+    .pipeline-title {
+        font-size: 2rem;
+        font-weight: 700;
+        color: #1a1a1a;
+        margin-bottom: 0.5rem;
+    }
+    
+    .pipeline-subtitle {
+        color: #666;
+        font-size: 1.125rem;
+    }
+    
+    /* Metrics Bar */
+    .metrics-bar {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+    
+    .metric-card {
+        background: white;
+        border-radius: 8px;
+        padding: 1.25rem;
+        text-align: center;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        border: 1px solid #f0f0f0;
+    }
+    
+    .metric-value {
+        font-size: 2rem;
+        font-weight: 700;
+        color: #1451EC;
+        margin-bottom: 0.25rem;
+    }
+    
+    .metric-label {
+        font-size: 0.875rem;
+        color: #666;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .metric-change {
+        font-size: 0.75rem;
+        margin-top: 0.5rem;
+    }
+    
+    .metric-change.positive {
+        color: #10b981;
+    }
+    
+    .metric-change.negative {
+        color: #ef4444;
+    }
+    
+    /* Kanban Board */
+    .kanban-board {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 1rem;
+        overflow-x: auto;
+        padding-bottom: 2rem;
+    }
+    
+    .stage-column {
+        background: #f1f3f5;
+        border-radius: 12px;
+        min-height: 600px;
+        display: flex;
+        flex-direction: column;
+    }
+    
+    .stage-header {
+        background: white;
+        padding: 1rem;
+        border-radius: 12px 12px 0 0;
+        border-bottom: 2px solid #e0e0e0;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+    }
+    
+    .stage-title {
+        font-weight: 600;
+        color: #333;
+        margin-bottom: 0.5rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    
+    .stage-count {
+        background: #e0e0e0;
+        color: #666;
+        padding: 0.125rem 0.5rem;
+        border-radius: 999px;
+        font-size: 0.875rem;
+        font-weight: 500;
+    }
+    
+    .stage-value {
+        font-size: 0.875rem;
+        color: #666;
+    }
+    
+    .stage-cards {
+        padding: 1rem;
+        flex: 1;
+        overflow-y: auto;
+    }
+    
+    /* Deal Cards */
+    .deal-card {
+        background: white;
+        border-radius: 8px;
+        padding: 1rem;
+        margin-bottom: 0.75rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+        cursor: move;
+        transition: all 0.2s;
+        border: 1px solid transparent;
+    }
+    
+    .deal-card:hover {
+        box-shadow: 0 4px 8px rgba(0,0,0,0.12);
+        border-color: #1451EC;
+        transform: translateY(-1px);
+    }
+    
+    .deal-card.dragging {
+        opacity: 0.5;
+        transform: rotate(5deg);
+    }
+    
+    .deal-customer {
+        font-weight: 600;
+        color: #333;
+        margin-bottom: 0.5rem;
+        font-size: 0.95rem;
+    }
+    
+    .deal-scenario {
+        font-size: 0.875rem;
+        color: #666;
+        margin-bottom: 0.75rem;
+    }
+    
+    .deal-metrics {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.5rem;
+        margin-bottom: 0.75rem;
+        padding: 0.75rem 0;
+        border-top: 1px solid #f0f0f0;
+        border-bottom: 1px solid #f0f0f0;
+    }
+    
+    .deal-metric {
+        text-align: center;
+    }
+    
+    .deal-metric-value {
+        font-weight: 600;
+        color: #333;
+        font-size: 0.875rem;
+    }
+    
+    .deal-metric-label {
+        font-size: 0.75rem;
+        color: #999;
+    }
+    
+    .deal-footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 0.75rem;
+    }
+    
+    .deal-age {
+        font-size: 0.75rem;
+        color: #999;
+    }
+    
+    .deal-probability {
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+    
+    .probability-high {
+        color: #10b981;
+    }
+    
+    .probability-medium {
+        color: #f59e0b;
+    }
+    
+    .probability-low {
+        color: #ef4444;
+    }
+    
+    /* Risk Indicators */
+    .risk-badge {
+        position: absolute;
+        top: 0.5rem;
+        right: 0.5rem;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+    }
+    
+    .risk-high {
+        background: #ef4444;
+        animation: pulse 2s infinite;
+    }
+    
+    .risk-medium {
+        background: #f59e0b;
+    }
+    
+    .risk-low {
+        background: #10b981;
+    }
+    
+    @keyframes pulse {
+        0% {
+            transform: scale(1);
+            opacity: 1;
+        }
+        50% {
+            transform: scale(1.2);
+            opacity: 0.7;
+        }
+        100% {
+            transform: scale(1);
+            opacity: 1;
+        }
+    }
+    
+    /* Stage Colors */
+    .stage-exploration .stage-header {
+        border-bottom-color: #3b82f6;
+    }
+    
+    .stage-proposal .stage-header {
+        border-bottom-color: #8b5cf6;
+    }
+    
+    .stage-negotiation .stage-header {
+        border-bottom-color: #f59e0b;
+    }
+    
+    .stage-closed_won .stage-header {
+        border-bottom-color: #10b981;
+    }
+    
+    .stage-closed_lost .stage-header {
+        border-bottom-color: #ef4444;
+    }
+    
+    /* Actions Bar */
+    .actions-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 2rem;
+        background: white;
+        padding: 1rem 1.5rem;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    
+    .view-toggle {
+        display: flex;
+        gap: 0.5rem;
+        background: #f0f0f0;
+        padding: 0.25rem;
+        border-radius: 6px;
+    }
+    
+    .view-btn {
+        padding: 0.5rem 1rem;
+        background: transparent;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 0.875rem;
+        transition: all 0.2s;
+    }
+    
+    .view-btn.active {
+        background: white;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    
+    .filter-controls {
+        display: flex;
+        gap: 1rem;
+        align-items: center;
+    }
+    
+    .filter-select {
+        padding: 0.5rem 1rem;
+        border: 1px solid #e0e0e0;
+        border-radius: 6px;
+        background: white;
+        font-size: 0.875rem;
+    }
+    
+    /* Empty State */
+    .empty-stage {
+        text-align: center;
+        padding: 3rem 1rem;
+        color: #999;
+    }
+    
+    .empty-stage-icon {
+        font-size: 3rem;
+        margin-bottom: 1rem;
+        opacity: 0.2;
+    }
+    
+    /* Conversion Funnel */
+    .conversion-funnel {
+        background: white;
+        border-radius: 12px;
+        padding: 1.5rem;
+        margin-top: 2rem;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    
+    .funnel-title {
+        font-weight: 600;
+        color: #333;
+        margin-bottom: 1rem;
+    }
+    
+    .funnel-stages {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        position: relative;
+    }
+    
+    .funnel-stage {
+        text-align: center;
+        flex: 1;
+        position: relative;
+    }
+    
+    .funnel-rate {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: #1451EC;
+        margin-bottom: 0.25rem;
+    }
+    
+    .funnel-label {
+        font-size: 0.875rem;
+        color: #666;
+    }
+    
+    .funnel-arrow {
+        position: absolute;
+        top: 50%;
+        right: -20px;
+        transform: translateY(-50%);
+        color: #e0e0e0;
+        font-size: 1.5rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="pipeline-container">
+    <!-- Header -->
+    <div class="pipeline-header">
+        <h1 class="pipeline-title">Deal Pipeline</h1>
+        <p class="pipeline-subtitle">Track your deals from exploration to close</p>
+    </div>
+    
+    <!-- Metrics Bar -->
+    <div class="metrics-bar">
+        <div class="metric-card">
+            <div class="metric-value">{{ metrics.total_deals }}</div>
+            <div class="metric-label">Active Deals</div>
+            <div class="metric-change positive">+12% vs last month</div>
+        </div>
+        
+        <div class="metric-card">
+            <div class="metric-value">${{ "{:,.0f}".format(metrics.total_value) }}</div>
+            <div class="metric-label">Total Pipeline Value</div>
+            <div class="metric-change positive">+23% vs last month</div>
+        </div>
+        
+        <div class="metric-card">
+            <div class="metric-value">${{ "{:,.0f}".format(metrics.weighted_value) }}</div>
+            <div class="metric-label">Weighted Value</div>
+            <div class="metric-change negative">-5% vs last month</div>
+        </div>
+        
+        <div class="metric-card">
+            <div class="metric-value">{{ "%.0f"|format(metrics.conversion_rate) }}%</div>
+            <div class="metric-label">Win Rate</div>
+            <div class="metric-change positive">+3pp vs last month</div>
+        </div>
+        
+        <div class="metric-card">
+            <div class="metric-value">${{ "{:,.0f}".format(metrics.avg_deal_size) }}</div>
+            <div class="metric-label">Avg Deal Size</div>
+            <div class="metric-change positive">+8% vs last month</div>
+        </div>
+        
+        <div class="metric-card">
+            <div class="metric-value">{{ "%.0f"|format(metrics.avg_days_to_close) }} days</div>
+            <div class="metric-label">Avg Close Time</div>
+            <div class="metric-change positive">-2 days vs last month</div>
+        </div>
+    </div>
+    
+    <!-- Actions Bar -->
+    <div class="actions-bar">
+        <div class="view-toggle">
+            <button class="view-btn active" onclick="setView('kanban')">
+                <i class="fas fa-columns"></i> Kanban
+            </button>
+            <button class="view-btn" onclick="setView('list')">
+                <i class="fas fa-list"></i> List
+            </button>
+            <button class="view-btn" onclick="setView('forecast')">
+                <i class="fas fa-chart-line"></i> Forecast
+            </button>
+        </div>
+        
+        <div class="filter-controls">
+            <select class="filter-select" onchange="filterDeals(this.value)">
+                <option value="all">All Deals</option>
+                <option value="at_risk">At Risk ({{ metrics.deals_at_risk }})</option>
+                <option value="high_value">High Value</option>
+                <option value="stalled">Stalled</option>
+            </select>
+            
+            <button class="btn btn-primary" onclick="createNewDeal()">
+                <i class="fas fa-plus"></i> New Deal
+            </button>
+        </div>
+    </div>
+    
+    <!-- Kanban Board -->
+    <div class="kanban-board" id="pipeline-board">
+        <!-- Exploration Stage -->
+        <div class="stage-column stage-exploration" data-stage="exploration">
+            <div class="stage-header">
+                <div class="stage-title">
+                    <i class="fas fa-search"></i>
+                    Exploration
+                    <span class="stage-count">{{ metrics.stage_counts.exploration }}</span>
+                </div>
+                <div class="stage-value">${{ "{:,.0f}".format(metrics.stage_values.exploration) }}</div>
+            </div>
+            <div class="stage-cards" ondrop="drop(event)" ondragover="allowDrop(event)">
+                {% for deal in deals if deal.stage == 'exploration' %}
+                <div class="deal-card" draggable="true" ondragstart="drag(event)" data-deal-id="{{ deal.id }}">
+                    <div class="risk-badge risk-{{ deal.risk_level }}"></div>
+                    <div class="deal-customer">{{ deal.customer_name }}</div>
+                    <div class="deal-scenario">{{ deal.scenario_name }}</div>
+                    <div class="deal-metrics">
+                        <div class="deal-metric">
+                            <div class="deal-metric-value">${{ "{:,.0f}".format(deal.value) }}</div>
+                            <div class="deal-metric-label">Total Value</div>
+                        </div>
+                        <div class="deal-metric">
+                            <div class="deal-metric-value">${{ "{:,.0f}".format(deal.monthly_payment) }}</div>
+                            <div class="deal-metric-label">Monthly</div>
+                        </div>
+                    </div>
+                    <div class="deal-footer">
+                        <span class="deal-age">{{ deal.days_in_stage }} days</span>
+                        <span class="deal-probability probability-low">{{ "%.0f"|format(deal.probability * 100) }}%</span>
+                    </div>
+                </div>
+                {% endfor %}
+                
+                {% if metrics.stage_counts.exploration == 0 %}
+                <div class="empty-stage">
+                    <i class="fas fa-inbox empty-stage-icon"></i>
+                    <p>No deals in exploration</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Proposal Stage -->
+        <div class="stage-column stage-proposal" data-stage="proposal">
+            <div class="stage-header">
+                <div class="stage-title">
+                    <i class="fas fa-file-alt"></i>
+                    Proposal
+                    <span class="stage-count">{{ metrics.stage_counts.proposal }}</span>
+                </div>
+                <div class="stage-value">${{ "{:,.0f}".format(metrics.stage_values.proposal) }}</div>
+            </div>
+            <div class="stage-cards" ondrop="drop(event)" ondragover="allowDrop(event)">
+                {% for deal in deals if deal.stage == 'proposal' %}
+                <div class="deal-card" draggable="true" ondragstart="drag(event)" data-deal-id="{{ deal.id }}">
+                    <div class="risk-badge risk-{{ deal.risk_level }}"></div>
+                    <div class="deal-customer">{{ deal.customer_name }}</div>
+                    <div class="deal-scenario">{{ deal.scenario_name }}</div>
+                    <div class="deal-metrics">
+                        <div class="deal-metric">
+                            <div class="deal-metric-value">${{ "{:,.0f}".format(deal.value) }}</div>
+                            <div class="deal-metric-label">Total Value</div>
+                        </div>
+                        <div class="deal-metric">
+                            <div class="deal-metric-value">${{ "{:,.0f}".format(deal.monthly_payment) }}</div>
+                            <div class="deal-metric-label">Monthly</div>
+                        </div>
+                    </div>
+                    <div class="deal-footer">
+                        <span class="deal-age">{{ deal.days_in_stage }} days</span>
+                        <span class="deal-probability probability-low">{{ "%.0f"|format(deal.probability * 100) }}%</span>
+                    </div>
+                </div>
+                {% endfor %}
+                
+                {% if metrics.stage_counts.proposal == 0 %}
+                <div class="empty-stage">
+                    <i class="fas fa-inbox empty-stage-icon"></i>
+                    <p>No deals in proposal</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Negotiation Stage -->
+        <div class="stage-column stage-negotiation" data-stage="negotiation">
+            <div class="stage-header">
+                <div class="stage-title">
+                    <i class="fas fa-handshake"></i>
+                    Negotiation
+                    <span class="stage-count">{{ metrics.stage_counts.negotiation }}</span>
+                </div>
+                <div class="stage-value">${{ "{:,.0f}".format(metrics.stage_values.negotiation) }}</div>
+            </div>
+            <div class="stage-cards" ondrop="drop(event)" ondragover="allowDrop(event)">
+                {% for deal in deals if deal.stage == 'negotiation' %}
+                <div class="deal-card" draggable="true" ondragstart="drag(event)" data-deal-id="{{ deal.id }}">
+                    <div class="risk-badge risk-{{ deal.risk_level }}"></div>
+                    <div class="deal-customer">{{ deal.customer_name }}</div>
+                    <div class="deal-scenario">{{ deal.scenario_name }}</div>
+                    <div class="deal-metrics">
+                        <div class="deal-metric">
+                            <div class="deal-metric-value">${{ "{:,.0f}".format(deal.value) }}</div>
+                            <div class="deal-metric-label">Total Value</div>
+                        </div>
+                        <div class="deal-metric">
+                            <div class="deal-metric-value">${{ "{:,.0f}".format(deal.monthly_payment) }}</div>
+                            <div class="deal-metric-label">Monthly</div>
+                        </div>
+                    </div>
+                    <div class="deal-footer">
+                        <span class="deal-age">{{ deal.days_in_stage }} days</span>
+                        <span class="deal-probability probability-medium">{{ "%.0f"|format(deal.probability * 100) }}%</span>
+                    </div>
+                </div>
+                {% endfor %}
+                
+                {% if metrics.stage_counts.negotiation == 0 %}
+                <div class="empty-stage">
+                    <i class="fas fa-inbox empty-stage-icon"></i>
+                    <p>No deals in negotiation</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Closed Won Stage -->
+        <div class="stage-column stage-closed_won" data-stage="closed_won">
+            <div class="stage-header">
+                <div class="stage-title">
+                    <i class="fas fa-trophy"></i>
+                    Closed Won
+                    <span class="stage-count">{{ metrics.stage_counts.closed_won }}</span>
+                </div>
+                <div class="stage-value">${{ "{:,.0f}".format(metrics.stage_values.closed_won) }}</div>
+            </div>
+            <div class="stage-cards" ondrop="drop(event)" ondragover="allowDrop(event)">
+                {% for deal in deals if deal.stage == 'closed_won' %}
+                <div class="deal-card" draggable="true" ondragstart="drag(event)" data-deal-id="{{ deal.id }}">
+                    <div class="risk-badge risk-low"></div>
+                    <div class="deal-customer">{{ deal.customer_name }}</div>
+                    <div class="deal-scenario">{{ deal.scenario_name }}</div>
+                    <div class="deal-metrics">
+                        <div class="deal-metric">
+                            <div class="deal-metric-value">${{ "{:,.0f}".format(deal.value) }}</div>
+                            <div class="deal-metric-label">Total Value</div>
+                        </div>
+                        <div class="deal-metric">
+                            <div class="deal-metric-value">${{ "{:,.0f}".format(deal.monthly_payment) }}</div>
+                            <div class="deal-metric-label">Monthly</div>
+                        </div>
+                    </div>
+                    <div class="deal-footer">
+                        <span class="deal-age">Closed</span>
+                        <span class="deal-probability probability-high">Won</span>
+                    </div>
+                </div>
+                {% endfor %}
+                
+                {% if metrics.stage_counts.closed_won == 0 %}
+                <div class="empty-stage">
+                    <i class="fas fa-inbox empty-stage-icon"></i>
+                    <p>No closed won deals</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Closed Lost Stage -->
+        <div class="stage-column stage-closed_lost" data-stage="closed_lost">
+            <div class="stage-header">
+                <div class="stage-title">
+                    <i class="fas fa-times-circle"></i>
+                    Closed Lost
+                    <span class="stage-count">{{ metrics.stage_counts.closed_lost }}</span>
+                </div>
+                <div class="stage-value">${{ "{:,.0f}".format(metrics.stage_values.closed_lost) }}</div>
+            </div>
+            <div class="stage-cards" ondrop="drop(event)" ondragover="allowDrop(event)">
+                {% for deal in deals if deal.stage == 'closed_lost' %}
+                <div class="deal-card" draggable="true" ondragstart="drag(event)" data-deal-id="{{ deal.id }}">
+                    <div class="deal-customer">{{ deal.customer_name }}</div>
+                    <div class="deal-scenario">{{ deal.scenario_name }}</div>
+                    <div class="deal-metrics">
+                        <div class="deal-metric">
+                            <div class="deal-metric-value">${{ "{:,.0f}".format(deal.value) }}</div>
+                            <div class="deal-metric-label">Total Value</div>
+                        </div>
+                        <div class="deal-metric">
+                            <div class="deal-metric-value">${{ "{:,.0f}".format(deal.monthly_payment) }}</div>
+                            <div class="deal-metric-label">Monthly</div>
+                        </div>
+                    </div>
+                    <div class="deal-footer">
+                        <span class="deal-age">Closed</span>
+                        <span class="deal-probability probability-low">Lost</span>
+                    </div>
+                </div>
+                {% endfor %}
+                
+                {% if metrics.stage_counts.closed_lost == 0 %}
+                <div class="empty-stage">
+                    <i class="fas fa-inbox empty-stage-icon"></i>
+                    <p>No closed lost deals</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Conversion Funnel -->
+    <div class="conversion-funnel">
+        <h3 class="funnel-title">Conversion Funnel</h3>
+        <div class="funnel-stages">
+            <div class="funnel-stage">
+                <div class="funnel-rate">{{ "%.0f"|format(metrics.stage_conversion.exploration_to_proposal * 100) }}%</div>
+                <div class="funnel-label">Exploration → Proposal</div>
+                <i class="fas fa-arrow-right funnel-arrow"></i>
+            </div>
+            <div class="funnel-stage">
+                <div class="funnel-rate">{{ "%.0f"|format(metrics.stage_conversion.proposal_to_negotiation * 100) }}%</div>
+                <div class="funnel-label">Proposal → Negotiation</div>
+                <i class="fas fa-arrow-right funnel-arrow"></i>
+            </div>
+            <div class="funnel-stage">
+                <div class="funnel-rate">{{ "%.0f"|format(metrics.stage_conversion.negotiation_to_close * 100) }}%</div>
+                <div class="funnel-label">Negotiation → Close</div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Drag and Drop functionality
+let draggedElement = null;
+
+function allowDrop(ev) {
+    ev.preventDefault();
+    ev.currentTarget.style.backgroundColor = '#e8f0fe';
+}
+
+function drag(ev) {
+    draggedElement = ev.target;
+    ev.target.classList.add('dragging');
+    ev.dataTransfer.effectAllowed = 'move';
+    ev.dataTransfer.setData('text/html', ev.target.innerHTML);
+}
+
+function drop(ev) {
+    ev.preventDefault();
+    ev.currentTarget.style.backgroundColor = '';
+    
+    if (draggedElement && ev.currentTarget.classList.contains('stage-cards')) {
+        const newStage = ev.currentTarget.closest('.stage-column').dataset.stage;
+        const dealId = draggedElement.dataset.dealId;
+        
+        // Move the card
+        ev.currentTarget.appendChild(draggedElement);
+        draggedElement.classList.remove('dragging');
+        
+        // Update the deal stage (would call API)
+        updateDealStage(dealId, newStage);
+        
+        // Update counts
+        updateStageCounts();
+    }
+}
+
+function updateDealStage(dealId, newStage) {
+    console.log(`Moving deal ${dealId} to ${newStage}`);
+    // In a real implementation, this would call an API endpoint
+    // fetch(`/api/deals/${dealId}/stage`, {
+    //     method: 'PUT',
+    //     headers: {'Content-Type': 'application/json'},
+    //     body: JSON.stringify({stage: newStage})
+    // });
+}
+
+function updateStageCounts() {
+    // Update the count badges for each stage
+    document.querySelectorAll('.stage-column').forEach(column => {
+        const stage = column.dataset.stage;
+        const count = column.querySelectorAll('.deal-card').length;
+        const countBadge = column.querySelector('.stage-count');
+        if (countBadge) {
+            countBadge.textContent = count;
+        }
+    });
+}
+
+// View switching
+function setView(view) {
+    // Update active button
+    document.querySelectorAll('.view-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    event.target.closest('.view-btn').classList.add('active');
+    
+    // Switch views (would implement different layouts)
+    console.log('Switching to view:', view);
+    
+    if (view === 'forecast') {
+        alert('Forecast view coming soon! This will show revenue projections based on pipeline data.');
+    } else if (view === 'list') {
+        alert('List view coming soon! This will show deals in a sortable table format.');
+    }
+}
+
+// Filtering
+function filterDeals(filter) {
+    console.log('Filtering deals by:', filter);
+    
+    // In a real implementation, this would filter the displayed deals
+    if (filter === 'at_risk') {
+        document.querySelectorAll('.deal-card').forEach(card => {
+            const isAtRisk = card.querySelector('.risk-high');
+            card.style.display = isAtRisk ? 'block' : 'none';
+        });
+    } else if (filter === 'all') {
+        document.querySelectorAll('.deal-card').forEach(card => {
+            card.style.display = 'block';
+        });
+    }
+}
+
+// Create new deal
+function createNewDeal() {
+    // Navigate to Deal Architect to create a new scenario
+    window.location.href = '/deal-architect';
+}
+
+// Deal card click handler
+document.addEventListener('click', function(e) {
+    const dealCard = e.target.closest('.deal-card');
+    if (dealCard && !e.target.closest('[draggable="true"]')) {
+        const dealId = dealCard.dataset.dealId;
+        // Would open deal details modal or navigate to deal page
+        console.log('Opening deal:', dealId);
+    }
+});
+
+// Add hover effect to drop zones
+document.querySelectorAll('.stage-cards').forEach(zone => {
+    zone.addEventListener('dragenter', function() {
+        this.style.backgroundColor = '#e8f0fe';
+    });
+    
+    zone.addEventListener('dragleave', function() {
+        this.style.backgroundColor = '';
+    });
+    
+    zone.addEventListener('drop', function() {
+        this.style.backgroundColor = '';
+    });
+});
+</script>
+{% endblock %}

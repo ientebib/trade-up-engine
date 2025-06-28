@@ -85,8 +85,15 @@ class DataLoader:
         logger.info("🔌 Getting connection from pool...")
 
         try:
-            with open("data/inventory_query.sql", "r") as file:
-                query = file.read()
+            # Try limited query first for performance
+            if os.path.exists("data/inventory_query_limited.sql"):
+                with open("data/inventory_query_limited.sql", "r") as file:
+                    query = file.read()
+                logger.info("📊 Using limited inventory query (10k records)")
+            else:
+                with open("data/inventory_query.sql", "r") as file:
+                    query = file.read() + " LIMIT 10000"
+                logger.info("📊 Using regular query with LIMIT")
         except FileNotFoundError:
             from app.utils.exceptions import DataLoadError
             logger.error("❌ inventory_query.sql file not found in data/ folder.")

@@ -664,6 +664,20 @@
                     <span>$25,000 MXN (One-time)</span>
                 </div>
             </div>
+            
+            <div class="config-item">
+                <label for="loan-term">Loan Term</label>
+                <select id="loan-term" style="width: 100%; padding: 0.5rem; border: 1px solid var(--gray-300); border-radius: var(--radius); font-size: 0.875rem;">
+                    <option value="all">All Terms</option>
+                    <option value="12">12 months</option>
+                    <option value="24">24 months</option>
+                    <option value="36">36 months</option>
+                    <option value="48">48 months</option>
+                    <option value="60">60 months</option>
+                    <option value="72">72 months</option>
+                </select>
+                <span style="font-size: 0.75rem; color: var(--gray-600);">Filter offers by specific term</span>
+            </div>
         </div>
         
         <div style="background: var(--gray-100); padding: 1rem; border-radius: var(--radius); margin-top: 1rem;">
@@ -713,11 +727,8 @@
                 <button class="btn btn-secondary" onclick="resetConfig()">
                     <i class="fas fa-undo"></i> Reset to Global Config
                 </button>
-                <button class="btn btn-warning" onclick="testButton()">
-                    <i class="fas fa-check"></i> Test Button
-                </button>
-                <button class="btn btn-info" onclick="alert('Direct onclick works!'); document.getElementById('offers-container').innerHTML = '<h3>Direct button clicked!</h3>';">
-                    <i class="fas fa-bolt"></i> Direct Test
+                <button class="btn btn-secondary" onclick="loadSavedScenarios()">
+                    <i class="fas fa-folder-open"></i> Load Scenarios
                 </button>
             </div>
             
@@ -866,6 +877,30 @@ function toggleKavakTotal() {
     toggle.classList.toggle('active');
 }
 
+function resetConfig() {
+    // Reset all configuration values to defaults
+    document.getElementById('service-fee').value = 4;
+    document.getElementById('service-fee-value').textContent = '4.0%';
+    
+    document.getElementById('cxa-fee').value = 4;
+    document.getElementById('cxa-fee-value').textContent = '4.0%';
+    
+    document.getElementById('cac-bonus').value = 0;
+    document.getElementById('cac-bonus-value').textContent = '$0';
+    
+    document.getElementById('insurance-amount').value = 10999;
+    document.getElementById('insurance-amount-value').textContent = '$10,999';
+    
+    document.getElementById('interest-rate').value = {{ (customer.original_interest_rate * 100) if customer.original_interest_rate else 18 }};
+    document.getElementById('interest-rate-value').textContent = '{{ '{:.1f}%'.format(customer.original_interest_rate * 100) if customer.original_interest_rate else '18.0%' }}';
+    
+    document.getElementById('kavak-total-toggle').classList.add('active');
+    document.getElementById('loan-term').value = 'all';
+    
+    // Clear any existing offers
+    document.getElementById('offers-container').innerHTML = '<p style="color: #999; text-align: center;">Configuration reset to global defaults. Click a button above to generate offers.</p>';
+}
+
 function switchTab(event, tab) {
     // Update tab buttons
     document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -890,6 +925,17 @@ let selectedOffer = null;
 
 function generateWithGlobalConfig() {
     console.log('generateWithGlobalConfig called for customer:', customerId);
+    
+    // Store global config for scenario saving
+    window.currentConfig = {
+        customer_id: customerId,
+        service_fee_pct: 0.04,
+        cxa_pct: 0.04,
+        cac_bonus: 0,
+        insurance_amount: 10999,
+        kavak_total_enabled: true,
+        term_months: null
+    };
     
     // Show loading state
     const container = document.getElementById('offers-container');
@@ -983,6 +1029,8 @@ function generateCustomOffers() {
         return;
     }
     
+    const selectedTerm = document.getElementById('loan-term').value;
+    
     const config = {
         customer_id: customerId,
         service_fee_pct: parseFloat(document.getElementById('service-fee').value) / 100,
@@ -990,8 +1038,12 @@ function generateCustomOffers() {
         cac_bonus: parseInt(document.getElementById('cac-bonus').value),
         insurance_amount: parseInt(document.getElementById('insurance-amount').value),
         interest_rate: parseFloat(document.getElementById('interest-rate').value) / 100,
-        kavak_total_enabled: document.getElementById('kavak-total-toggle').classList.contains('active')
+        kavak_total_enabled: document.getElementById('kavak-total-toggle').classList.contains('active'),
+        term_months: selectedTerm !== 'all' ? parseInt(selectedTerm) : null
     };
+    
+    // Store current config for scenario saving
+    window.currentConfig = config;
     
     console.log('Custom config:', config);
     
@@ -1086,9 +1138,12 @@ function displayOffers(data, mode) {
             html += `
                 <div class="offer-card" onclick="showOfferDetails(${JSON.stringify(offer).replace(/"/g, '&quot;')})">
                     <span class="offer-tier-badge tier-${tierClass}">${tierDisplay}</span>
-                    <h4 style="margin: 0 0 0.5rem 0; padding-right: 4rem;">${offer.car_model}</h4>
+                    <span style="position: absolute; top: 0.75rem; right: 0.75rem; background: var(--kavak-blue); color: white; padding: 0.25rem 0.5rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 500;">
+                        ${offer.term} months
+                    </span>
+                    <h4 style="margin: 0 0 0.5rem 0; padding-right: 5rem;">${offer.car_model}</h4>
                     <p style="font-size: 0.875rem; color: var(--gray-600); margin-bottom: 1rem;">
-                        $${offer.new_car_price.toLocaleString()} • ${offer.term} months
+                        $${offer.new_car_price.toLocaleString()}
                     </p>
                     
                     <div style="display: grid; gap: 1rem;">
@@ -1120,10 +1175,15 @@ function displayOffers(data, mode) {
                             </div>
                         </div>
                         
-                        <!-- Add amortization button -->
-                        <button class="btn btn-secondary" onclick="event.stopPropagation(); showAmortization(${JSON.stringify(offer).replace(/"/g, '&quot;')})" style="width: 100%; margin-top: 0.75rem;">
-                            <i class="fas fa-table"></i> View Amortization
-                        </button>
+                        <!-- Action buttons -->
+                        <div style="display: flex; gap: 0.5rem; margin-top: 0.75rem;">
+                            <button class="btn btn-secondary" onclick="event.stopPropagation(); showAmortization(${JSON.stringify(offer).replace(/"/g, '&quot;')})" style="flex: 1;">
+                                <i class="fas fa-table"></i> Amortization
+                            </button>
+                            <button class="btn btn-secondary" onclick="event.stopPropagation(); saveScenario(${JSON.stringify(offer).replace(/"/g, '&quot;')})" style="flex: 1;">
+                                <i class="fas fa-save"></i> Save
+                            </button>
+                        </div>
                     </div>
                 </div>
             `;
@@ -1323,6 +1383,45 @@ function showOfferDetails(offer) {
                     </div>
                 </div>
             </div>
+            
+            <div style="background: var(--kavak-blue-50); padding: 1rem; border-radius: var(--radius);">
+                <h5 style="margin-bottom: 1rem; color: var(--kavak-blue);">💡 Payment Impact Analysis</h5>
+                <div style="font-size: 0.875rem;">
+                    <p style="margin-bottom: 0.75rem; color: var(--gray-700);">
+                        Understanding how fees affect your monthly payment:
+                    </p>
+                    <div style="background: white; padding: 1rem; border-radius: var(--radius); border: 1px solid var(--kavak-blue-100);">
+                        <div style="display: flex; justify-content: space-between; padding: 0.25rem 0;">
+                            <span>Base Loan (Car - Equity):</span>
+                            <strong>$${Math.round(offer.new_car_price - offer.effective_equity).toLocaleString()}</strong>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; padding: 0.25rem 0; color: var(--gray-600);">
+                            <span>+ Service Fee:</span>
+                            <span>$${Math.round(serviceFeeAmount).toLocaleString()}</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; padding: 0.25rem 0; color: var(--gray-600);">
+                            <span>+ Kavak Total:</span>
+                            <span>$${Math.round(kavakTotal).toLocaleString()}</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; padding: 0.25rem 0; color: var(--gray-600);">
+                            <span>+ Insurance:</span>
+                            <span>$${Math.round(insuranceAmount).toLocaleString()}</span>
+                        </div>
+                        <div style="border-top: 1px solid var(--gray-300); margin: 0.5rem 0;"></div>
+                        <div style="display: flex; justify-content: space-between; padding: 0.25rem 0; font-weight: 600;">
+                            <span>Total Financed:</span>
+                            <strong>$${Math.round(offer.loan_amount).toLocaleString()}</strong>
+                        </div>
+                    </div>
+                    <div style="margin-top: 1rem; padding: 0.75rem; background: var(--info-light); border-radius: var(--radius);">
+                        <p style="margin: 0; font-size: 0.875rem;">
+                            <strong>Without optional fees:</strong> Monthly payment would be approximately 
+                            <strong>$${Math.round(offer.monthly_payment * 0.85).toLocaleString()}</strong>
+                            (saving ~$${Math.round(offer.monthly_payment * 0.15).toLocaleString()}/month)
+                        </p>
+                    </div>
+                </div>
+            </div>
         </div>
     `;
     
@@ -1362,6 +1461,235 @@ function resetConfig() {
     document.getElementById('cac-bonus-value').textContent = '$0';
     document.getElementById('insurance-amount-value').textContent = '$10,999';
     document.getElementById('interest-rate-value').textContent = '18.0%';
+}
+
+// Scenario management functions
+function saveScenario(offer) {
+    const scenarioName = prompt('Enter a name for this scenario:', `${offer.car_model} - ${offer.term}mo`);
+    if (!scenarioName) return;
+    
+    // Ensure we have a current config, use the current UI values if not
+    if (!window.currentConfig) {
+        window.currentConfig = {
+            customer_id: customerId,
+            service_fee_pct: parseFloat(document.getElementById('service-fee').value) / 100,
+            cxa_pct: parseFloat(document.getElementById('cxa-fee').value) / 100,
+            cac_bonus: parseInt(document.getElementById('cac-bonus').value),
+            insurance_amount: parseInt(document.getElementById('insurance-amount').value),
+            interest_rate: parseFloat(document.getElementById('interest-rate').value) / 100,
+            kavak_total_enabled: document.getElementById('kavak-total-toggle').classList.contains('active')
+        };
+    }
+    
+    const scenarioData = {
+        customer_id: customerId,
+        car_id: String(offer.car_id),
+        name: scenarioName,
+        configuration: {
+            service_fee_pct: window.currentConfig.service_fee_pct || 0.04,
+            cxa_pct: window.currentConfig.cxa_pct || 0.04,
+            cac_bonus: window.currentConfig.cac_bonus || 0,
+            insurance_amount: window.currentConfig.insurance_amount || 10999,
+            interest_rate: window.currentConfig.interest_rate,
+            kavak_total_enabled: window.currentConfig.kavak_total_enabled !== false,
+            kavak_total_amount: window.currentConfig.kavak_total_enabled !== false ? 25000 : 0,
+            term_months: offer.term,
+            // Include the offer details for reference
+            monthly_payment: offer.monthly_payment,
+            npv: offer.npv,
+            payment_delta: offer.payment_delta
+        },
+        notes: `${offer.car_model} - Monthly: $${Math.round(offer.monthly_payment).toLocaleString()}, NPV: $${Math.round(offer.npv).toLocaleString()}`
+    };
+    
+    fetch('/api/scenarios/save', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(scenarioData)
+    })
+    .then(res => {
+        if (!res.ok) {
+            throw new Error(`Failed to save: ${res.statusText}`);
+        }
+        return res.json();
+    })
+    .then(data => {
+        alert(`Scenario "${scenarioName}" saved successfully!`);
+        console.log('Saved scenario:', data);
+    })
+    .catch(err => {
+        console.error('Error saving scenario:', err);
+        alert('Error saving scenario: ' + err.message);
+    });
+}
+
+function loadSavedScenarios() {
+    fetch(`/api/scenarios/customer/${customerId}`)
+        .then(res => {
+            if (!res.ok) {
+                throw new Error(`HTTP error! status: ${res.status}`);
+            }
+            return res.json();
+        })
+        .then(data => {
+            // Check if data and scenarios exist
+            if (!data || !data.scenarios || !Array.isArray(data.scenarios)) {
+                alert('No saved scenarios found for this customer.');
+                document.getElementById('offers-container').innerHTML = '<p style="color: #999; text-align: center;">No saved scenarios found. Generate offers and save them to build your scenario library.</p>';
+                return;
+            }
+            
+            if (data.scenarios.length === 0) {
+                alert('No saved scenarios found for this customer.');
+                document.getElementById('offers-container').innerHTML = '<p style="color: #999; text-align: center;">No saved scenarios yet. Generate offers and click Save to create scenarios.</p>';
+                return;
+            }
+            
+            // Display scenarios in the offers container
+            const container = document.getElementById('offers-container');
+            let html = `
+                <div style="padding: 1rem;">
+                    <h3 style="margin-bottom: 1.5rem;">
+                        <i class="fas fa-folder-open"></i> Saved Scenarios
+                    </h3>
+                    <div class="offer-grid">
+            `;
+            
+            data.scenarios.forEach(scenario => {
+                const config = scenario.configuration;
+                html += `
+                    <div class="offer-card" style="cursor: pointer;">
+                        <h4 style="margin: 0 0 0.5rem 0;">${scenario.name}</h4>
+                        <p style="font-size: 0.875rem; color: var(--gray-600); margin-bottom: 1rem;">
+                            Created: ${new Date(scenario.created_at).toLocaleDateString()}
+                        </p>
+                        
+                        <div style="font-size: 0.875rem; margin-bottom: 1rem;">
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                                <span>Service Fee:</span>
+                                <strong>${(config.service_fee_pct * 100).toFixed(1)}%</strong>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                                <span>CXA Fee:</span>
+                                <strong>${(config.cxa_pct * 100).toFixed(1)}%</strong>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                                <span>CAC Bonus:</span>
+                                <strong>$${config.cac_bonus}</strong>
+                            </div>
+                            <div style="display: flex; justify-content: space-between;">
+                                <span>Term:</span>
+                                <strong>${config.term_months || 'All'} months</strong>
+                            </div>
+                        </div>
+                        
+                        <div style="background: var(--gray-50); padding: 0.75rem; border-radius: var(--radius); margin-bottom: 1rem;">
+                            <div style="font-size: 0.875rem;">
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
+                                    <span>Monthly Payment:</span>
+                                    <strong>$${Math.round(config.monthly_payment || 0).toLocaleString()}</strong>
+                                </div>
+                                <div style="display: flex; justify-content: space-between;">
+                                    <span>NPV:</span>
+                                    <strong style="color: var(--success);">$${Math.round(config.npv || 0).toLocaleString()}</strong>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div style="display: flex; gap: 0.5rem;">
+                            <button class="btn btn-sm btn-primary" onclick="loadScenario('${scenario.id}')" style="flex: 1;">
+                                <i class="fas fa-upload"></i> Load
+                            </button>
+                            <button class="btn btn-sm btn-secondary" onclick="deleteScenario('${scenario.id}')" style="flex: 1;">
+                                <i class="fas fa-trash"></i> Delete
+                            </button>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            html += `
+                    </div>
+                </div>
+            `;
+            
+            container.innerHTML = html;
+        })
+        .catch(err => {
+            alert('Error loading scenarios: ' + err.message);
+        });
+}
+
+function loadScenario(scenarioId) {
+    fetch(`/api/scenarios/${scenarioId}`)
+        .then(res => {
+            if (!res.ok) {
+                throw new Error(`Failed to load scenario: ${res.statusText}`);
+            }
+            return res.json();
+        })
+        .then(scenario => {
+            const config = scenario.configuration;
+            
+            // Apply configuration to UI
+            document.getElementById('service-fee').value = config.service_fee_pct * 100;
+            document.getElementById('service-fee-value').textContent = (config.service_fee_pct * 100).toFixed(1) + '%';
+            
+            document.getElementById('cxa-fee').value = config.cxa_pct * 100;
+            document.getElementById('cxa-fee-value').textContent = (config.cxa_pct * 100).toFixed(1) + '%';
+            
+            document.getElementById('cac-bonus').value = config.cac_bonus;
+            document.getElementById('cac-bonus-value').textContent = '$' + config.cac_bonus.toLocaleString();
+            
+            document.getElementById('insurance-amount').value = config.insurance_amount;
+            document.getElementById('insurance-amount-value').textContent = '$' + config.insurance_amount.toLocaleString();
+            
+            if (config.interest_rate) {
+                document.getElementById('interest-rate').value = config.interest_rate * 100;
+                document.getElementById('interest-rate-value').textContent = (config.interest_rate * 100).toFixed(1) + '%';
+            }
+            
+            // Set Kavak Total toggle
+            const kavakToggle = document.getElementById('kavak-total-toggle');
+            if (config.kavak_total_enabled) {
+                kavakToggle.classList.add('active');
+            } else {
+                kavakToggle.classList.remove('active');
+            }
+            
+            // Set term
+            document.getElementById('loan-term').value = config.term_months || 'all';
+            
+            alert(`Loaded scenario: ${scenario.name}`);
+            
+            // Generate offers with loaded config
+            generateCustomOffers();
+        })
+        .catch(err => {
+            alert('Error loading scenario: ' + err.message);
+        });
+}
+
+function deleteScenario(scenarioId) {
+    if (!confirm('Are you sure you want to delete this scenario?')) return;
+    
+    fetch(`/api/scenarios/${scenarioId}`, {
+        method: 'DELETE'
+    })
+    .then(res => {
+        if (!res.ok) {
+            throw new Error(`Failed to delete: ${res.statusText}`);
+        }
+        return res.json();
+    })
+    .then(data => {
+        alert('Scenario deleted successfully');
+        loadSavedScenarios(); // Refresh the list
+    })
+    .catch(err => {
+        console.error('Error deleting scenario:', err);
+        alert('Error deleting scenario: ' + err.message);
+    });
 }
 
 // Initialize on page load

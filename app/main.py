@@ -17,7 +17,7 @@ from .core.startup import startup_event
 from .middleware.request_id import RequestIDMiddleware
 from .middleware.sanitization import SanitizationMiddleware
 from .middleware.timeout import TimeoutMiddleware
-from .routes import pages
+from .routes import pages, deal_architect, scenarios, pipeline
 
 # Setup logging
 setup_logging(logging.INFO)
@@ -123,6 +123,9 @@ app.include_router(circuit_breaker.router)
 
 # Pages don't need versioning
 app.include_router(pages.router)
+app.include_router(deal_architect.router)
+app.include_router(scenarios.router)
+app.include_router(pipeline.router)
 
 # Register startup event
 @app.on_event("startup")

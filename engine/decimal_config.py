@@ -2,7 +2,7 @@
 Global Decimal configuration for financial calculations
 Ensures consistent precision and rounding across the application
 """
-from decimal import Decimal, getcontext, ROUND_HALF_UP
+from decimal import Decimal, getcontext, ROUND_HALF_UP, InvalidOperation, DivisionByZero, Overflow, Underflow
 import logging
 
 logger = logging.getLogger(__name__)
@@ -32,10 +32,10 @@ def configure_decimal_context():
     context.Emin = -999999
     
     # Enable all traps except Inexact and Rounded (common in financial calcs)
-    context.traps[Decimal.InvalidOperation] = 1
-    context.traps[Decimal.DivisionByZero] = 1
-    context.traps[Decimal.Overflow] = 1
-    context.traps[Decimal.Underflow] = 0  # Allow underflow to zero
+    context.traps[InvalidOperation] = 1
+    context.traps[DivisionByZero] = 1
+    context.traps[Overflow] = 1
+    context.traps[Underflow] = 0  # Allow underflow to zero
     
     logger.info(f"✅ Decimal context configured: precision={context.prec}, rounding={context.rounding}")
     

@@ -536,24 +536,34 @@ def test_database_connection() -> Dict:
     }
     
     try:
-        # Test customer data (CSV)
-        customers_df = data_loader.load_customers_data()
-        if not customers_df.empty:
-            status["customers"]["connected"] = True
-            status["customers"]["count"] = len(customers_df)
+        # Test customer data (CSV) - just check if file exists and is readable
+        csv_path = "customers_data_tradeup.csv"
+        if os.path.exists(csv_path):
+            # Read just the first row to verify format
+            test_df = pd.read_csv(csv_path, nrows=1)
+            if not test_df.empty:
+                # Count rows without loading entire file
+                with open(csv_path, 'r') as f:
+                    row_count = sum(1 for line in f) - 1  # Subtract header
+                status["customers"]["connected"] = True
+                status["customers"]["count"] = row_count
+                logger.info(f"✅ Customer CSV accessible, ~{row_count} records")
     except Exception as e:
         status["customers"]["error"] = str(e)
     
     try:
-        # Test inventory data (Redshift) - try a quick connection test
-        inventory_df = data_loader.load_inventory_from_redshift()
-        if inventory_df is not None and not inventory_df.empty:
-            status["inventory"]["connected"] = True
-            status["inventory"]["count"] = len(inventory_df)
-        else:
-            # If Redshift fails, we still consider it "not critical" for startup
-            status["inventory"]["connected"] = False
-            status["inventory"]["error"] = "Redshift connection timeout or no data"
+        # Test Redshift connection with a lightweight query
+        from .connection_pool import get_connection_pool
+        pool = get_connection_pool()
+        
+        with pool.get_connection() as conn:
+            with conn.cursor() as cursor:
+                # Just verify connection works - don't count millions of rows!
+                cursor.execute("SELECT 1")
+                cursor.fetchone()
+                status["inventory"]["connected"] = True
+                status["inventory"]["count"] = 0  # Don't count on startup
+                logger.info("✅ Redshift connection verified")
     except Exception as e:
         status["inventory"]["connected"] = False
         status["inventory"]["error"] = str(e)
