@@ -130,21 +130,19 @@ def get_inventory_stats() -> Dict:
 
 
 def get_car_by_id(car_id: str) -> Optional[Dict]:
-    """Get a single car by ID - TRUE optimization with WHERE clause"""
+    """Get a single car by ID directly from Redshift."""
     logger.info(f"🔍 Fetching car {car_id}")
-    
-    # Production mode - always use real data
-    # Ensure car_id is string for comparison
+
+    # Always treat car_id as string for comparison
     car_id_str = str(car_id)
-    
-    # Get all inventory first
-    inventory = get_all_inventory()
-    
-    # Find the specific car
-    for car in inventory:
-        if str(car.get('car_id')) == car_id_str:
+
+    try:
+        car = data_loader.load_single_car_from_redshift(car_id_str)
+        if car:
             return car
-    
+    except Exception as e:
+        logger.error(f"❌ Error loading car {car_id} from Redshift: {e}")
+
     logger.warning(f"⚠️ Car {car_id} not found")
     return None
 

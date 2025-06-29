@@ -2,7 +2,8 @@
 Unit tests for calculator module
 """
 import pytest
-from engine.calculator import calculate_npv, generate_amortization_table
+from engine.calculator import generate_amortization_table
+from engine.payment_utils import calculate_final_npv as calculate_npv
 from config.config import IVA_RATE
 
 
