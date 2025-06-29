@@ -3,6 +3,30 @@ from config.config import IVA_RATE
 from .payment_utils import calculate_payment_components, calculate_final_npv
 
 
+def calculate_npv(offer: dict) -> float:
+    """Legacy helper to compute NPV of interest income.
+
+    Args:
+        offer: Dictionary containing at least ``total_financed`` (or ``loan_amount``),
+            ``interest_rate`` and ``term`` keys.
+
+    Returns:
+        Calculated NPV value as ``float``.
+    """
+    loan_amount = float(
+        offer.get("total_financed")
+        or offer.get("loan_amount")
+        or 0.0
+    )
+    interest_rate = float(offer.get("interest_rate", 0.0))
+    term_months = int(offer.get("term", 0))
+
+    if loan_amount <= 0 or term_months <= 0:
+        return 0.0
+
+    return calculate_final_npv(loan_amount, interest_rate, term_months)
+
+
 def generate_amortization_table(offer_details: dict) -> list[dict]:
     """. 
     Generate month-by-month amortization table using the EXACT audited logic.
