@@ -1,0 +1,59 @@
+        <div class="panel">
+            <div class="panel-header">
+                <h3 style="margin: 0; font-size: 1.125rem;">Comparison</h3>
+            </div>
+            <div class="panel-body">
+                <!-- Saved Scenarios -->
+                <div style="margin-bottom: 2rem;">
+                    <h4 style="font-size: 0.875rem; text-transform: uppercase; color: #666; margin-bottom: 1rem;">
+                        Saved Scenarios ({{ saved_scenarios|length }})
+                    </h4>
+                    <div id="saved-scenarios" style="max-height: 200px; overflow-y: auto;">
+                        {% for scenario in saved_scenarios %}
+                        <div class="quick-action scenario-item" data-scenario-id='{{ scenario.id | e }}' style="margin-bottom: 0.5rem;">
+                            <div style="font-weight: 500;">{{ scenario.name | e }}</div>
+                            <div style="font-size: 0.75rem; color: #666;">
+                                ${{ "{:,.0f}".format(scenario.configuration.monthly_payment|default(0)) }}/mo
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                
+                <!-- Comparison Slots -->
+                <h4 style="font-size: 0.875rem; text-transform: uppercase; color: #666; margin-bottom: 1rem;">
+                    Compare Offers
+                </h4>
+                <div id="comparison-slots">
+                    <div class="comparison-slot" data-slot="1">
+                        <div style="color: #999;">
+                            <i class="fas fa-plus-circle" style="font-size: 2rem; margin-bottom: 0.5rem;"></i>
+                            <p>Click a vehicle to compare</p>
+                        </div>
+                    </div>
+                    <div class="comparison-slot" data-slot="2">
+                        <div style="color: #999;">
+                            <i class="fas fa-plus-circle" style="font-size: 2rem; margin-bottom: 0.5rem;"></i>
+                            <p>Click a vehicle to compare</p>
+                        </div>
+                    </div>
+                    <div class="comparison-slot" data-slot="3">
+                        <div style="color: #999;">
+                            <i class="fas fa-plus-circle" style="font-size: 2rem; margin-bottom: 0.5rem;"></i>
+                            <p>Click a vehicle to compare</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Comparison Actions -->
+                <div style="margin-top: 1.5rem;">
+                    <button class="btn btn-secondary" id="clear-comparison-btn" style="width: 100%; margin-bottom: 0.5rem;">
+                        Clear Comparison
+                    </button>
+                    <button id="generate-report-btn" class="btn btn-primary" style="width: 100%;">
+                        Generate Report
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>

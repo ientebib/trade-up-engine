@@ -1,0 +1,104 @@
+        <div class="panel">
+            <div class="panel-header">
+                <h3 style="margin: 0; font-size: 1.125rem;">Configuration</h3>
+            </div>
+            <div class="panel-body">
+                <!-- Current Payment Display -->
+                <div class="payment-display">
+                    <div class="payment-value" id="current-payment">
+                        $<span id="calculated-payment">{{ "{:,.0f}".format(customer.current_monthly_payment) }}</span>
+                    </div>
+                    <div class="payment-delta" id="payment-delta">
+                        Calculating...
+                    </div>
+                </div>
+                
+                <!-- Loan Terms -->
+                <div class="config-section">
+                    <h4>Loan Terms</h4>
+                    <div class="slider-group">
+                        <label>Term</label>
+                        <select id="term-select" class="form-control">
+                            <option value="36">36 months</option>
+                            <option value="48" selected>48 months</option>
+                            <option value="60">60 months</option>
+                            <option value="72">72 months</option>
+                        </select>
+                    </div>
+                    <div class="slider-group">
+                        <div class="slider-label">
+                            <label>Interest Rate</label>
+                            <span class="slider-value" id="interest-value">18.0%</span>
+                        </div>
+                        <input type="range" id="interest-slider" min="10" max="30" step="0.5" value="18">
+                    </div>
+                </div>
+                
+                <!-- Fees Configuration -->
+                <div class="config-section">
+                    <h4>Fees & Commissions</h4>
+                    <div class="slider-group">
+                        <div class="slider-label">
+                            <label>Service Fee</label>
+                            <span class="slider-value" id="service-fee-value">4.0%</span>
+                        </div>
+                        <input type="range" id="service-fee-slider" min="0" max="5" step="0.1" value="4">
+                    </div>
+                    <div class="slider-group">
+                        <div class="slider-label">
+                            <label>CXA (Opening Fee)</label>
+                            <span class="slider-value" id="cxa-value">4.0%</span>
+                        </div>
+                        <input type="range" id="cxa-slider" min="0" max="5" step="0.1" value="4">
+                    </div>
+                    <div class="slider-group">
+                        <div class="slider-label">
+                            <label>CAC Bonus</label>
+                            <span class="slider-value" id="cac-value">$0</span>
+                        </div>
+                        <input type="range" id="cac-slider" min="0" max="10000" step="500" value="0">
+                    </div>
+                </div>
+                
+                <!-- Products -->
+                <div class="config-section">
+                    <h4>Products</h4>
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
+                        <label>Kavak Total</label>
+                        <div class="toggle" id="kavak-total-toggle"></div>
+                    </div>
+                    <div class="slider-group">
+                        <div class="slider-label">
+                            <label>Insurance Amount</label>
+                            <span class="slider-value" id="insurance-value">$10,999</span>
+                        </div>
+                        <input type="range" id="insurance-slider" min="8000" max="20000" step="500" value="10999">
+                    </div>
+                </div>
+                
+                <!-- Quick Actions -->
+                <div class="config-section">
+                    <h4>Quick Actions</h4>
+                    <div class="quick-actions">
+                        <button class="quick-action" data-preset="conservative">
+                            Conservative
+                        </button>
+                        <button class="quick-action" data-preset="aggressive">
+                            Aggressive
+                        </button>
+                        <button class="quick-action" data-preset="no-fees">
+                            No Fees
+                        </button>
+                        <button class="quick-action" data-preset="max-term">
+                            Max Term
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Save Configuration -->
+                <button id="save-config-btn" class="btn btn-primary" style="width: 100%;">
+                    <i class="fas fa-save"></i> Save Configuration
+                </button>
+            </div>
+        </div>
+        

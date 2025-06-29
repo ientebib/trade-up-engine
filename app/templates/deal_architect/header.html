@@ -1,0 +1,32 @@
+<div class="workspace">
+    <div id="da-data" data-customer-id="{{ customer.customer_id | e }}" data-current-payment="{{ customer.current_monthly_payment }}" data-vehicle-equity="{{ customer.vehicle_equity }}" style="display:none;"></div>
+    <!-- Header -->
+    <div class="workspace-header">
+        <div style="display: flex; align-items: center; gap: 1rem;">
+            <h1 style="margin: 0; font-size: 1.25rem; font-weight: 600;">Deal Architect</h1>
+            <span class="live-indicator"></span>
+            <span style="color: #666; font-size: 0.875rem;">Live Mode</span>
+        </div>
+        
+        <div style="flex: 1; display: flex; align-items: center; gap: 1rem;">
+            <div style="padding: 0.5rem 1rem; background: #f8f9fa; border-radius: 6px;">
+                <strong>{{ (customer.full_name or customer.customer_id) | e }}</strong>
+                <span style="margin-left: 1rem; color: #666;">
+                    Current: ${{ "{:,.0f}".format(customer.current_monthly_payment) }}/mo
+                </span>
+            </div>
+        </div>
+        
+        <div style="display: flex; gap: 1rem;">
+            <button id="reset-btn" class="btn btn-secondary">
+                <i class="fas fa-undo"></i> Reset
+            </button>
+            <button id="export-btn" class="btn btn-primary">
+                <i class="fas fa-download"></i> Export
+            </button>
+        </div>
+    </div>
+    
+    <!-- Main Workspace -->
+    <div class="workspace-body">
+        <!-- Left Panel: Configuration -->

@@ -1,0 +1,127 @@
+        <div class="panel" style="background: #f8f9fa;">
+            <div class="panel-header">
+                <h3 style="margin: 0; font-size: 1.125rem;">Smart Inventory Browser</h3>
+                <div style="margin-top: 0.5rem; display: flex; gap: 0.5rem;">
+                    <input type="text" id="search-inventory" placeholder="Search by brand, model, year..." 
+                           style="flex: 1; padding: 0.5rem; border: 1px solid #e0e0e0; border-radius: 6px;"
+                          >
+                    <button class="btn btn-sm" style="background: white; border: 1px solid #e0e0e0;">
+                        <i class="fas fa-filter"></i> Filters
+                    </button>
+                </div>
+                
+                <!-- Advanced Filters (Hidden by default) -->
+                <div id="advanced-filters" style="display: none; margin-top: 1rem; padding: 1rem; background: white; border-radius: 8px; border: 1px solid #e0e0e0;">
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem;">
+                        <!-- Payment Range -->
+                        <div>
+                            <label style="font-size: 0.75rem; color: #666;">Payment Change</label>
+                            <div style="display: flex; gap: 0.5rem; margin-top: 0.25rem;">
+                                <input type="number" id="payment-min" placeholder="-10%" value="-10" style="width: 60px; padding: 0.25rem; border: 1px solid #e0e0e0; border-radius: 4px;">
+                                <span>to</span>
+                                <input type="number" id="payment-max" placeholder="25%" value="25" style="width: 60px; padding: 0.25rem; border: 1px solid #e0e0e0; border-radius: 4px;">
+                            </div>
+                        </div>
+                        
+                        <!-- Price Range -->
+                        <div>
+                            <label style="font-size: 0.75rem; color: #666;">Price Range</label>
+                            <div style="display: flex; gap: 0.5rem; margin-top: 0.25rem;">
+                                <input type="number" id="price-min" placeholder="Min" style="width: 80px; padding: 0.25rem; border: 1px solid #e0e0e0; border-radius: 4px;">
+                                <span>to</span>
+                                <input type="number" id="price-max" placeholder="Max" style="width: 80px; padding: 0.25rem; border: 1px solid #e0e0e0; border-radius: 4px;">
+                            </div>
+                        </div>
+                        
+                        <!-- Year Range -->
+                        <div>
+                            <label style="font-size: 0.75rem; color: #666;">Year</label>
+                            <div style="display: flex; gap: 0.5rem; margin-top: 0.25rem;">
+                                <input type="number" id="year-min" placeholder="2020" min="2015" max="2025" style="width: 80px; padding: 0.25rem; border: 1px solid #e0e0e0; border-radius: 4px;">
+                                <span>to</span>
+                                <input type="number" id="year-max" placeholder="2025" min="2015" max="2025" style="width: 80px; padding: 0.25rem; border: 1px solid #e0e0e0; border-radius: 4px;">
+                            </div>
+                        </div>
+                        
+                        <!-- Max KM -->
+                        <div>
+                            <label style="font-size: 0.75rem; color: #666;">Max Kilometers</label>
+                            <input type="number" id="max-km" placeholder="50000" style="width: 100%; padding: 0.25rem; border: 1px solid #e0e0e0; border-radius: 4px; margin-top: 0.25rem;">
+                        </div>
+                        
+                        <!-- Vehicle Type -->
+                        <div>
+                            <label style="font-size: 0.75rem; color: #666;">Vehicle Type</label>
+                            <select id="vehicle-types" multiple style="width: 100%; padding: 0.25rem; border: 1px solid #e0e0e0; border-radius: 4px; margin-top: 0.25rem; height: 60px;">
+                                <option value="SUV">SUV</option>
+                                <option value="Sedan">Sedan</option>
+                                <option value="Truck">Truck</option>
+                                <option value="Hatchback">Hatchback</option>
+                            </select>
+                        </div>
+                        
+                        <!-- Sort By -->
+                        <div>
+                            <label style="font-size: 0.75rem; color: #666;">Sort By</label>
+                            <select id="sort-by" style="width: 100%; padding: 0.25rem; border: 1px solid #e0e0e0; border-radius: 4px; margin-top: 0.25rem;">
+                                <option value="payment_delta">Payment Match</option>
+                                <option value="npv">NPV (Highest)</option>
+                                <option value="payment">Monthly Payment</option>
+                                <option value="price">Price</option>
+                                <option value="year">Year</option>
+                                <option value="km">Kilometers</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div style="display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1rem;">
+                        <button class="btn btn-sm" style="background: white; border: 1px solid #e0e0e0;">
+                            Clear
+                        </button>
+                        <button id="apply-filters-btn" class="btn btn-sm btn-primary">
+                            Apply Filters
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="panel-body">
+                <!-- Stats -->
+                <div class="results-stats">
+                    <div class="stat-card">
+                        <div class="stat-value" id="total-offers">0</div>
+                        <div class="stat-label">Total Matches</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="viable-offers">0</div>
+                        <div class="stat-label">Showing</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="avg-npv">$0</div>
+                        <div class="stat-label">Avg NPV</div>
+                    </div>
+                </div>
+                
+                <!-- Category Tabs -->
+                <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
+                    <button class="btn btn-sm active" data-category="all">All</button>
+                    <button class="btn btn-sm" data-category="perfect_match">
+                        Perfect Match <span id="count-perfect" style="opacity: 0.7;">(0)</span>
+                    </button>
+                    <button class="btn btn-sm" data-category="slight_increase">
+                        Slight+ <span id="count-slight" style="opacity: 0.7;">(0)</span>
+                    </button>
+                    <button class="btn btn-sm" data-category="moderate_increase">
+                        Moderate+ <span id="count-moderate" style="opacity: 0.7;">(0)</span>
+                    </button>
+                </div>
+                
+                <!-- Results Container -->
+                <div id="results-container" style="max-height: calc(100vh - 380px); overflow-y: auto;">
+                    <div style="text-align: center; padding: 3rem; color: #999;">
+                        <i class="fas fa-spinner fa-spin" style="font-size: 2rem; margin-bottom: 1rem;"></i>
+                        <p>Loading inventory...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
