@@ -70,9 +70,41 @@ echo "   - 100 mock inventory cars"
 echo "   - No Redshift connection required"
 echo ""
 
-# Run with single worker for development
-python -m uvicorn app.main:app \
+# Start server in background and exit
+echo "🚀 Starting server in background..."
+nohup python -m uvicorn app.main:app \
   --host 0.0.0.0 \
   --port 8000 \
   --reload \
-  --log-level info
+  --log-level info > server.log 2>&1 &
+
+# Get the PID
+SERVER_PID=$!
+echo $SERVER_PID > server.pid
+
+# Wait a bit for server to start
+echo "⏳ Waiting for server to start..."
+sleep 5
+
+# Check if server is running
+if kill -0 $SERVER_PID 2>/dev/null; then
+  echo ""
+  echo "✅ ============================================="
+  echo "✅ SETUP COMPLETE & SERVER RUNNING!"
+  echo "✅ ============================================="
+  echo ""
+  echo "🌐 Server is running at: http://localhost:8000"
+  echo "📄 Server PID: $SERVER_PID (saved to server.pid)"
+  echo "📋 Server logs: tail -f server.log"
+  echo ""
+  echo "To stop the server later:"
+  echo "  kill \$(cat server.pid)"
+  echo "  # or"
+  echo "  kill $SERVER_PID"
+  echo ""
+  echo "✅ Script completed successfully!"
+  exit 0
+else
+  echo "❌ Server failed to start. Check server.log for errors."
+  exit 1
+fi
