@@ -16,7 +16,7 @@ git clone <repository-url>
 cd trade-up-engine
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
-pip install -r requirements.txt
+pip install -r requirements.lock  # Install pinned dependencies
 
 # Configure environment
 cp .env.example .env
@@ -93,6 +93,9 @@ See `config/schema.py` for all available settings.
 ## Testing
 
 ```bash
+# Install exact versions
+pip install -r requirements.lock
+
 # All tests
 ./run_tests.py
 
