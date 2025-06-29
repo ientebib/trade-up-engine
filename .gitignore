@@ -45,6 +45,7 @@ htmlcov/
 scenario_results.json
 engine_config.json
 server.log
+server.pid
 *.bak
 *~
 .claude/
