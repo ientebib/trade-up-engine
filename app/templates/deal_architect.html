@@ -384,6 +384,63 @@
         display: inline-block;
         margin-right: 0.5rem;
     }
+    
+    /* Loading States */
+    .loading-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(255, 255, 255, 0.9);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 100;
+    }
+    
+    .loading-spinner {
+        width: 40px;
+        height: 40px;
+        border: 3px solid #f3f3f3;
+        border-top: 3px solid #1451EC;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    
+    .loading-text {
+        margin-top: 1rem;
+        color: #666;
+        font-size: 0.875rem;
+    }
+    
+    .skeleton {
+        background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+        background-size: 200% 100%;
+        animation: loading 1.5s infinite;
+    }
+    
+    @keyframes loading {
+        0% { background-position: 200% 0; }
+        100% { background-position: -200% 0; }
+    }
+    
+    .skeleton-text {
+        height: 1rem;
+        border-radius: 4px;
+        margin-bottom: 0.5rem;
+    }
+    
+    .skeleton-box {
+        height: 80px;
+        border-radius: 8px;
+        margin-bottom: 0.75rem;
+    }
 </style>
 {% endblock %}
 
@@ -734,9 +791,48 @@ let currentCategory = 'all';
 // Initialize
 document.addEventListener('DOMContentLoaded', function() {
     console.log('Deal Architect initialized');
+    showLoadingState('calculations');
+    showLoadingState('inventory');
+    showLoadingState('scenarios');
     loadInitialData();
     setupRealtimeUpdates();
 });
+
+function loadInitialData() {
+    // Load initial calculations
+    calculatePayments();
+    
+    // Load saved scenarios
+    fetch('/api/scenarios')
+        .then(res => res.json())
+        .then(data => {
+            if (data.scenarios) {
+                updateSavedScenarios(data.scenarios);
+            }
+        })
+        .catch(err => console.error('Error loading scenarios:', err))
+        .finally(() => hideLoadingState('scenarios'));
+    
+    // Initial inventory search
+    performSearch('');
+}
+
+function updateSavedScenarios(scenarios) {
+    const container = document.getElementById('saved-scenarios');
+    if (scenarios.length === 0) {
+        container.innerHTML = '<p style="color: #999; font-size: 0.875rem;">No saved scenarios yet</p>';
+        return;
+    }
+    
+    container.innerHTML = scenarios.map(scenario => `
+        <div class="quick-action" onclick="loadScenario('${scenario.id}')" style="margin-bottom: 0.5rem;">
+            <div style="font-weight: 500;">${scenario.name}</div>
+            <div style="font-size: 0.75rem; color: #666;">
+                $${Math.round(scenario.configuration.monthly_payment || 0).toLocaleString()}/mo
+            </div>
+        </div>
+    `).join('');
+}
 
 // Real-time calculation updates
 function updateCalculations() {
@@ -752,7 +848,7 @@ function calculatePayments() {
     const config = getCurrentConfig();
     
     // Show loading state
-    document.getElementById('payment-delta').textContent = 'Calculating...';
+    showLoadingState('calculations');
     
     // Make real-time calculation request
     fetch('/api/calculate-payment', {
@@ -777,6 +873,9 @@ function calculatePayments() {
     })
     .catch(err => {
         console.error('Calculation error:', err);
+    })
+    .finally(() => {
+        hideLoadingState('calculations');
     });
 }
 
@@ -924,8 +1023,13 @@ function displayVehicles() {
     document.getElementById('count-moderate').textContent = `(${categories.moderate_increase})`;
     
     // Display vehicles
-    document.getElementById('results-container').innerHTML = html || 
-        '<p style="text-align: center; color: #999; padding: 3rem;">No vehicles found. Try adjusting your search or filters.</p>';
+    const container = document.getElementById('results-container');
+    if (isLoading) {
+        container.innerHTML = createLoadingState();
+    } else {
+        container.innerHTML = html || 
+            '<p style="text-align: center; color: #999; padding: 3rem;">No vehicles found. Try adjusting your search or filters.</p>';
+    }
 }
 
 function createVehicleCard(vehicle) {
@@ -1274,19 +1378,186 @@ function resetAll() {
 }
 
 function exportComparison() {
-    // TODO: Export comparison to PDF/Excel
-    alert('Export feature coming soon!');
+    // Export comparison data to CSV
+    const config = getCurrentConfig();
+    const csvData = generateComparisonCSV(config);
+    
+    // Create download link
+    const blob = new Blob([csvData], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `deal_comparison_${customerId}_${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
 }
 
 function generateReport() {
-    // TODO: Generate detailed report
-    alert('Report generation coming soon!');
+    // Generate detailed report with current configuration
+    const config = getCurrentConfig();
+    const reportData = {
+        customer_id: customerId,
+        configuration: config,
+        timestamp: new Date().toISOString(),
+        selected_vehicles: selectedVehicles || []
+    };
+    
+    // Open report in new window
+    const reportWindow = window.open('', '_blank');
+    reportWindow.document.write(generateHTMLReport(reportData));
+}
+
+function generateComparisonCSV(config) {
+    let csv = 'Parameter,Value\n';
+    csv += `Service Fee,${config.service_fee_pct * 100}%\n`;
+    csv += `CXA Fee,${config.cxa_pct * 100}%\n`;
+    csv += `CAC Bonus,$${config.cac_bonus}\n`;
+    csv += `Kavak Total,$${config.kavak_total_amount}\n`;
+    csv += `Insurance,$${config.insurance_amount}\n`;
+    csv += `Term,${config.term_months} months\n`;
+    return csv;
+}
+
+function generateHTMLReport(data) {
+    return `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Deal Report - ${data.customer_id}</title>
+            <style>
+                body { font-family: Arial, sans-serif; margin: 40px; }
+                h1 { color: #1451EC; }
+                table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+                th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                th { background-color: #f5f7fa; }
+                .timestamp { color: #666; font-size: 14px; }
+            </style>
+        </head>
+        <body>
+            <h1>Deal Configuration Report</h1>
+            <p class="timestamp">Generated: ${new Date(data.timestamp).toLocaleString()}</p>
+            <h2>Customer: ${data.customer_id}</h2>
+            
+            <h3>Configuration Parameters</h3>
+            <table>
+                <tr><th>Parameter</th><th>Value</th></tr>
+                <tr><td>Service Fee</td><td>${(data.configuration.service_fee_pct * 100).toFixed(2)}%</td></tr>
+                <tr><td>CXA Fee</td><td>${(data.configuration.cxa_pct * 100).toFixed(2)}%</td></tr>
+                <tr><td>CAC Bonus</td><td>$${data.configuration.cac_bonus.toLocaleString()}</td></tr>
+                <tr><td>Kavak Total</td><td>$${data.configuration.kavak_total_amount.toLocaleString()}</td></tr>
+                <tr><td>Insurance</td><td>$${data.configuration.insurance_amount.toLocaleString()}</td></tr>
+                <tr><td>Term</td><td>${data.configuration.term_months} months</td></tr>
+            </table>
+            
+            <h3>Selected Vehicles</h3>
+            ${data.selected_vehicles.length > 0 ? 
+                '<p>' + data.selected_vehicles.length + ' vehicles selected for comparison</p>' :
+                '<p>No vehicles selected yet</p>'
+            }
+            
+            <button onclick="window.print()">Print Report</button>
+        </body>
+        </html>
+    `;
+}
+
+// Loading state helper functions
+function showLoadingState(section) {
+    if (section === 'inventory') {
+        document.getElementById('results-container').innerHTML = `
+            <div class="loading-overlay">
+                <div>
+                    <div class="loading-spinner"></div>
+                    <div class="loading-text">Loading inventory...</div>
+                </div>
+            </div>`;
+    } else if (section === 'calculations') {
+        document.querySelectorAll('.stat-value').forEach(el => {
+            el.classList.add('skeleton', 'skeleton-text');
+        });
+        document.getElementById('calculated-payment').classList.add('skeleton', 'skeleton-text');
+        document.getElementById('payment-delta').classList.add('skeleton', 'skeleton-text');
+    } else if (section === 'search') {
+        document.getElementById('results-container').innerHTML = `
+            <div class="skeleton skeleton-box"></div>
+            <div class="skeleton skeleton-box"></div>
+            <div class="skeleton skeleton-box"></div>`;
+    } else if (section === 'scenarios') {
+        document.getElementById('saved-scenarios').innerHTML = `
+            <div class="skeleton skeleton-box"></div>
+            <div class="skeleton skeleton-box"></div>`;
+    }
+}
+
+function hideLoadingState(section) {
+    if (section === 'calculations') {
+        document.querySelectorAll('.stat-value').forEach(el => {
+            el.classList.remove('skeleton', 'skeleton-text');
+        });
+        document.getElementById('calculated-payment').classList.remove('skeleton', 'skeleton-text');
+        document.getElementById('payment-delta').classList.remove('skeleton', 'skeleton-text');
+    }
+}
+
+function createLoadingState() {
+    return `
+        <div style="text-align: center; padding: 3rem; color: #999;">
+            <div class="loading-spinner" style="margin: 0 auto 1rem;"></div>
+            <p>Loading...</p>
+        </div>
+    `;
 }
 
 // Search functionality
 document.getElementById('search-inventory').addEventListener('input', function(e) {
     const searchTerm = e.target.value.toLowerCase();
-    // TODO: Implement search filtering
+    
+    // Filter inventory cards
+    const inventoryCards = document.querySelectorAll('.inventory-card');
+    let visibleCount = 0;
+    
+    inventoryCards.forEach(card => {
+        const brand = card.querySelector('.car-title')?.textContent.toLowerCase() || '';
+        const model = card.querySelector('.car-details')?.textContent.toLowerCase() || '';
+        const price = card.querySelector('.car-price')?.textContent.toLowerCase() || '';
+        
+        const matches = brand.includes(searchTerm) || 
+                       model.includes(searchTerm) || 
+                       price.includes(searchTerm);
+        
+        if (matches) {
+            card.style.display = 'block';
+            visibleCount++;
+        } else {
+            card.style.display = 'none';
+        }
+    });
+    
+    // Update results count
+    const resultsInfo = document.querySelector('.results-info');
+    if (resultsInfo) {
+        resultsInfo.textContent = `Showing ${visibleCount} vehicles`;
+    }
+    
+    // Show no results message if needed
+    if (visibleCount === 0 && searchTerm) {
+        const noResults = document.getElementById('no-results') || createNoResultsMessage();
+        noResults.style.display = 'block';
+    } else {
+        const noResults = document.getElementById('no-results');
+        if (noResults) noResults.style.display = 'none';
+    }
 });
+
+function createNoResultsMessage() {
+    const div = document.createElement('div');
+    div.id = 'no-results';
+    div.className = 'text-center p-4';
+    div.innerHTML = '<p class="text-muted">No vehicles match your search</p>';
+    document.getElementById('inventory-results').appendChild(div);
+    return div;
+}
 </script>
 {% endblock %}

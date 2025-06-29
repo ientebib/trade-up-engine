@@ -81,13 +81,13 @@ def get_all_inventory() -> List[Dict]:
     def fetch_inventory():
         logger.info("🔍 Fetching inventory from Redshift...")
         _, inventory_df = data_loader.load_all_data()
-            
-            if inventory_df.empty:
-                logger.error("❌ No inventory data from Redshift!")
-                return []
-            
-            logger.info(f"✅ Loaded {len(inventory_df)} cars from Redshift")
-            return inventory_df.to_dict("records")
+        
+        if inventory_df.empty:
+            logger.error("❌ No inventory data from Redshift!")
+            return []
+        
+        logger.info(f"✅ Loaded {len(inventory_df)} cars from Redshift")
+        return inventory_df.to_dict("records")
     
     # Use cache with 4-hour TTL (configurable)
     data, from_cache = cache_manager.get("inventory_all", fetch_inventory)
@@ -112,7 +112,7 @@ def get_inventory_stats() -> Dict:
         
         # Use car_price for mock data, sales_price for real data
         price_col = "sales_price"  # Production column name
-        brand_col = "brand" if USE_MOCK_DATA else "car_brand"
+        brand_col = "car_brand"
         
         stats = {
             "total_cars": len(inventory_df),
@@ -135,44 +135,18 @@ def get_car_by_id(car_id: str) -> Optional[Dict]:
     
     # Production mode - always use real data
     # Ensure car_id is string for comparison
-        car_id_str = str(car_id)
-        mask = inventory_df["car_id"].astype(str) == car_id_str
-        
-        if not mask.any():
-            logger.warning(f"⚠️ Car {car_id} not found in mock data")
-            return None
-        
-        return inventory_df[mask].iloc[0].to_dict()
+    car_id_str = str(car_id)
     
-    # First try direct Redshift query with WHERE clause
-    car_data = data_loader.load_single_car_from_redshift(car_id)
+    # Get all inventory first
+    inventory = get_all_inventory()
     
-    if car_data:
-        return car_data
+    # Find the specific car
+    for car in inventory:
+        if str(car.get('car_id')) == car_id_str:
+            return car
     
-    # Fallback to cached inventory if Redshift fails
-    logger.info(f"⚠️ Falling back to cached inventory for car {car_id}")
-    
-    def fetch_from_cache():
-        _, inventory_df = data_loader.load_all_data()
-        
-        if inventory_df.empty:
-            logger.error("❌ No inventory data available")
-            return None
-        
-        # Ensure car_id is string for comparison
-        car_id_str = str(car_id)
-        mask = inventory_df["car_id"].astype(str) == car_id_str
-        
-        if not mask.any():
-            logger.warning(f"⚠️ Car {car_id} not found in cache")
-            return None
-        
-        return inventory_df[mask].iloc[0].to_dict()
-    
-    # Try cache with short TTL
-    car_data, from_cache = cache_manager.get(f"car_{car_id}", fetch_from_cache, ttl_seconds=300)
-    return car_data
+    logger.warning(f"⚠️ Car {car_id} not found")
+    return None
 
 
 def search_inventory(
@@ -187,11 +161,8 @@ def search_inventory(
     """Search inventory with filters - returns filtered results"""
     logger.info(f"🔍 Searching inventory: query='{query}', limit={limit}")
     
-    # Get inventory data
-    if USE_MOCK_DATA:
-        inventory_df = generate_mock_inventory(100)
-    else:
-        _, inventory_df = data_loader.load_all_data()
+    # Get inventory data - production mode
+    _, inventory_df = data_loader.load_all_data()
     
     if inventory_df.empty:
         return []
@@ -240,10 +211,8 @@ def get_inventory_aggregates() -> Dict:
     
     def calculate_aggregates():
         logger.info("📊 Calculating inventory aggregates...")
-        if USE_MOCK_DATA:
-            inventory_df = generate_mock_inventory(100)
-        else:
-            _, inventory_df = data_loader.load_all_data()
+        # Production mode - always use real data
+        _, inventory_df = data_loader.load_all_data()
         
         if inventory_df.empty:
             return {
@@ -254,7 +223,7 @@ def get_inventory_aggregates() -> Dict:
             }
         
         # Get unique makes
-        make_col = "brand" if USE_MOCK_DATA else ("make" if "make" in inventory_df.columns else "car_brand")
+        make_col = "make" if "make" in inventory_df.columns else "car_brand"
         makes = sorted(inventory_df[make_col].dropna().unique().tolist()) if make_col in inventory_df.columns else []
         
         # Get year range
@@ -301,11 +270,8 @@ def search_customers_with_filters(
     
     logger.info(f"🔍 Searching customers: term='{search_term}', risk='{risk_filter}', limit={limit}")
     
-    # Load customer data
-    if USE_MOCK_DATA:
-        customers_df = generate_mock_customers(50)
-    else:
-        customers_df = data_loader.load_customers_data()
+    # Load customer data - production mode
+    customers_df = data_loader.load_customers_data()
     
     if customers_df.empty:
         return [], 0
@@ -396,21 +362,21 @@ def get_tradeup_inventory_for_customer(customer_car_details: Dict) -> List[Dict]
     
     # Try to load pre-filtered inventory from database (efficient)
     try:
-            filtered_df = data_loader.load_filtered_inventory_from_redshift(
-                year=current_year,
-                price=current_price,
-                kilometers=current_km
-            )
-            
-            if not filtered_df.empty:
-                filtered_count = len(filtered_df)
-                logger.info(f"✅ Pre-filtered inventory: {filtered_count} cars from database")
-                return filtered_df.to_dict("records")
-        except Exception as e:
-            logger.error(f"❌ Filtered query failed: {e}")
-            # Don't fall back to loading all inventory - it's too expensive
-            logger.warning("⚠️ Returning empty inventory to prevent memory exhaustion")
-            return []
+        filtered_df = data_loader.load_filtered_inventory_from_redshift(
+            year=current_year,
+            price=current_price,
+            kilometers=current_km
+        )
+        
+        if not filtered_df.empty:
+            filtered_count = len(filtered_df)
+            logger.info(f"✅ Pre-filtered inventory: {filtered_count} cars from database")
+            return filtered_df.to_dict("records")
+    except Exception as e:
+        logger.error(f"❌ Filtered query failed: {e}")
+        # Don't fall back to loading all inventory - it's too expensive
+        logger.warning("⚠️ Returning empty inventory to prevent memory exhaustion")
+        return []
     
     # NO FALLBACK - If we can't get filtered inventory, return empty
     # Loading all inventory is too expensive and causes performance issues
@@ -423,10 +389,8 @@ def get_customer_statistics() -> Dict:
     
     def calculate_customer_stats():
         logger.info("📊 Calculating customer statistics...")
-        if USE_MOCK_DATA:
-            customers_df = generate_mock_customers(50)
-        else:
-            customers_df = data_loader.load_customers_data()
+        # Production mode - always use real data
+        customers_df = data_loader.load_customers_data()
         
         if customers_df.empty:
             return {
@@ -485,13 +449,7 @@ def test_database_connection() -> Dict:
     """Test database connections and return status"""
     logger.info("🧪 Testing database connections")
     
-    if USE_MOCK_DATA:
-        logger.info("🎭 Running in MOCK DATA mode")
-        status = {
-            "customers": {"connected": True, "count": 50, "source": "Mock Data"},
-            "inventory": {"connected": True, "count": 100, "source": "Mock Data"}
-        }
-        return status
+    # Production mode only - no mock data
     
     status = {
         "customers": {"connected": False, "count": 0, "source": "CSV"},

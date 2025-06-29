@@ -6,7 +6,7 @@ from typing import Dict, List, Optional, Tuple, Any
 from data import database
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
-import aioredis
+import redis
 import ujson
 from asyncio import gather, create_task
 import hashlib
@@ -25,14 +25,17 @@ class SearchService:
         self._redis = None
         self._cache_ttl = 300  # 5 minutes for search results
         
-    async def _get_redis(self):
+    def _get_redis(self):
         """Get or create Redis connection"""
         if not self._redis:
             try:
-                self._redis = await aioredis.create_redis_pool(
-                    'redis://localhost:6379',
-                    encoding='utf-8'
+                self._redis = redis.Redis(
+                    host='localhost',
+                    port=6379,
+                    decode_responses=True
                 )
+                # Test connection
+                self._redis.ping()
             except Exception as e:
                 logger.warning(f"Redis not available, using in-memory cache: {e}")
                 # Fallback to in-memory cache if Redis not available
@@ -45,23 +48,23 @@ class SearchService:
         param_hash = hashlib.md5(param_str.encode()).hexdigest()
         return f"{prefix}:{param_hash}"
     
-    async def _cache_get(self, key: str) -> Optional[Any]:
+    def _cache_get(self, key: str) -> Optional[Any]:
         """Get from cache (Redis or memory)"""
-        redis = await self._get_redis()
+        redis = self._get_redis()
         if redis:
             try:
-                data = await redis.get(key)
+                data = redis.get(key)
                 return ujson.loads(data) if data else None
             except Exception as e:
                 logger.error(f"Cache get error: {e}")
         return None
     
-    async def _cache_set(self, key: str, value: Any, ttl: int = None):
+    def _cache_set(self, key: str, value: Any, ttl: int = None):
         """Set in cache with TTL"""
-        redis = await self._get_redis()
+        redis = self._get_redis()
         if redis:
             try:
-                await redis.setex(
+                redis.setex(
                     key, 
                     ttl or self._cache_ttl,
                     ujson.dumps(value)
@@ -102,7 +105,7 @@ class SearchService:
         }
         
         cache_key = self._get_cache_key('search', cache_params)
-        cached_result = await self._cache_get(cache_key)
+        cached_result = self._cache_get(cache_key)
         if cached_result:
             logger.info(f"Cache hit for search: {customer_id}")
             return cached_result
@@ -154,7 +157,7 @@ class SearchService:
         )
         
         # Cache the result
-        await self._cache_set(cache_key, result)
+        self._cache_set(cache_key, result)
         
         return result
     
@@ -366,7 +369,7 @@ class SearchService:
         
         # Cache results
         cache_key = f"npv_results:{customer_id}:{datetime.utcnow().isoformat()}"
-        await self._cache_set(cache_key, cars, ttl=600)  # 10 minute cache
+        self._cache_set(cache_key, cars, ttl=600)  # 10 minute cache
     
     def _calculate_npv_for_batch(
         self,
@@ -412,7 +415,7 @@ class SearchService:
     ) -> List[str]:
         """Get search suggestions with caching"""
         cache_key = f"suggestions:{partial_query.lower()}"
-        cached = await self._cache_get(cache_key)
+        cached = self._cache_get(cache_key)
         if cached:
             return cached
         
@@ -438,7 +441,7 @@ class SearchService:
                 suggestions.append(model)
         
         # Cache for 1 hour
-        await self._cache_set(cache_key, suggestions[:10], ttl=3600)
+        self._cache_set(cache_key, suggestions[:10], ttl=3600)
         
         return suggestions[:10]
     
@@ -479,7 +482,7 @@ class SearchService:
     async def get_inventory_filters(self) -> Dict[str, Any]:
         """Get filter options with caching"""
         cache_key = 'inventory_filters'
-        cached = await self._cache_get(cache_key)
+        cached = self._cache_get(cache_key)
         if cached:
             return cached
         
@@ -491,7 +494,7 @@ class SearchService:
         )
         
         # Cache for 1 hour
-        await self._cache_set(cache_key, filters, ttl=3600)
+        self._cache_set(cache_key, filters, ttl=3600)
         
         return filters
     
@@ -578,11 +581,10 @@ class SearchService:
         
         return payment
     
-    async def close(self):
+    def close(self):
         """Clean up resources"""
         if self._redis:
             self._redis.close()
-            await self._redis.wait_closed()
         self._executor.shutdown(wait=True)
 
 
