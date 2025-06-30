@@ -14,6 +14,7 @@ from tenacity import retry, wait_exponential, stop_after_attempt
 from app.utils.logging import setup_logging
 from .connection_pool import get_connection_pool
 from app.utils.validation import UnifiedValidator as DataValidator, DataIntegrityError
+from data.cache_manager import cache_manager
 RISK_PROFILE_MAPPING = {
     'AAA': 0, 'AA': 1, 'A': 2, 'A1': 3, 'A2': 4,
     'B': 5, 'C1': 6, 'C2': 7, 'C3': 8,
@@ -29,7 +30,6 @@ load_dotenv()
 # Set up logging
 setup_logging(logging.INFO)
 logger = logging.getLogger(__name__)
-
 
 class DataLoader:
     """
@@ -85,15 +85,10 @@ class DataLoader:
         logger.info("🔌 Getting connection from pool...")
 
         try:
-            # Try limited query first for performance
-            if os.path.exists("data/inventory_query_limited.sql"):
-                with open("data/inventory_query_limited.sql", "r") as file:
-                    query = file.read()
-                logger.info("📊 Using limited inventory query (10k records)")
-            else:
-                with open("data/inventory_query.sql", "r") as file:
-                    query = file.read() + " LIMIT 10000"
-                logger.info("📊 Using regular query with LIMIT")
+            # Always use the single canonical query file.
+            with open("data/inventory_query.sql", "r") as file:
+                query = file.read()
+            logger.info("📊 Using main inventory query from data/inventory_query.sql")
         except FileNotFoundError:
             from app.utils.exceptions import DataLoadError
             logger.error("❌ inventory_query.sql file not found in data/ folder.")
@@ -114,7 +109,7 @@ class DataLoader:
                     logger.warning(f"💥 Chaos mode: stalling for {delay:.1f}s")
                     time.sleep(delay)
 
-        try:
+        def _fetch_inventory():
             pool = get_connection_pool()
             with pool.get_connection() as conn:
                 logger.info("✅ Got connection from pool")
@@ -124,24 +119,16 @@ class DataLoader:
                     cursor.execute(query)
                     df = cursor.fetch_dataframe()
 
-                inventory_df = self.transform_inventory_data(df)
-                logger.info(f"✅ Loaded {len(inventory_df)} inventory items from Redshift.")
-                return inventory_df
+            return self.transform_inventory_data(df)
 
-        except Exception as e:
-            import traceback
-            from app.utils.exceptions import DataLoadError
+        # Use cache manager to avoid repeating heavy query within TTL
+        inventory_df, from_cache = cache_manager.get("inventory_df", _fetch_inventory)
+        if not from_cache:
+            logger.info(f"✅ Loaded {len(inventory_df)} inventory items from Redshift and cached the result")
+        else:
+            logger.info(f"✅ Reused cached inventory ({len(inventory_df)} rows)")
 
-            logger.error(
-                f"❌ Failed to load inventory from Redshift: {type(e).__name__}"
-            )
-            logger.error(f"Full Traceback:\n{traceback.format_exc()}")
-            
-            # Raise a proper exception instead of returning empty DataFrame
-            raise DataLoadError(
-                source="Redshift",
-                reason=f"{type(e).__name__}: {str(e)}"
-            )
+        return inventory_df
 
     def transform_inventory_data(self, raw_df):
         """
@@ -265,6 +252,10 @@ class DataLoader:
             }
         )
 
+        # Ensure correct numeric types before any downstream filtering
+        inventory_df["year"] = pd.to_numeric(inventory_df["year"], errors="coerce").fillna(0).astype(int)
+        inventory_df["kilometers"] = pd.to_numeric(inventory_df["kilometers"], errors="coerce")
+
         # Clean up and validate
         inventory_df = inventory_df.dropna(subset=["car_id", "model", "sales_price"])
         inventory_df["sales_price"] = pd.to_numeric(
@@ -298,45 +289,62 @@ class DataLoader:
         return inventory_df
 
     def load_customers_from_csv(self, csv_path="data/customer_data.csv"):
-        """Load and transform customer data from CSV"""
+        """Load and transform customer data from CSV (cached)."""
 
-        try:
-            # Check for enriched data file first
-            enriched_csv = "data/customers_data_tradeup.csv"
-            if os.path.exists(enriched_csv):
-                csv_path = enriched_csv
-                logger.info(f"📊 Loading ENRICHED customer data from {csv_path}...")
-            elif os.path.exists("data/customer_data_tradeup.csv"):
-                # Fallback to old name
-                csv_path = "data/customer_data_tradeup.csv"
-                logger.info(f"📊 Loading customer data from {csv_path}...")
-            else:
-                logger.info(f"📊 Loading customer data from {csv_path}...")
-            
-            # Read with encoding to handle special characters
-            df = pd.read_csv(csv_path, encoding='utf-8-sig')
-
-            # Transform data to match expected structure
-            customers_df = self.transform_customer_data(df)
-            
-            # Validate the dataframe
+        def _read_and_transform() -> pd.DataFrame:
+            """Inner helper that actually hits the disk — used by the cache."""
             try:
-                customers_df = DataValidator.validate_dataframe(customers_df, 'customers')
-                logger.info(f"✅ Validated customers: {len(customers_df)} records")
-            except DataIntegrityError as e:
-                logger.error(f"❌ Customer data validation failed: {e}")
-                raise
+                # Check for enriched data file first
+                enriched_csv = "data/customers_data_tradeup.csv"
+                if os.path.exists(enriched_csv):
+                    _path = enriched_csv
+                    logger.info(f"📊 Loading ENRICHED customer data from {_path}...")
+                elif os.path.exists("data/customer_data_tradeup.csv"):
+                    _path = "data/customer_data_tradeup.csv"
+                    logger.info(f"📊 Loading customer data from {_path}...")
+                else:
+                    _path = csv_path
+                    logger.info(f"📊 Loading customer data from {_path}...")
 
-            logger.info(f"✅ Loaded {len(customers_df)} customers from CSV")
-            return customers_df
+                # Read with encoding to handle special characters
+                df_local = pd.read_csv(_path, encoding="utf-8-sig")
 
-        except Exception as e:
-            from app.utils.exceptions import DataLoadError
-            logger.error(f"❌ Failed to load customer data: {str(e)}")
-            raise DataLoadError(
-                source="customers_data_tradeup.csv",
-                reason=str(e)
+                # Transform data to match expected structure
+                customers_local = self.transform_customer_data(df_local)
+
+                # Validate the dataframe once
+                try:
+                    customers_local = DataValidator.validate_dataframe(
+                        customers_local, "customers"
+                    )
+                    logger.info(
+                        f"✅ Validated customers: {len(customers_local)} records"
+                    )
+                except DataIntegrityError as e:
+                    logger.error(f"❌ Customer data validation failed: {e}")
+                    raise
+
+                logger.info(
+                    f"✅ Loaded {len(customers_local)} customers from CSV (disk read)"
+                )
+                return customers_local
+
+            except Exception as e:
+                from app.utils.exceptions import DataLoadError
+                logger.error(f"❌ Failed to load customer data: {str(e)}")
+                raise DataLoadError(
+                    source="customers_data_tradeup.csv", reason=str(e)
+                )
+
+        # Retrieve from cache or read if missing/expired
+        customers_df, from_cache = cache_manager.get("customers_df", _read_and_transform)
+
+        if from_cache:
+            logger.info(
+                f"✅ Reused cached customers dataframe ({len(customers_df)} rows)"
             )
+
+        return customers_df
 
     # ------------------------------------------------------------------
     # Public helper methods
@@ -735,45 +743,73 @@ class DataLoader:
         return self.load_customers_from_csv()
     
     def load_filtered_inventory_from_redshift(self, year: int, price: float, kilometers: float):
-        """Load pre-filtered inventory from Redshift for trade-up candidates."""
-        logger.info(f"🔍 Loading filtered inventory: year>={year}, price>${price:,.0f}, km<{kilometers:,.0f}")
-        
+        """Load pre-filtered inventory from Redshift for trade-up candidates.
+
+        If an optimized SQL file (data/filtered_inventory_query.sql) is present, it
+        will be executed server-side for efficiency. If the file is missing, we
+        transparently fall back to loading the full inventory and applying the
+        filter in memory so the feature continues to work without the extra
+        query file.
+        """
+        logger.info(
+            f"🔍 Loading filtered inventory: year>={year}, price>${price:,.0f}, km<{kilometers:,.0f}"
+        )
+
+        sql_available = False
         try:
             with open("data/filtered_inventory_query.sql", "r") as file:
                 query = file.read()
+                sql_available = True
         except FileNotFoundError:
-            from app.utils.exceptions import DataLoadError
-            logger.error("❌ filtered_inventory_query.sql not found")
-            raise DataLoadError(
-                source="filtered_inventory_query.sql",
-                reason="Query file not found in data/ folder"
+            logger.warning(
+                "⚠️ filtered_inventory_query.sql not found – falling back to in-memory filtering"
             )
-        
-        try:
-            pool = get_connection_pool()
-            with pool.get_connection() as conn:
-                logger.info("✅ Got connection from pool for filtered query")
-                
-                with conn.cursor() as cursor:
-                    cursor.execute(query, (year, price, kilometers))
-                    df = cursor.fetch_dataframe()
-                
+
+        if sql_available:
+            try:
+                pool = get_connection_pool()
+                with pool.get_connection() as conn:
+                    logger.info("✅ Got connection from pool for filtered query")
+                    with conn.cursor() as cursor:
+                        cursor.execute(query, (year, price, kilometers))
+                        df = cursor.fetch_dataframe()
+
                 if df.empty:
-                    logger.info("📊 No inventory matches the filter criteria")
+                    logger.info("📊 No inventory matches the filter criteria (SQL)")
                     return pd.DataFrame()
-                
+
                 inventory_df = self.transform_inventory_data(df)
-                logger.info(f"✅ Loaded {len(inventory_df)} pre-filtered items from Redshift")
+                logger.info(
+                    f"✅ Loaded {len(inventory_df)} pre-filtered items from Redshift"
+                )
                 return inventory_df
-                
-        except Exception as e:
-            from app.utils.exceptions import DataLoadError
-            logger.error(f"❌ Failed to load filtered inventory: {type(e).__name__}: {e}")
-            raise DataLoadError(
-                source="Redshift (filtered)",
-                reason=f"{type(e).__name__}: {str(e)}"
+
+            except Exception as e:
+                from app.utils.exceptions import DataLoadError
+                logger.error(
+                    f"❌ Failed SQL-based filtered inventory load: {type(e).__name__}: {e}"
+                )
+                raise DataLoadError(
+                    source="Redshift (filtered)",
+                    reason=f"{type(e).__name__}: {str(e)}",
+                )
+        else:
+            # Fallback: load full inventory then filter locally
+            full_df = self.load_inventory_from_redshift()
+            if full_df.empty:
+                logger.warning("⚠️ Full inventory load returned 0 rows – cannot apply filter")
+                return pd.DataFrame()
+
+            filtered_df = full_df[
+                (full_df["year"] >= year)
+                & (full_df["car_price"] > price)
+                & (full_df["kilometers"] < kilometers)
+            ]
+            logger.info(
+                f"✅ In-memory fallback filter produced {len(filtered_df)} candidate cars"
             )
-    
+            return filtered_df
+
     def load_single_car_from_redshift(self, car_id: str):
         """Load a single car from Redshift using WHERE clause - TRUE optimization."""
         logger.info(f"🔍 Loading single car {car_id} from Redshift...")
