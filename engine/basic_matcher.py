@@ -263,6 +263,14 @@ class BasicMatcher:
         logger.info(f"   Refresh: {len(organized['Refresh'])}")
         logger.info(f"   Upgrade: {len(organized['Upgrade'])}")
         logger.info(f"   Max Upgrade: {len(organized['Max Upgrade'])}")
+        
+        # Debug logging
+        if total == 0:
+            logger.warning(f"⚠️ No offers generated for customer {customer['customer_id']}")
+            logger.warning(f"   Current payment: ${customer['current_monthly_payment']:,.0f}")
+            logger.warning(f"   Equity: ${customer['vehicle_equity']:,.0f}")
+            logger.warning(f"   Current car price: ${customer['current_car_price']:,.0f}")
+            logger.warning(f"   Fees used: {fees}")
 
         return {
             "offers": organized,
@@ -349,8 +357,16 @@ class BasicMatcher:
         down_payment_pct = DOWN_PAYMENT_TABLE.loc[risk_index, term]
         down_payment_required = car["car_price"] * down_payment_pct
 
+        # Step 1: Calculate preliminary base loan (car price - vehicle equity)
+        preliminary_base_loan = car["car_price"] - customer["vehicle_equity"]
+        
+        # Step 2: Calculate CXA on base loan with IVA (not on car price)
+        cxa_amount = preliminary_base_loan * fees_config["cxa_pct"] * (1 + IVA_RATE)
+        
+        # Step 3: Calculate service fee (still based on car price)
         service_fee_amount = car["car_price"] * fees_config["service_fee_pct"]
-        cxa_amount = car["car_price"] * fees_config["cxa_pct"]
+        
+        # Step 4: Get other fees and amounts
         cac_bonus = fees_config.get("cac_bonus", 0)
         kavak_total_amount = fees_config.get("kavak_total_amount", KAVAK_TOTAL_DEFAULT_AMOUNT)
         if "insurance_amount" in fees_config and fees_config["insurance_amount"] is not None:
@@ -358,6 +374,7 @@ class BasicMatcher:
         else:
             insurance_amount = INSURANCE_TABLE.get(customer.get("risk_profile_name", "A"), 10999)
 
+        # Step 5: GPS fees with IVA
         gps_install_fee = fees_config.get("gps_installation_fee", GPS_INSTALLATION_FEE)
         gps_monthly_fee = fees_config.get("gps_monthly_fee", GPS_MONTHLY_FEE)
         gps_install_with_iva = gps_install_fee * (1 + IVA_RATE)
@@ -370,8 +387,12 @@ class BasicMatcher:
         if effective_equity < down_payment_required:
             return None
 
+        # Step 7: Final base loan
         base_loan = car["car_price"] - effective_equity
         if base_loan <= 0:
+            # Debug logging
+            if car["car_price"] > customer["current_car_price"] * 1.1:  # Log only for cars >10% more expensive
+                logger.debug(f"Skipping car {car['car_id']} - base_loan <= 0: car_price=${car['car_price']:,.0f}, effective_equity=${effective_equity:,.0f}, base_loan=${base_loan:,.0f}")
             return None
 
         total_financed = base_loan + service_fee_amount + kavak_total_amount + insurance_amount
@@ -408,7 +429,7 @@ class BasicMatcher:
             "service_fee_amount": service_fee_amount,
             "kavak_total_amount": kavak_total_amount,
             "insurance_amount": insurance_amount,
-            "gps_install_fee": gps_install_with_iva,
+            "gps_install_fee": 0.0,  # Financed, not charged separately
             "gps_monthly_fee": gps_monthly_with_iva,
             "gps_monthly_fee_base": gps_monthly_fee,
             "gps_monthly_fee_iva": gps_monthly_fee * IVA_RATE,

@@ -28,7 +28,14 @@ class FileLoader(BaseLoader):
         Args:
             config_dir: Directory containing config files (default: "config")
         """
-        self.config_dir = config_dir or Path("config")
+        # Resolve configuration directory. If not provided, assume it is located
+        # one level up from this loaders package (i.e., the package root's
+        # `config` directory). This avoids issues when the current working
+        # directory is not the project root.
+        if config_dir is None:
+            self.config_dir = (Path(__file__).resolve().parent.parent)
+        else:
+            self.config_dir = Path(config_dir)
         self.base_config_file = self.config_dir / "base_config.json"
         self.override_file = self.config_dir / "engine_config.json"
     

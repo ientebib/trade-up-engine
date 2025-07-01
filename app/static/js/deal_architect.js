@@ -1,7 +1,8 @@
-const dataEl = document.getElementById("da-data");
-const customerId = dataEl.dataset.customerId;
-const currentPayment = parseFloat(dataEl.dataset.currentPayment);
-const vehicleEquity = parseFloat(dataEl.dataset.vehicleEquity);
+// Global variables - will be initialized after DOM loads
+let customerId = null;
+let currentPayment = 0;
+let vehicleEquity = 0;
+
 // State management
 let currentOffers = [];
 function escapeHtml(str){return str.replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c];});}
@@ -15,46 +16,137 @@ let currentCategory = 'all';
 let isSearching = false;
 let isLoading = false;
 let selectedVehicles = [];
+let backendConfig = null;
 
 // Initialize
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('Deal Architect initialized');
-    showLoadingState('calculations');
-    showLoadingState('inventory');
-    showLoadingState('scenarios');
-    document.getElementById('reset-btn').addEventListener('click', resetAll);
-    document.getElementById('export-btn').addEventListener('click', exportComparison);
-    document.getElementById('save-config-btn').addEventListener('click', saveCurrentConfig);
-    document.getElementById('toggle-filters-btn').addEventListener('click', toggleAdvancedFilters);
-    document.getElementById('clear-filters-btn').addEventListener('click', clearFilters);
-    document.getElementById('apply-filters-btn').addEventListener('click', applyFilters);
-    document.getElementById('clear-comparison-btn').addEventListener('click', clearComparison);
-    document.getElementById('generate-report-btn').addEventListener('click', generateReport);
-    document.getElementById('search-inventory').addEventListener('keyup', debounceSearch);
-    document.getElementById('term-select').addEventListener('change', updateCalculations);
-    ['interest-slider','service-fee-slider','cxa-slider','cac-slider','insurance-slider'].forEach(id => {
-        const el = document.getElementById(id);
-        el.addEventListener('input', () => {
-            const displayId = id.replace('-slider','-value');
-            const prefix = id.includes('cac') || id.includes('insurance') ? '$' : '%';
-            updateSlider(el, displayId, prefix);
-            updateCalculations();
+    console.log('=== Deal Architect Initializing ===');
+    console.log('DOM state:', document.readyState);
+    
+    try {
+        // Get customer data from DOM
+        const dataEl = document.getElementById("da-data");
+        if (!dataEl) {
+            console.error('FATAL: da-data element not found!');
+            document.body.innerHTML += '<div style="position:fixed;top:0;left:0;right:0;background:red;color:white;padding:20px;z-index:9999;">ERROR: Missing da-data element</div>';
+            return;
+        }
+        
+        console.log('Found da-data element:', dataEl);
+        customerId = dataEl.dataset.customerId;
+        currentPayment = parseFloat(dataEl.dataset.currentPayment) || 0;
+        vehicleEquity = parseFloat(dataEl.dataset.vehicleEquity) || 0;
+        
+        console.log('Customer data loaded:', {
+            customerId: customerId,
+            currentPayment: currentPayment,
+            vehicleEquity: vehicleEquity
         });
-    });
-    document.querySelectorAll('.quick-action[data-preset]').forEach(btn => {
-        btn.addEventListener('click', () => applyPreset(btn.dataset.preset));
-    });
-    document.querySelectorAll('[data-category]').forEach(btn => {
-        btn.addEventListener('click', () => filterByCategory(btn.dataset.category));
-    });
+    
+        // Show loading states
+        console.log('Setting loading states...');
+        showLoadingState('calculations');
+        showLoadingState('inventory');
+        showLoadingState('scenarios');
+        
+        // Safely attach event listeners
+        console.log('Attaching event listeners...');
+        const attachListener = (id, event, handler) => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.addEventListener(event, handler);
+                console.log(`✓ Attached ${event} to #${id}`);
+            } else {
+                console.warn(`✗ Element #${id} not found`);
+            }
+        };
+        
+        attachListener('reset-btn', 'click', resetAll);
+        attachListener('export-btn', 'click', exportComparison);
+        attachListener('save-config-btn', 'click', saveCurrentConfig);
+        attachListener('recalculate-btn', 'click', recalculateOffers);
+        attachListener('toggle-filters-btn', 'click', toggleAdvancedFilters);
+        attachListener('clear-filters-btn', 'click', clearFilters);
+        attachListener('apply-filters-btn', 'click', applyFilters);
+        attachListener('clear-comparison-btn', 'click', clearComparison);
+        attachListener('generate-report-btn', 'click', generateReport);
+        attachListener('search-inventory', 'keyup', debounceSearch);
+        // Attach slider listeners
+        console.log('Attaching slider listeners...');
+        ['interest-slider','service-fee-slider','cxa-slider','cac-slider','insurance-slider'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.addEventListener('input', () => {
+                    const displayId = id.replace('-slider','-value');
+                    const prefix = id.includes('cac') || id.includes('insurance') ? '$' : '%';
+                    updateSlider(el, displayId, prefix);
+                });
+                console.log(`✓ Attached input to #${id}`);
+            } else {
+                console.warn(`✗ Slider #${id} not found`);
+            }
+        });
+        // Attach preset and category listeners
+        console.log('Attaching preset listeners...');
+        document.querySelectorAll('.quick-action[data-preset]').forEach(btn => {
+            btn.addEventListener('click', () => applyPreset(btn.dataset.preset));
+        });
+        
+        console.log('Attaching category listeners...');
+        document.querySelectorAll('[data-category]').forEach(btn => {
+            btn.addEventListener('click', () => filterByCategory(btn.dataset.category));
+        });
 
-    loadInitialData();
-    setupRealtimeUpdates();
+        console.log('Loading backend configuration...');
+        loadBackendConfig().then(() => {
+            console.log('Calling loadInitialData...');
+            loadInitialData();
+            setupRealtimeUpdates();
+        });
+        
+    } catch (error) {
+        console.error('FATAL ERROR during initialization:', error);
+        console.error('Stack trace:', error.stack);
+        document.body.innerHTML += `<div style="position:fixed;top:0;left:0;right:0;background:red;color:white;padding:20px;z-index:9999;">ERROR: ${error.message}</div>`;
+    }
 });
 
+async function loadBackendConfig() {
+    try {
+        const response = await fetch('/api/config');
+        const config = await response.json();
+        backendConfig = config;
+        console.log('Backend config loaded:', config);
+        
+        // Update UI with backend values
+        if (config.fees) {
+            // Update sliders with backend values
+            document.getElementById('cxa-slider').value = config.fees.cxa_pct * 100;
+            document.getElementById('cxa-value').textContent = (config.fees.cxa_pct * 100).toFixed(2) + '%';
+            
+            document.getElementById('service-fee-slider').value = config.fees.service_fee_pct * 100;
+            document.getElementById('service-fee-value').textContent = (config.fees.service_fee_pct * 100).toFixed(1) + '%';
+            
+            // Update insurance slider based on default
+            if (config.fees.insurance_annual) {
+                document.getElementById('insurance-slider').value = config.fees.insurance_annual;
+                document.getElementById('insurance-value').textContent = '$' + Math.round(config.fees.insurance_annual).toLocaleString();
+            }
+            
+            // Update Kavak Total display if it exists
+            const kavakTotalDisplay = document.querySelector('#kavak-total-toggle + span');
+            if (kavakTotalDisplay && config.fees.kavak_total_amount) {
+                kavakTotalDisplay.textContent = `$${Math.round(config.fees.kavak_total_amount).toLocaleString()} MXN (One-time)`;
+            }
+        }
+    } catch (error) {
+        console.error('Failed to load backend config:', error);
+        // Continue with defaults if config fails to load
+    }
+}
+
 function loadInitialData() {
-    // Load initial calculations
-    calculatePayments();
+    console.log('loadInitialData called, customerId:', customerId);
     
     // Load saved scenarios for this customer
     fetch(`/api/scenarios/customer/${customerId}`)
@@ -68,6 +160,7 @@ function loadInitialData() {
         .finally(() => hideLoadingState('scenarios'));
     
     // Initial inventory search
+    console.log('Calling performSearch from loadInitialData');
     performSearch('');
 }
 
@@ -139,7 +232,9 @@ function calculatePayments() {
     .then(res => res.json())
     .then(data => {
         updatePaymentDisplay(data);
-        refreshOffers();
+        // DON'T refresh all offers when config changes - that's insane!
+        // Just update the display with current data
+        displayVehicles();
     })
     .catch(err => {
         console.error('Calculation error:', err);
@@ -169,18 +264,30 @@ function getCurrentConfig() {
 }
 
 function updatePaymentDisplay(data) {
-    if (data.viable) {
-        document.getElementById('calculated-payment').textContent = Math.round(data.monthly_payment).toLocaleString();
+    const paymentEl = document.getElementById('calculated-payment');
+    const deltaEl = document.getElementById('payment-delta');
+    
+    if (!paymentEl || !deltaEl) {
+        console.error('Payment display elements not found');
+        return;
+    }
+    
+    if (data && data.viable) {
+        paymentEl.textContent = Math.round(data.monthly_payment).toLocaleString();
         const delta = ((data.monthly_payment / currentPayment) - 1) * 100;
-        document.getElementById('payment-delta').innerHTML = `
+        deltaEl.innerHTML = `
             ${delta > 0 ? '+' : ''}${delta.toFixed(1)}% vs current
             <br>
             <span style="font-size: 0.875rem; opacity: 0.8;">
-                Without fees: $${Math.round(data.payment_without_fees).toLocaleString()}
+                Without fees: $${Math.round(data.payment_without_fees || 0).toLocaleString()}
             </span>
         `;
+    } else if (data && data.error) {
+        paymentEl.textContent = 'Error';
+        deltaEl.innerHTML = `<span style="color: #f44336;">${data.error}</span>`;
     } else {
-        document.getElementById('payment-delta').textContent = 'Configuration not viable';
+        paymentEl.textContent = 'Calculating';
+        deltaEl.textContent = 'Configuration not viable';
     }
 }
 
@@ -195,51 +302,207 @@ function updateSlider(slider, displayId, prefix) {
 }
 
 function toggleKavakTotal() {
-    document.getElementById('kavak-total-toggle').classList.toggle('active');
+    const toggle = document.getElementById('kavak-total-toggle');
+    const isActive = toggle.classList.contains('active');
+    
+    if (isActive) {
+        toggle.classList.remove('active');
+        toggle.style.background = '#ccc';
+        toggle.querySelector('span').style.transform = 'translateX(2px)';
+    } else {
+        toggle.classList.add('active');
+        toggle.style.background = '#1451EC';
+        toggle.querySelector('span').style.transform = 'translateX(26px)';
+    }
+    
+    // Update calculations
+    updateCalculations();
 }
 
+// Make function global
+window.toggleKavakTotal = toggleKavakTotal;
+
+function togglePanel(panelId) {
+    const panel = document.getElementById(panelId);
+    if (panel) {
+        panel.classList.toggle('collapsed');
+        
+        // Adjust grid when panels are collapsed
+        const workspace = document.querySelector('.workspace-body');
+        const configCollapsed = document.getElementById('config-panel')?.classList.contains('collapsed');
+        const comparisonCollapsed = document.getElementById('comparison-panel')?.classList.contains('collapsed');
+        
+        if (configCollapsed && comparisonCollapsed) {
+            workspace.style.gridTemplateColumns = '60px 1fr 60px';
+        } else if (configCollapsed) {
+            workspace.style.gridTemplateColumns = '60px 1fr 350px';
+        } else if (comparisonCollapsed) {
+            workspace.style.gridTemplateColumns = '350px 1fr 60px';
+        } else {
+            workspace.style.gridTemplateColumns = '350px 1fr 350px';
+        }
+    }
+}
+
+// Make function global
+window.togglePanel = togglePanel;
+
+
+async function pollForTaskCompletion(taskId, maxAttempts = 30) {
+    console.log(`Starting to poll task ${taskId}, max attempts: ${maxAttempts}`);
+    
+    for (let i = 0; i < maxAttempts; i++) {
+        try {
+            console.log(`Poll attempt ${i + 1}/${maxAttempts} for task ${taskId}`);
+            const response = await fetch(`/api/offers/status/${taskId}`);
+            
+            if (!response.ok) {
+                throw new Error(`Status check failed: ${response.status}`);
+            }
+            
+            const status = await response.json();
+            console.log(`Task status:`, status);
+            
+            if (status.status === 'completed') {
+                console.log('Task completed, fetching full result...');
+                // Get the full result
+                const resultResponse = await fetch(`/api/offers/result/${taskId}`);
+                
+                if (!resultResponse.ok) {
+                    throw new Error(`Result fetch failed: ${resultResponse.status}`);
+                }
+                
+                const result = await resultResponse.json();
+                console.log('Got result with offers:', Object.keys(result.offers || {}));
+                return result;
+            } else if (status.status === 'failed') {
+                throw new Error(status.error || 'Task failed');
+            }
+            
+            // Wait before next poll
+            await new Promise(resolve => setTimeout(resolve, 1000));
+        } catch (error) {
+            console.error('Polling error:', error);
+            throw error;
+        }
+    }
+    throw new Error('Timeout waiting for results');
+}
+
+function processOffersData(data) {
+    console.log('processOffersData called with:', data);
+    
+    // Convert offers to vehicle format for Deal Architect
+    allVehicles = [];
+    if (data.offers) {
+        console.log('Processing offers:', Object.keys(data.offers));
+        // Flatten all offers from all tiers
+        Object.values(data.offers).forEach(tierOffers => {
+            if (Array.isArray(tierOffers)) {
+                console.log(`Adding ${tierOffers.length} offers to allVehicles`);
+                allVehicles = allVehicles.concat(tierOffers);
+            }
+        });
+    } else {
+        console.warn('No offers in data!');
+    }
+    
+    console.log(`Total vehicles after processing: ${allVehicles.length}`);
+    currentSearchResults = allVehicles;
+    displayVehicles();
+    hideLoadingState('inventory');
+}
 
 function performSearch(searchTerm = '') {
-    if (isSearching) return;  // Prevent concurrent searches
+    console.log('performSearch called with:', searchTerm, 'customerId:', customerId);
+    if (isSearching) {
+        console.log('Already searching, skipping');
+        return;  // Prevent concurrent searches
+    }
     
     isSearching = true;
     const config = getCurrentConfig();
     
     // Show loading
-    document.getElementById('results-container').innerHTML = `
+    const resultsContainer = document.getElementById('results-container');
+    if (!resultsContainer) {
+        console.error('results-container element not found!');
+        isSearching = false;
+        return;
+    }
+    
+    resultsContainer.innerHTML = `
         <div style="text-align: center; padding: 3rem; color: #999;">
             <i class="fas fa-spinner fa-spin" style="font-size: 2rem; margin-bottom: 1rem;"></i>
             <p>Searching inventory...</p>
         </div>
     `;
     
-    // Use live search API for real-time NPV calculations
-    fetch('/api/search-inventory-live', {
+    console.log('Making API call with config:', config);
+    
+    // Use the basic endpoint to get initial offers WITH CUSTOM CONFIG
+    fetch('/api/generate-offers-basic', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
             customer_id: customerId,
-            search_term: searchTerm,
-            config: config,
-            limit: 50
+            custom_config: {
+                service_fee_pct: config.service_fee_pct,
+                cxa_pct: config.cxa_pct,
+                cac_bonus: config.cac_bonus,
+                kavak_total_enabled: config.kavak_total_enabled,
+                insurance_amount: config.insurance_amount,
+                interest_rate_override: config.interest_rate
+            }
         })
     })
-    .then(res => res.json())
-    .then(data => {
-        allVehicles = data.vehicles || [];
-        currentSearchResults = allVehicles;
-        displayVehicles();
+    .then(res => {
+        console.log('API Response status:', res.status);
+        if (!res.ok) {
+            throw new Error(`HTTP error! status: ${res.status}`);
+        }
+        return res.json();
+    })
+    .then(async (data) => {
+        console.log('API Response data:', data);
+        
+        // Handle async task response
+        if (data.task_id) {
+            console.log('Got task ID, polling for completion:', data.task_id);
+            // Poll for completion
+            const result = await pollForTaskCompletion(data.task_id);
+            console.log('Poll result:', result);
+            if (result && result.offers) {
+                processOffersData(result);
+            } else {
+                console.error('No offers in poll result');
+                throw new Error('No offers returned from task');
+            }
+        } else if (data.offers) {
+            console.log('Got direct offers response');
+            // Direct response
+            processOffersData(data);
+        } else {
+            console.error('Unexpected response format:', data);
+            throw new Error('Invalid response format - no task_id or offers');
+        }
     })
     .catch(err => {
         console.error('Error searching inventory:', err);
-        document.getElementById('results-container').innerHTML = `
-            <div style="text-align: center; padding: 3rem; color: #f44336;">
-                <i class="fas fa-exclamation-triangle" style="font-size: 2rem; margin-bottom: 1rem;"></i>
-                <p>Error loading inventory. Please try again.</p>
-            </div>
-        `;
+        console.error('Stack trace:', err.stack);
+        const resultsContainer = document.getElementById('results-container');
+        if (resultsContainer) {
+            resultsContainer.innerHTML = `
+                <div style="text-align: center; padding: 3rem; color: #f44336;">
+                    <i class="fas fa-exclamation-triangle" style="font-size: 2rem; margin-bottom: 1rem;"></i>
+                    <p>Error: ${err.message}</p>
+                    <p style="font-size: 0.875rem; margin-top: 1rem;">Check console for details</p>
+                </div>
+            `;
+        }
     })
     .finally(() => {
+        console.log('performSearch completed, resetting flag');
         isSearching = false;  // Reset flag
     });
 }
@@ -250,108 +513,176 @@ function refreshOffers() {
 }
 
 function displayVehicles() {
-    let vehicles = currentCategory === 'all' ? currentSearchResults : filterVehiclesByCategory(currentCategory);
+    console.log('displayVehicles called');
+    console.log('currentSearchResults:', currentSearchResults.length);
+    console.log('currentCategory:', currentCategory);
     
-    let html = '';
-    let totalNPV = 0;
-    let categories = {
-        perfect_match: 0,
-        slight_increase: 0,
-        moderate_increase: 0,
-        stretch: 0
-    };
-    
-    vehicles.forEach(vehicle => {
-        const delta = vehicle.payment_delta || 0;
-        totalNPV += vehicle.npv || 0;
+    try {
+        let vehicles = currentCategory === 'all' ? currentSearchResults : filterVehiclesByCategory(currentCategory);
         
-        // Categorize
-        if (delta >= -0.05 && delta <= 0.05) {
-            categories.perfect_match++;
-        } else if (delta > 0.05 && delta <= 0.15) {
-            categories.slight_increase++;
-        } else if (delta > 0.15 && delta <= 0.25) {
-            categories.moderate_increase++;
-        } else {
-            categories.stretch++;
+        let html = '';
+        let totalNPV = 0;
+        let categories = {
+            perfect_match: 0,
+            slight_increase: 0,
+            moderate_increase: 0,
+            stretch: 0
+        };
+        
+        vehicles.forEach(vehicle => {
+            const delta = vehicle.payment_delta || 0;
+            totalNPV += vehicle.npv || 0;
+            
+            // Categorize
+            if (delta >= -0.05 && delta <= 0.05) {
+                categories.perfect_match++;
+            } else if (delta > 0.05 && delta <= 0.15) {
+                categories.slight_increase++;
+            } else if (delta > 0.15 && delta <= 0.25) {
+                categories.moderate_increase++;
+            } else {
+                categories.stretch++;
+            }
+            
+            html += createVehicleCard(vehicle);
+        });
+        
+        // Update stats
+        const updateElement = (id, value) => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.textContent = value;
+            } else {
+                console.warn(`Element #${id} not found`);
+            }
+        };
+        
+        updateElement('total-offers', currentSearchResults.length);
+        updateElement('viable-offers', vehicles.length);
+        updateElement('avg-npv', vehicles.length > 0 ? 
+            '$' + Math.round(totalNPV / vehicles.length).toLocaleString() : '$0');
+        
+        // Update category counts
+        updateElement('count-perfect', `(${categories.perfect_match})`);
+        updateElement('count-slight', `(${categories.slight_increase})`);
+        updateElement('count-moderate', `(${categories.moderate_increase})`);
+        
+        // Display vehicles
+        const container = document.getElementById('results-container');
+        if (!container) {
+            console.error('results-container not found!');
+            return;
         }
         
-        html += createVehicleCard(vehicle);
-    });
-    
-    // Update stats
-    document.getElementById('total-offers').textContent = currentSearchResults.length;
-    document.getElementById('viable-offers').textContent = vehicles.length;
-    document.getElementById('avg-npv').textContent = vehicles.length > 0 ? 
-        '$' + Math.round(totalNPV / vehicles.length).toLocaleString() : '$0';
-    
-    // Update category counts
-    document.getElementById('count-perfect').textContent = `(${categories.perfect_match})`;
-    document.getElementById('count-slight').textContent = `(${categories.slight_increase})`;
-    document.getElementById('count-moderate').textContent = `(${categories.moderate_increase})`;
-    
-    // Display vehicles
-    const container = document.getElementById('results-container');
-    if (isLoading) {
-        container.innerHTML = createLoadingState();
-    } else {
-        container.innerHTML = html ||
-            '<p style="text-align: center; color: #999; padding: 3rem;">No vehicles found. Try adjusting your search or filters.</p>';
+        if (isLoading) {
+            container.innerHTML = createLoadingState();
+        } else {
+            container.innerHTML = html ||
+                '<p style="text-align: center; color: #999; padding: 3rem;">No vehicles found. Try adjusting your search or filters.</p>';
 
-        container.querySelectorAll('.vehicle-card').forEach(card => {
-            card.addEventListener('click', () => {
-                const vehicle = JSON.parse(decodeURIComponent(card.dataset.vehicle));
-                selectVehicle(vehicle);
+            container.querySelectorAll('.vehicle-card').forEach(card => {
+                card.addEventListener('click', () => {
+                    try {
+                        const vehicle = JSON.parse(decodeURIComponent(card.dataset.vehicle));
+                        selectVehicle(vehicle);
+                    } catch (e) {
+                        console.error('Error parsing vehicle data:', e);
+                    }
+                });
             });
-        });
+        }
+        
+        console.log('displayVehicles completed successfully');
+    } catch (error) {
+        console.error('Error in displayVehicles:', error);
+        console.error('Stack trace:', error.stack);
     }
 }
 
 function createVehicleCard(vehicle) {
-    const delta = vehicle.payment_delta || 0;
-    let paymentClass = 'payment-match';
-    if (delta > 0.15) paymentClass = 'payment-high';
-    else if (delta > 0.05) paymentClass = 'payment-increase';
-    
-    const deltaPercent = (delta * 100).toFixed(1);
-    const deltaDisplay = delta > 0 ? `+${deltaPercent}%` : `${deltaPercent}%`;
-    
-    const data = encodeURIComponent(JSON.stringify(vehicle));
-    return `
-        <div class="vehicle-card" data-vehicle="${data}">
-            <span class="payment-indicator ${paymentClass}">${deltaDisplay}</span>
-            
-            <div class="vehicle-header">
-                <div>
-                    <div class="vehicle-title">${vehicle.car_model || vehicle.model}</div>
-                    <div class="vehicle-subtitle">${vehicle.year} • ${Math.round((vehicle.kilometers || 0) / 1000)}k km</div>
+    try {
+        const delta = vehicle.payment_delta || 0;
+        let paymentClass = 'payment-match';
+        if (delta > 0.15) paymentClass = 'payment-high';
+        else if (delta > 0.05) paymentClass = 'payment-increase';
+        
+        const deltaPercent = (delta * 100).toFixed(1);
+        const deltaDisplay = delta > 0 ? `+${deltaPercent}%` : `${deltaPercent}%`;
+        
+        // Get vehicle price (handle different field names)
+        const carPrice = vehicle.car_price || vehicle.new_car_price || 0;
+        
+        // Handle missing fields with defaults - look at the actual data structure
+        const model = vehicle.car_model || vehicle.model || 'Unknown Model';
+        const year = vehicle.year || new Date().getFullYear();
+        const kilometers = vehicle.kilometers || vehicle.km || 0;
+        const monthlyPayment = vehicle.monthly_payment || 0;
+        const term = vehicle.term || 48;
+        const npv = vehicle.npv || 0;
+        
+        // Calculate down payment percentage properly
+        // down_payment = effective_equity, so down_payment_pct = effective_equity / car_price
+        let downPaymentPct = 0;
+        if (vehicle.effective_equity && carPrice > 0) {
+            downPaymentPct = vehicle.effective_equity / carPrice;
+        } else if (vehicle.vehicle_equity && carPrice > 0) {
+            // Fallback calculation
+            downPaymentPct = vehicle.vehicle_equity / carPrice;
+        }
+        
+        const cxaAmount = vehicle.cxa_amount !== undefined ? vehicle.cxa_amount : 0;
+        const baseLoanBeforeFees = vehicle.new_car_price - vehicleEquity; // preliminary base loan
+        const cxaPercentOfBase = baseLoanBeforeFees > 0 ? (cxaAmount / baseLoanBeforeFees * 100) : 0;
+        
+        const data = encodeURIComponent(JSON.stringify(vehicle));
+        return `
+            <div class="vehicle-card" data-vehicle="${data}">
+                <div class="vehicle-header">
+                    <div style="flex: 1;">
+                        <div class="vehicle-title">${escapeHtml(model)}</div>
+                        <div class="vehicle-subtitle">${year} • ${kilometers > 0 ? Math.round(kilometers / 1000) + 'k km' : '0k km'}</div>
+                    </div>
+                    <div class="vehicle-price" style="text-align: right; flex-shrink: 0;">
+                        <div class="vehicle-price-value">$${Math.round(carPrice).toLocaleString()}</div>
+                        <div class="vehicle-price-label">Vehicle Price</div>
+                    </div>
                 </div>
-                <div class="vehicle-price">
-                    <div class="vehicle-price-value">$${Math.round(vehicle.car_price).toLocaleString()}</div>
-                    <div class="vehicle-price-label">Vehicle Price</div>
+                <div style="margin-top: 0.5rem;">
+                    <span class="payment-indicator ${paymentClass}" style="position: static; display: inline-block; margin-bottom: 0.5rem;">${deltaDisplay}</span>
+                </div>
+                
+                <div class="vehicle-stats">
+                    <div class="vehicle-stat">
+                        <div class="vehicle-stat-value">$${Math.round(monthlyPayment).toLocaleString()}</div>
+                        <div class="vehicle-stat-label">Monthly</div>
+                    </div>
+                    <div class="vehicle-stat">
+                        <div class="vehicle-stat-value">${term}mo</div>
+                        <div class="vehicle-stat-label">Term</div>
+                    </div>
+                    <div class="vehicle-stat">
+                        <div class="vehicle-stat-value" style="color: #2e7d32;">$${Math.round(npv).toLocaleString()}</div>
+                        <div class="vehicle-stat-label">NPV</div>
+                    </div>
+                    <div class="vehicle-stat">
+                        <div class="vehicle-stat-value">$${Math.round(vehicle.loan_amount).toLocaleString()}</div>
+                        <div class="vehicle-stat-label">Loan</div>
+                    </div>
+                    <div class="vehicle-stat">
+                        <div class="vehicle-stat-value" style="${downPaymentPct > 0.5 ? 'color: #ef6c00;' : ''}">${downPaymentPct > 0 ? Math.round(downPaymentPct * 100) + '%' : '0%'}</div>
+                        <div class="vehicle-stat-label">Down</div>
+                    </div>
+                    <div class="vehicle-stat">
+                        <div class="vehicle-stat-value" style="${cxaPercentOfBase > 0 ? 'color: #1451EC;' : ''}">${cxaPercentOfBase.toFixed(1)}% of base loan</div>
+                        <div class="vehicle-stat-label">CXA Fee</div>
+                    </div>
                 </div>
             </div>
-            
-            <div class="vehicle-stats">
-                <div class="vehicle-stat">
-                    <div class="vehicle-stat-value">$${Math.round(vehicle.monthly_payment).toLocaleString()}</div>
-                    <div class="vehicle-stat-label">Monthly</div>
-                </div>
-                <div class="vehicle-stat">
-                    <div class="vehicle-stat-value">${vehicle.term}mo</div>
-                    <div class="vehicle-stat-label">Term</div>
-                </div>
-                <div class="vehicle-stat">
-                    <div class="vehicle-stat-value" style="color: #4caf50;">$${Math.round(vehicle.npv).toLocaleString()}</div>
-                    <div class="vehicle-stat-label">NPV</div>
-                </div>
-                <div class="vehicle-stat">
-                    <div class="vehicle-stat-value">${Math.round(vehicle.down_payment_pct * 100)}%</div>
-                    <div class="vehicle-stat-label">Down</div>
-                </div>
-            </div>
-        </div>
-    `;
+        `;
+    } catch (error) {
+        console.error('Error creating vehicle card:', error, vehicle);
+        return '';
+    }
 }
 
 function selectVehicle(vehicle) {
@@ -379,15 +710,16 @@ function debounceSearch() {
     clearTimeout(searchTimer);
     searchTimer = setTimeout(() => {
         const searchTerm = document.getElementById('search-inventory').value;
-        if (!isSearching) {  // Prevent multiple simultaneous searches
-            performSearch(searchTerm);
-        }
-    }, 800);  // Increased from 500ms to 800ms
+        // Use local search for immediate filtering
+        performLocalSearch(searchTerm);
+    }, 300);  // Reduced to 300ms for faster local search
 }
 
 function applyFilters() {
+    console.log('Applying filters...');
+    
     // Collect all filter values
-    activeFilters = {
+    const filters = {
         payment_delta_min: parseFloat(document.getElementById('payment-min').value) / 100 || -0.1,
         payment_delta_max: parseFloat(document.getElementById('payment-max').value) / 100 || 0.25,
         min_price: parseFloat(document.getElementById('price-min').value) || null,
@@ -400,64 +732,69 @@ function applyFilters() {
     // Get selected vehicle types
     const vehicleTypesSelect = document.getElementById('vehicle-types');
     const selectedTypes = Array.from(vehicleTypesSelect.selectedOptions).map(opt => opt.value);
-    if (selectedTypes.length > 0) {
-        activeFilters.vehicle_types = selectedTypes;
-    }
     
     // Get sort options
     const sortBy = document.getElementById('sort-by').value;
     
-    // Show loading
-    document.getElementById('results-container').innerHTML = `
-        <div style="text-align: center; padding: 3rem; color: #999;">
-            <i class="fas fa-spinner fa-spin" style="font-size: 2rem; margin-bottom: 1rem;"></i>
-            <p>Applying filters...</p>
-        </div>
-    `;
-    
-    // Make filtered search request
-    fetch('/api/search-inventory', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-            customer_id: customerId,
-            filters: activeFilters,
-            sort_by: sortBy,
-            sort_order: 'asc',
-            limit: 100
-        })
-    })
-    .then(res => res.json())
-    .then(data => {
-        // Update vehicles with quick calculations
-        allVehicles = data.vehicles || [];
-        currentSearchResults = allVehicles;
+    // Apply filters locally to current results
+    let filtered = allVehicles.filter(vehicle => {
+        const delta = vehicle.payment_delta || 0;
+        const price = vehicle.car_price || vehicle.new_car_price || 0;
+        const year = vehicle.year || 0;
+        const km = vehicle.kilometers || vehicle.km || 0;
         
-        // Now get full NPV calculations for visible vehicles
-        const config = getCurrentConfig();
-        return fetch('/api/search-inventory-live', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-                customer_id: customerId,
-                search_term: document.getElementById('search-inventory').value,
-                config: config,
-                limit: 50
-            })
-        });
-    })
-    .then(res => res.json())
-    .then(data => {
-        allVehicles = data.vehicles || [];
-        currentSearchResults = allVehicles;
-        displayVehicles();
+        // Apply payment delta filter
+        if (delta < filters.payment_delta_min || delta > filters.payment_delta_max) return false;
         
-        // Hide filters after applying
-        toggleAdvancedFilters();
-    })
-    .catch(err => {
-        console.error('Error applying filters:', err);
+        // Apply price filter
+        if (filters.min_price && price < filters.min_price) return false;
+        if (filters.max_price && price > filters.max_price) return false;
+        
+        // Apply year filter
+        if (filters.min_year && year < filters.min_year) return false;
+        if (filters.max_year && year > filters.max_year) return false;
+        
+        // Apply km filter
+        if (filters.max_km && km > filters.max_km) return false;
+        
+        // Apply vehicle type filter
+        if (selectedTypes.length > 0) {
+            // Try to match vehicle type from model name
+            const model = (vehicle.car_model || '').toLowerCase();
+            const matchesType = selectedTypes.some(type => {
+                if (type === 'SUV') return model.includes('suv') || model.includes('cherokee') || model.includes('x1');
+                if (type === 'Sedan') return model.includes('sedan') || model.includes('corolla') || model.includes('civic');
+                if (type === 'Truck') return model.includes('truck') || model.includes('ram') || model.includes('f-150');
+                if (type === 'Hatchback') return model.includes('hatch') || model.includes('golf') || model.includes('swift');
+                return false;
+            });
+            if (!matchesType) return false;
+        }
+        
+        return true;
     });
+    
+    // Sort results
+    if (sortBy === 'payment_delta') {
+        filtered.sort((a, b) => (a.payment_delta || 0) - (b.payment_delta || 0));
+    } else if (sortBy === 'npv') {
+        filtered.sort((a, b) => (b.npv || 0) - (a.npv || 0));
+    } else if (sortBy === 'payment') {
+        filtered.sort((a, b) => (a.monthly_payment || 0) - (b.monthly_payment || 0));
+    } else if (sortBy === 'price') {
+        filtered.sort((a, b) => (a.car_price || a.new_car_price || 0) - (b.car_price || b.new_car_price || 0));
+    } else if (sortBy === 'year') {
+        filtered.sort((a, b) => (b.year || 0) - (a.year || 0));
+    } else if (sortBy === 'km') {
+        filtered.sort((a, b) => (a.kilometers || a.km || 0) - (b.kilometers || b.km || 0));
+    }
+    
+    console.log(`Filtered from ${allVehicles.length} to ${filtered.length} vehicles`);
+    currentSearchResults = filtered;
+    displayVehicles();
+    
+    // Hide filters after applying
+    toggleAdvancedFilters();
 }
 
 function clearFilters() {
@@ -511,33 +848,44 @@ function addToComparison(vehicle, slotIndex) {
     comparisonSlots[slotIndex] = vehicle;
     
     const slot = document.querySelector(`[data-slot="${slotIndex + 1}"]`);
+    if (!slot) {
+        console.error(`Comparison slot ${slotIndex + 1} not found`);
+        return;
+    }
+    
     slot.classList.add('filled');
     slot.innerHTML = `
-        <div style="position: relative;">
-            <button class="remove-comp" data-slot-index="${slotIndex}" style="position: absolute; top: -0.5rem; right: -0.5rem; background: #f44336; color: white; border: none; border-radius: 50%; width: 24px; height: 24px; cursor: pointer;">
-                <i class="fas fa-times"></i>
+        <div style="position: relative; padding: 1rem;">
+            <button class="remove-comp" data-slot-index="${slotIndex}" style="position: absolute; top: 0; right: 0; background: #f44336; color: white; border: none; border-radius: 50%; width: 20px; height: 20px; cursor: pointer; font-size: 0.75rem;">
+                ×
             </button>
-            <h5 style="margin: 0 0 0.5rem 0;">${vehicle.car_model || vehicle.model}</h5>
-            <div style="font-size: 0.875rem;">
-                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
-                    <span>Monthly:</span>
+            <h5 style="margin: 0 0 0.75rem 0; font-size: 0.875rem; font-weight: 600;">${escapeHtml(vehicle.car_model || vehicle.model || 'Unknown')}</h5>
+            <div style="font-size: 0.8125rem;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 0.375rem;">
+                    <span style="color: #666;">Monthly:</span>
                     <strong>$${Math.round(vehicle.monthly_payment).toLocaleString()}</strong>
                 </div>
-                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
-                    <span>Change:</span>
-                    <strong style="color: ${vehicle.payment_delta > 0 ? '#f44336' : '#4caf50'};">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 0.375rem;">
+                    <span style="color: #666;">Change:</span>
+                    <strong style="color: ${vehicle.payment_delta > 0 ? '#ef6c00' : '#2e7d32'};">
                         ${vehicle.payment_delta > 0 ? '+' : ''}${(vehicle.payment_delta * 100).toFixed(1)}%
                     </strong>
                 </div>
                 <div style="display: flex; justify-content: space-between;">
-                    <span>NPV:</span>
-                    <strong style="color: #4caf50;">$${Math.round(vehicle.npv).toLocaleString()}</strong>
+                    <span style="color: #666;">NPV:</span>
+                    <strong style="color: #2e7d32;">$${Math.round(vehicle.npv).toLocaleString()}</strong>
                 </div>
             </div>
         </div>
     `;
 
-    slot.querySelector('.remove-comp').addEventListener('click', () => removeFromComparison(slotIndex));
+    const removeBtn = slot.querySelector('.remove-comp');
+    if (removeBtn) {
+        removeBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            removeFromComparison(slotIndex);
+        });
+    }
 }
 
 function removeFromComparison(slotIndex) {
@@ -559,10 +907,14 @@ function clearComparison() {
 }
 
 function applyPreset(preset) {
+    // Use backend config if available, otherwise use defaults
+    const defaultCxa = backendConfig?.fees?.cxa_pct ? backendConfig.fees.cxa_pct * 100 : 3.99;
+    const defaultServiceFee = backendConfig?.fees?.service_fee_pct ? backendConfig.fees.service_fee_pct * 100 : 4;
+    
     switch(preset) {
         case 'conservative':
-            document.getElementById('service-fee-slider').value = 4;
-            document.getElementById('cxa-slider').value = 4;
+            document.getElementById('service-fee-slider').value = defaultServiceFee;
+            document.getElementById('cxa-slider').value = defaultCxa;
             document.getElementById('cac-slider').value = 0;
             document.getElementById('term-select').value = '48';
             break;
@@ -634,12 +986,27 @@ function setupRealtimeUpdates() {
     // For now, using debounced updates
 }
 
+function recalculateOffers() {
+    console.log('Recalculating offers with new configuration...');
+    
+    // Clear current results
+    currentSearchResults = [];
+    allVehicles = [];
+    
+    // Show loading state
+    showLoadingState('inventory');
+    
+    // Perform new search with updated config
+    performSearch(document.getElementById('search-inventory').value || '');
+}
+
 function resetAll() {
-    // Reset all sliders to defaults
-    document.getElementById('service-fee-slider').value = 4;
-    document.getElementById('cxa-slider').value = 4;
-    document.getElementById('cac-slider').value = 0;
-    document.getElementById('insurance-slider').value = 10999;
+    // Reset all sliders to backend defaults or fallback values
+    const config = backendConfig?.fees || {};
+    document.getElementById('service-fee-slider').value = (config.service_fee_pct || 0.04) * 100;
+    document.getElementById('cxa-slider').value = (config.cxa_pct || 0.0399) * 100;
+    document.getElementById('cac-slider').value = config.cac_bonus || 0;
+    document.getElementById('insurance-slider').value = config.insurance_annual || 10999;
     document.getElementById('interest-slider').value = 18;
     document.getElementById('term-select').value = '48';
     document.getElementById('kavak-total-toggle').classList.add('active');
@@ -747,29 +1114,44 @@ function generateHTMLReport(data) {
 
 // Loading state helper functions
 function showLoadingState(section) {
+    console.log(`showLoadingState called for section: ${section}`);
+    
     if (section === 'inventory') {
-        document.getElementById('results-container').innerHTML = `
-            <div class="loading-overlay">
-                <div>
-                    <div class="loading-spinner"></div>
-                    <div class="loading-text">Loading inventory...</div>
-                </div>
-            </div>`;
+        const container = document.getElementById('results-container');
+        if (container) {
+            container.innerHTML = `
+                <div class="loading-overlay">
+                    <div>
+                        <div class="loading-spinner"></div>
+                        <div class="loading-text">Loading inventory...</div>
+                    </div>
+                </div>`;
+        } else {
+            console.error('results-container not found!');
+        }
     } else if (section === 'calculations') {
         document.querySelectorAll('.stat-value').forEach(el => {
             el.classList.add('skeleton', 'skeleton-text');
         });
-        document.getElementById('calculated-payment').classList.add('skeleton', 'skeleton-text');
-        document.getElementById('payment-delta').classList.add('skeleton', 'skeleton-text');
+        const calcPayment = document.getElementById('calculated-payment');
+        const paymentDelta = document.getElementById('payment-delta');
+        if (calcPayment) calcPayment.classList.add('skeleton', 'skeleton-text');
+        if (paymentDelta) paymentDelta.classList.add('skeleton', 'skeleton-text');
     } else if (section === 'search') {
-        document.getElementById('results-container').innerHTML = `
-            <div class="skeleton skeleton-box"></div>
-            <div class="skeleton skeleton-box"></div>
-            <div class="skeleton skeleton-box"></div>`;
+        const container = document.getElementById('results-container');
+        if (container) {
+            container.innerHTML = `
+                <div class="skeleton skeleton-box"></div>
+                <div class="skeleton skeleton-box"></div>
+                <div class="skeleton skeleton-box"></div>`;
+        }
     } else if (section === 'scenarios') {
-        document.getElementById('saved-scenarios').innerHTML = `
-            <div class="skeleton skeleton-box"></div>
-            <div class="skeleton skeleton-box"></div>`;
+        const container = document.getElementById('saved-scenarios');
+        if (container) {
+            container.innerHTML = `
+                <div class="skeleton skeleton-box"></div>
+                <div class="skeleton skeleton-box"></div>`;
+        }
     }
 }
 
@@ -792,46 +1174,32 @@ function createLoadingState() {
     `;
 }
 
-// Search functionality
-document.getElementById('search-inventory').addEventListener('input', function(e) {
-    const searchTerm = e.target.value.toLowerCase();
+// Local search functionality
+function performLocalSearch(searchTerm) {
+    console.log('Performing local search for:', searchTerm);
+    const term = searchTerm.toLowerCase();
     
-    // Filter inventory cards
-    const inventoryCards = document.querySelectorAll('.inventory-card');
-    let visibleCount = 0;
+    if (!term) {
+        // Show all vehicles if no search term
+        displayVehicles();
+        return;
+    }
     
-    inventoryCards.forEach(card => {
-        const brand = card.querySelector('.car-title')?.textContent.toLowerCase() || '';
-        const model = card.querySelector('.car-details')?.textContent.toLowerCase() || '';
-        const price = card.querySelector('.car-price')?.textContent.toLowerCase() || '';
+    // Filter current results
+    const filtered = allVehicles.filter(vehicle => {
+        const model = (vehicle.car_model || '').toLowerCase();
+        const year = String(vehicle.year || '');
+        const carId = String(vehicle.car_id || '');
         
-        const matches = brand.includes(searchTerm) || 
-                       model.includes(searchTerm) || 
-                       price.includes(searchTerm);
-        
-        if (matches) {
-            card.style.display = 'block';
-            visibleCount++;
-        } else {
-            card.style.display = 'none';
-        }
+        return model.includes(term) || 
+               year.includes(term) || 
+               carId.includes(term);
     });
     
-    // Update results count
-    const resultsInfo = document.querySelector('.results-info');
-    if (resultsInfo) {
-        resultsInfo.textContent = `Showing ${visibleCount} vehicles`;
-    }
-    
-    // Show no results message if needed
-    if (visibleCount === 0 && searchTerm) {
-        const noResults = document.getElementById('no-results') || createNoResultsMessage();
-        noResults.style.display = 'block';
-    } else {
-        const noResults = document.getElementById('no-results');
-        if (noResults) noResults.style.display = 'none';
-    }
-});
+    console.log(`Found ${filtered.length} vehicles matching "${searchTerm}"`);
+    currentSearchResults = filtered;
+    displayVehicles();
+}
 
 function createNoResultsMessage() {
     const div = document.createElement('div');

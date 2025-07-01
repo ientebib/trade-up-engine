@@ -7,6 +7,7 @@ import os
 from typing import Dict, Any
 
 from config.config import DEFAULT_FEES, PAYMENT_DELTA_TIERS, TERM_SEARCH_ORDER
+from config.facade import ConfigProxy
 
 logger = logging.getLogger(__name__)
 
@@ -31,19 +32,28 @@ class ConfigService:
         # Load any saved config overrides
         saved_config = cls._load_saved_config()
         
-        # Merge with defaults
+        # Use configuration facade to get current values
+        config = ConfigProxy()
+        
+        # Merge with defaults from configuration facade
         current_config = {
             "fees": {
-                "service_fee_pct": saved_config.get('service_fee_pct', DEFAULT_FEES['service_fee_pct']),
-                "cxa_pct": saved_config.get('cxa_pct', DEFAULT_FEES['cxa_pct']),
+                "service_fee_pct": saved_config.get('service_fee_pct', float(config.get_decimal('fees.service.percentage'))),
+                "cxa_pct": saved_config.get('cxa_pct', float(config.get_decimal('fees.cxa.percentage'))),
                 "cac_min": saved_config.get('cac_min', 0),
                 "cac_max": saved_config.get('cac_max', 5000),
-                "cac_bonus": saved_config.get('cac_bonus', 0),
+                "cac_bonus": saved_config.get('cac_bonus', float(config.get_decimal('fees.cac_bonus.default'))),
                 "kavak_total_enabled": saved_config.get('kavak_total_enabled', True),
-                "kavak_total_amount": saved_config.get('kavak_total_amount', DEFAULT_FEES['kavak_total_amount']),
-                "gps_monthly": saved_config.get('gps_monthly', DEFAULT_FEES['gps_monthly']),
-                "gps_installation": saved_config.get('gps_installation', DEFAULT_FEES['gps_installation']),
-                "insurance_annual": saved_config.get('insurance_annual', DEFAULT_FEES['insurance_annual'])
+                "kavak_total_amount": saved_config.get('kavak_total_amount', float(config.get_decimal('fees.kavak_total.amount'))),
+                "gps_monthly": saved_config.get('gps_monthly', float(config.get_decimal('fees.gps.monthly'))),
+                "gps_installation": saved_config.get('gps_installation', float(config.get_decimal('fees.gps.installation'))),
+                "insurance_annual": saved_config.get('insurance_annual', float(config.get_decimal('insurance.amount'))),
+                "insurance_by_profile": {
+                    "A": float(config.get_decimal('insurance.amount_a')),
+                    "B": float(config.get_decimal('insurance.amount_b')),
+                    "C": float(config.get_decimal('insurance.amount_c')),
+                    "default": float(config.get_decimal('insurance.amount_default'))
+                }
             },
             "tiers": {
                 "refresh": {

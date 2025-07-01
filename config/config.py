@@ -127,13 +127,21 @@ IVA_RATE = _safe_get_decimal("financial.iva_rate", 0.16)
 GPS_INSTALLATION_FEE = _safe_get_decimal("fees.gps.installation", 750.0)
 GPS_MONTHLY_FEE = _safe_get_decimal("fees.gps.monthly", 350.0)
 
-# Insurance amount lookup by risk profile. Placeholder values use the default
-# insurance amount for all profiles but allow future customization.
-INSURANCE_TABLE = {
-    profile: DEFAULT_FEES['insurance_amount']
-    for profile in [
-        'AAA', 'AA', 'A', 'A1', 'A2', 'B', 'C1', 'C2', 'C3', 'D1', 'D2',
-        'D3', 'E1', 'E2', 'E3', 'E4', 'E5', 'F1', 'F2', 'F3', 'F4',
-        'B_SB', 'C1_SB', 'C2_SB', 'E5_SB', 'Z'
-    ]
-}
+# Insurance amount lookup by risk profile.
+# Using configuration facade to get risk-based amounts
+from config.facade import ConfigProxy
+_config = ConfigProxy()
+
+INSURANCE_TABLE = {}
+# A profiles
+for profile in ['AAA', 'AA', 'A', 'A1', 'A2']:
+    INSURANCE_TABLE[profile] = float(_config.get_decimal("insurance.amount_a", 10999))
+# B profiles  
+for profile in ['B', 'B_SB']:
+    INSURANCE_TABLE[profile] = float(_config.get_decimal("insurance.amount_b", 13799))
+# C profiles
+for profile in ['C1', 'C2', 'C3', 'C1_SB', 'C2_SB']:
+    INSURANCE_TABLE[profile] = float(_config.get_decimal("insurance.amount_c", 15599))
+# Default for all other profiles
+for profile in ['D1', 'D2', 'D3', 'E1', 'E2', 'E3', 'E4', 'E5', 'E5_SB', 'F1', 'F2', 'F3', 'F4', 'Z']:
+    INSURANCE_TABLE[profile] = float(_config.get_decimal("insurance.amount_default", 10999))

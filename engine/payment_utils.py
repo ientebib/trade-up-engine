@@ -53,7 +53,11 @@ def validate_financial_inputs(
     max_rate = float(config.get_decimal("financial.max_interest_rate"))
     min_term = config.get_int("financial.min_term_months")
     max_term = config.get_int("financial.max_term_months")
-    max_fee = float(config.get_decimal("fees.cac_bonus.max") * 20)  # Use reasonable multiple of max bonus
+    # Determine an upper threshold for individual fees. We allow up to 10% of
+    # the maximum loan amount (configurable) which comfortably covers service
+    # fees on large-ticket vehicles while still protecting against obviously
+    # invalid inputs.
+    max_fee = float(max_loan * 0.10)  # e.g. 1 000 000 if max_loan is 10 000 000
     
     # Validate loan base amount
     if loan_base is not None:
@@ -205,9 +209,9 @@ def calculate_payment_components(
     principal_sf = abs(npf.ppmt(rate_float, period, term_months, -float(service_fee_amount))) if service_fee_amount > 0 else 0.0
     principal_kt = abs(npf.ppmt(rate_float, period, term_months, -float(kavak_total_amount))) if kavak_total_amount > 0 else 0.0
     
-    # Insurance uses special period calculation (resets every 12 months)
-    insurance_period = ((period - 1) % 12) + 1 if insurance_amount > 0 else 0
-    principal_ins = abs(npf.ppmt(rate_float, insurance_period, insurance_term, -float(insurance_amount))) if insurance_amount > 0 and insurance_period <= insurance_term else 0.0
+    # Insurance only for first 12 months - no reset
+    insurance_period = period if insurance_amount > 0 and period <= 12 else 0
+    principal_ins = abs(npf.ppmt(rate_float, insurance_period, insurance_term, -float(insurance_amount))) if insurance_amount > 0 and period <= 12 else 0.0
     
     # Interest calculations WITH IVA (using contractual rate then applying IVA)
     monthly_rate_float = float(monthly_rate)
@@ -215,7 +219,7 @@ def calculate_payment_components(
     interest_main = abs(npf.ipmt(monthly_rate_float, period, term_months, -float(loan_base))) * iva_multiplier if loan_base > 0 else 0.0
     interest_sf = abs(npf.ipmt(monthly_rate_float, period, term_months, -float(service_fee_amount))) * iva_multiplier if service_fee_amount > 0 else 0.0
     interest_kt = abs(npf.ipmt(monthly_rate_float, period, term_months, -float(kavak_total_amount))) * iva_multiplier if kavak_total_amount > 0 else 0.0
-    interest_ins = abs(npf.ipmt(monthly_rate_float, insurance_period, insurance_term, -float(insurance_amount))) * iva_multiplier if insurance_amount > 0 and insurance_period <= insurance_term else 0.0
+    interest_ins = abs(npf.ipmt(monthly_rate_float, insurance_period, insurance_term, -float(insurance_amount))) * iva_multiplier if insurance_amount > 0 and period <= 12 else 0.0
     
     # Calculate totals
     total_principal = principal_main + principal_sf + principal_kt + principal_ins

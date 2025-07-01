@@ -1,6 +1,10 @@
 import numpy_financial as npf
 from config.config import IVA_RATE
+from config.facade import ConfigProxy
 from .payment_utils import calculate_payment_components, calculate_final_npv
+
+# Use configuration facade
+config = ConfigProxy()
 
 
 def calculate_npv(offer: dict) -> float:
@@ -40,7 +44,7 @@ def generate_amortization_table(offer_details: dict) -> list[dict]:
     kavak_total = float(offer_details.get("kavak_total_amount", 0.0) or offer_details.get(5, 0.0))
     insurance_amt = float(offer_details.get("insurance_amount", 0.0) or offer_details.get(6, 0.0))
     
-    gps_monthly_fee = 350.0 * (1 + IVA_RATE)
+    gps_monthly_fee = float(config.get_decimal("fees.gps.monthly")) * (1 + IVA_RATE)
     gps_install_fee = float(offer_details.get("gps_install_fee", 0.0) or 0.0)
 
     # CRITICAL: Apply IVA to the rate once (as per audited logic)
@@ -60,21 +64,16 @@ def generate_amortization_table(offer_details: dict) -> list[dict]:
     balance_sf = financed_sf
     balance_kt = financed_kt
     balance_ins = insurance_amt  # first cycle
-    months_since_insurance_reset = 1
 
     table = []
 
     for month in range(1, term + 1):
-        # Reset insurance financing every 12 months
-        if months_since_insurance_reset > 12 and insurance_amt > 0:
-            balance_ins = insurance_amt
-            months_since_insurance_reset = 1
-
         # Beginning balances
         beginning_balance_main = balance_main
         beginning_balance_sf = balance_sf
         beginning_balance_kt = balance_kt
-        beginning_balance_ins = balance_ins if insurance_amt > 0 else 0.0
+        # Insurance balance only for first 12 months
+        beginning_balance_ins = balance_ins if insurance_amt > 0 and month <= 12 else 0.0
 
         # Use the SINGLE SOURCE OF TRUTH for payment calculations
         components = calculate_payment_components(
@@ -123,14 +122,15 @@ def generate_amortization_table(offer_details: dict) -> list[dict]:
         balance_main -= principal_main
         balance_sf -= principal_sf
         balance_kt -= principal_kt
-        if insurance_amt > 0:
+        # Only update insurance balance for first 12 months
+        if insurance_amt > 0 and month <= 12:
             balance_ins -= principal_ins
-            months_since_insurance_reset += 1
 
         ending_balance_main = max(balance_main, 0)
         ending_balance_sf = max(balance_sf, 0)
         ending_balance_kt = max(balance_kt, 0)
-        ending_balance_ins = max(balance_ins, 0) if insurance_amt > 0 else 0.0
+        # Insurance balance becomes 0 after month 12
+        ending_balance_ins = max(balance_ins, 0) if insurance_amt > 0 and month <= 12 else 0.0
 
         # Calculate interest components for display
         # Extract base interest from what we already calculated (remove IVA)

@@ -24,6 +24,16 @@ class OfferRequest(BaseModel):
         description="Whether to use smart filtering for better offers",
         example=True
     )
+    custom_config: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Custom configuration overrides",
+        example={
+            "service_fee_pct": 0.03,
+            "cxa_pct": 0.03,
+            "cac_bonus": 2000,
+            "insurance_amount": 15000
+        }
+    )
 
 
 class BulkOfferRequest(BaseModel):

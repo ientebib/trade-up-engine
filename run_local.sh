@@ -35,6 +35,9 @@ fi
 # Set Python path (project root)
 export PYTHONPATH="$(pwd)"
 
+export KAVAK_CXA_PCT=0.0399
+export KAVAK_TOTAL_AMOUNT=17599
+
 # Force production environment
 export ENVIRONMENT=production
 

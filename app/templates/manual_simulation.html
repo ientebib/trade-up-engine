@@ -471,10 +471,6 @@ document.getElementById('simulation-form').addEventListener('submit', async (e) 
     };
     
     try {
-        // DISABLED: /api/manual-simulation endpoint returns 501
-        alert('Manual simulation is temporarily disabled');
-        return;
-        
         // Call API
         const response = await fetch('/api/manual-simulation', {
             method: 'POST',

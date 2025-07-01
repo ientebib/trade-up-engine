@@ -651,17 +651,24 @@
             </div>
             
             <div class="config-item">
-                <label for="interest-rate">Interest Rate (Annual)</label>
-                <input type="range" id="interest-rate" min="10" max="30" step="0.5" value="{{ (customer.original_interest_rate * 100) if customer.original_interest_rate else 18 }}">
-                <div class="config-value" id="interest-rate-value">{{ '{:.1f}%'.format(customer.original_interest_rate * 100) if customer.original_interest_rate else '18.0%' }}</div>
-                <span style="font-size: 0.75rem; color: var(--gray-600);">Before IVA</span>
+                <label>Interest Rate (Annual)</label>
+                <div class="config-value" id="interest-rate-value">
+                    {% if customer.mapped_interest_rate is not none %}
+                        {{ '{:.1f}%'.format(customer.mapped_interest_rate * 100) }}
+                    {% elif customer.original_interest_rate is not none %}
+                        {{ '{:.1f}%'.format(customer.original_interest_rate * 100) }}
+                    {% else %}—{% endif %}
+                </div>
+                <span style="font-size: 0.75rem; color: var(--gray-600);">Fixed by risk profile</span>
+                <!-- Hidden input to keep existing JS from crashing; not visible -->
+                <input type="hidden" id="interest-rate" value="0">
             </div>
             
             <div class="config-item">
                 <label>Kavak Total</label>
                 <div class="toggle-wrapper">
                     <div class="toggle active" id="kavak-total-toggle" onclick="toggleKavakTotal()"></div>
-                    <span>$25,000 MXN (One-time)</span>
+                    <span>$17,599 MXN (One-time)</span>
                 </div>
             </div>
             
@@ -687,11 +694,11 @@
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; font-size: 0.875rem;">
                 <div>
                     <span style="color: var(--gray-600);">GPS Installation:</span>
-                    <strong>$750 + IVA = $870</strong>
+                    <strong>$<span id="gps-install-base">750</span> + IVA = $<span id="gps-install-total">870</span></strong>
                 </div>
                 <div>
                     <span style="color: var(--gray-600);">GPS Monthly:</span>
-                    <strong>$350 + IVA = $406</strong>
+                    <strong>$<span id="gps-monthly-base">350</span> + IVA = $<span id="gps-monthly-total">406</span></strong>
                 </div>
                 <div>
                     <span style="color: var(--gray-600);">IVA Rate:</span>
@@ -1297,9 +1304,12 @@ function showOfferDetails(offer) {
     
     // Extract all fee details from the offer
     const serviceFeeAmount = offer.service_fee_amount || (offer.new_car_price * 0.04);
-    const cxaAmount = offer.cxa_amount || (offer.new_car_price * 0.04);
+    const cxaAmount = offer.cxa_amount !== undefined ? offer.cxa_amount : 0;
     const cacBonus = offer.cac_bonus !== undefined ? offer.cac_bonus : 0;
-    const kavakTotal = offer.kavak_total_amount !== undefined ? offer.kavak_total_amount : 25000;
+    const baseLoanBeforeFees = offer.new_car_price - vehicleEquity; // preliminary loan used for CXA calc
+    const cxaPctWithIva = baseLoanBeforeFees > 0 ? (cxaAmount / baseLoanBeforeFees * 100) : 0;
+    const cxaPctRaw = cxaPctWithIva / 1.16;
+    const kavakTotal = offer.kavak_total_amount !== undefined ? offer.kavak_total_amount : (window.backendConfig?.fees?.kavak_total_amount || 17599);
     const insuranceAmount = offer.insurance_amount || 10999;
     const gpsInstallFee = offer.gps_install_fee || (750 * 1.16);
     const gpsMonthlyFee = offer.gps_monthly_fee || (350 * 1.16);
@@ -1350,96 +1360,72 @@ function showOfferDetails(offer) {
                 </div>
             </div>
             
-            <div style="background: var(--info-light); padding: 1rem; border-radius: var(--radius);">
-                <h5 style="margin-bottom: 1rem;">Equity Breakdown</h5>
-                <div style="font-size: 0.875rem; space-y: 0.5rem;">
-                    <div style="display: flex; justify-content: space-between; padding: 0.25rem 0;">
-                        <span>Vehicle Equity:</span>
-                        <strong>+$${Math.round(vehicleEquity).toLocaleString()}</strong>
+            <div style="background: var(--kavak-blue-50); padding: 1rem; border-radius: var(--radius); margin-top: 0;">
+                <h5 style="margin-bottom: 1rem; color: var(--kavak-blue);">💡 Loan Construction Waterfall</h5>
+                <div style="font-size: 0.875rem; background:white; padding:1rem; border-radius:var(--radius); border: 1px solid var(--kavak-blue-100);">
+                    <!-- Vehicle and equity -->
+                    <div style="display:flex; justify-content:space-between; padding:0.25rem 0;">
+                        <span>Vehicle Price:</span>
+                        <strong>$${Math.round(offer.new_car_price).toLocaleString()}</strong>
                     </div>
-                    <div style="display: flex; justify-content: space-between; padding: 0.25rem 0; color: var(--error);">
-                        <span>CXA Fee (${(cxaAmount / offer.new_car_price * 100).toFixed(1)}%):</span>
-                        <strong>-$${Math.round(cxaAmount).toLocaleString()}</strong>
+                    <div style="display:flex; justify-content:space-between; padding:0.25rem 0;">
+                        <span>- Vehicle Equity:</span>
+                        <strong>($${Math.round(vehicleEquity).toLocaleString()})</strong>
                     </div>
-                    <div style="display: flex; justify-content: space-between; padding: 0.25rem 0; color: var(--error);">
-                        <span>GPS Installation (inc. IVA):</span>
-                        <strong>-$${Math.round(gpsInstallFee).toLocaleString()}</strong>
+                    <div style="border-top:1px solid var(--gray-300); margin:0.5rem 0;"></div>
+                    <!-- Pre-fee base loan -->
+                    <div style="display:flex; justify-content:space-between; padding:0.25rem 0; font-weight:600;">
+                        <span>Pre-fee Base Loan:</span>
+                        <strong>$${Math.round(baseLoanBeforeFees).toLocaleString()}</strong>
+                    </div>
+                    <!-- CXA applied to base loan -->
+                    <div style="display:flex; justify-content:space-between; padding:0.25rem 0; color:var(--gray-600);" title="${Math.round(baseLoanBeforeFees).toLocaleString()} × 3.99% × 1.16 = ${Math.round(cxaAmount).toLocaleString()}">
+                        <span>+ CXA (3.99% + IVA):</span>
+                        <span>$${Math.round(cxaAmount).toLocaleString()}</span>
+                    </div>
+                    <!-- GPS install and CAC bonus adjust equity -->
+                    <div style="display:flex; justify-content:space-between; padding:0.25rem 0; color:var(--gray-600);">
+                        <span>- GPS Install (+IVA):</span>
+                        <span>($${Math.round(gpsInstallFee).toLocaleString()})</span>
                     </div>
                     ${cacBonus > 0 ? `
-                    <div style="display: flex; justify-content: space-between; padding: 0.25rem 0; color: var(--success);">
-                        <span>CAC Bonus:</span>
-                        <strong>+$${Math.round(cacBonus).toLocaleString()}</strong>
+                    <div style="display:flex; justify-content:space-between; padding:0.25rem 0; color:var(--gray-600);">
+                        <span>+ CAC Bonus:</span>
+                        <span>$${Math.round(cacBonus).toLocaleString()}</span>
                     </div>` : ''}
-                    <div style="border-top: 1px solid var(--gray-300); margin: 0.5rem 0;"></div>
-                    <div style="display: flex; justify-content: space-between; padding: 0.25rem 0; font-weight: 600;">
-                        <span>Effective Equity (Down Payment):</span>
+                    <div style="border-top:1px solid var(--gray-300); margin:0.5rem 0;"></div>
+                    <!-- Effective equity -->
+                    <div style="display:flex; justify-content:space-between; padding:0.25rem 0; font-weight:600;">
+                        <span>Effective Equity (Down):</span>
                         <strong>$${Math.round(offer.effective_equity).toLocaleString()}</strong>
                     </div>
-                </div>
-            </div>
-            
-            <div style="background: var(--warning-light); padding: 1rem; border-radius: var(--radius);">
-                <h5 style="margin-bottom: 1rem;">Fees & Services</h5>
-                <div style="font-size: 0.875rem; space-y: 0.5rem;">
-                    <div style="display: flex; justify-content: space-between; padding: 0.25rem 0;">
-                        <span>Service Fee (${(serviceFeeAmount / offer.new_car_price * 100).toFixed(1)}%):</span>
-                        <strong>$${Math.round(serviceFeeAmount).toLocaleString()} (financed)</strong>
+                    <div style="border-top:1px solid var(--gray-300); margin:0.5rem 0;"></div>
+                    <!-- Recomputed base loan after equity -->
+                    <div style="display:flex; justify-content:space-between; padding:0.25rem 0; font-weight:600;">
+                        <span>Base Loan:</span>
+                        <strong>$${Math.round(offer.new_car_price - offer.effective_equity).toLocaleString()}</strong>
                     </div>
-                    <div style="display: flex; justify-content: space-between; padding: 0.25rem 0;">
-                        <span>Kavak Total:</span>
-                        <strong>$${Math.round(kavakTotal).toLocaleString()} (financed)</strong>
+                    <!-- Financed fees -->
+                    <div style="display:flex; justify-content:space-between; padding:0.25rem 0; color:var(--gray-600);">
+                        <span>+ Service Fee (financed):</span>
+                        <span>$${Math.round(serviceFeeAmount).toLocaleString()}</span>
                     </div>
-                    <div style="display: flex; justify-content: space-between; padding: 0.25rem 0;">
-                        <span>Insurance (annual):</span>
-                        <strong>$${Math.round(insuranceAmount).toLocaleString()}</strong>
+                    <div style="display:flex; justify-content:space-between; padding:0.25rem 0; color:var(--gray-600);">
+                        <span>+ Kavak Total (financed):</span>
+                        <span>$${Math.round(kavakTotal).toLocaleString()}</span>
                     </div>
-                    <div style="display: flex; justify-content: space-between; padding: 0.25rem 0;">
-                        <span>GPS Monthly (inc. IVA):</span>
-                        <strong>$${Math.round(gpsMonthlyFee).toLocaleString()}</strong>
+                    <div style="display:flex; justify-content:space-between; padding:0.25rem 0; color:var(--gray-600);">
+                        <span>+ Insurance:</span>
+                        <span>$${Math.round(insuranceAmount).toLocaleString()}</span>
                     </div>
-                    <div style="border-top: 1px solid var(--gray-300); margin: 0.5rem 0;"></div>
-                    <div style="display: flex; justify-content: space-between; padding: 0.25rem 0; font-weight: 600; color: var(--success);">
+                    <div style="border-top:1px solid var(--gray-300); margin:0.5rem 0;"></div>
+                    <div style="display:flex; justify-content:space-between; padding:0.25rem 0; font-weight:600;">
+                        <span>Total Financed (Loan Amount):</span>
+                        <strong>$${Math.round(offer.loan_amount).toLocaleString()}</strong>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; padding:0.25rem 0; font-weight:600; color:var(--success);">
                         <span>NPV to Kavak:</span>
                         <strong>$${Math.round(offer.npv).toLocaleString()}</strong>
-                    </div>
-                </div>
-            </div>
-            
-            <div style="background: var(--kavak-blue-50); padding: 1rem; border-radius: var(--radius);">
-                <h5 style="margin-bottom: 1rem; color: var(--kavak-blue);">💡 Payment Impact Analysis</h5>
-                <div style="font-size: 0.875rem;">
-                    <p style="margin-bottom: 0.75rem; color: var(--gray-700);">
-                        Understanding how fees affect your monthly payment:
-                    </p>
-                    <div style="background: white; padding: 1rem; border-radius: var(--radius); border: 1px solid var(--kavak-blue-100);">
-                        <div style="display: flex; justify-content: space-between; padding: 0.25rem 0;">
-                            <span>Base Loan (Car - Equity):</span>
-                            <strong>$${Math.round(offer.new_car_price - offer.effective_equity).toLocaleString()}</strong>
-                        </div>
-                        <div style="display: flex; justify-content: space-between; padding: 0.25rem 0; color: var(--gray-600);">
-                            <span>+ Service Fee:</span>
-                            <span>$${Math.round(serviceFeeAmount).toLocaleString()}</span>
-                        </div>
-                        <div style="display: flex; justify-content: space-between; padding: 0.25rem 0; color: var(--gray-600);">
-                            <span>+ Kavak Total:</span>
-                            <span>$${Math.round(kavakTotal).toLocaleString()}</span>
-                        </div>
-                        <div style="display: flex; justify-content: space-between; padding: 0.25rem 0; color: var(--gray-600);">
-                            <span>+ Insurance:</span>
-                            <span>$${Math.round(insuranceAmount).toLocaleString()}</span>
-                        </div>
-                        <div style="border-top: 1px solid var(--gray-300); margin: 0.5rem 0;"></div>
-                        <div style="display: flex; justify-content: space-between; padding: 0.25rem 0; font-weight: 600;">
-                            <span>Total Financed:</span>
-                            <strong>$${Math.round(offer.loan_amount).toLocaleString()}</strong>
-                        </div>
-                    </div>
-                    <div style="margin-top: 1rem; padding: 0.75rem; background: var(--info-light); border-radius: var(--radius);">
-                        <p style="margin: 0; font-size: 0.875rem;">
-                            <strong>Without optional fees:</strong> Monthly payment would be approximately 
-                            <strong>$${Math.round(offer.monthly_payment * 0.85).toLocaleString()}</strong>
-                            (saving ~$${Math.round(offer.monthly_payment * 0.15).toLocaleString()}/month)
-                        </p>
                     </div>
                 </div>
             </div>
@@ -1513,7 +1499,7 @@ function saveScenario(offer) {
             insurance_amount: window.currentConfig.insurance_amount || 10999,
             interest_rate: window.currentConfig.interest_rate,
             kavak_total_enabled: window.currentConfig.kavak_total_enabled !== false,
-            kavak_total_amount: window.currentConfig.kavak_total_enabled !== false ? 25000 : 0,
+            kavak_total_amount: window.currentConfig.kavak_total_enabled !== false ? (window.backendConfig?.fees?.kavak_total_amount || 17599) : 0,
             term_months: offer.term,
             // Include the offer details for reference
             monthly_payment: offer.monthly_payment,
@@ -1713,9 +1699,44 @@ function deleteScenario(scenarioId) {
     });
 }
 
+// Global backend config
+window.backendConfig = null;
+
+// Load backend configuration
+async function loadBackendConfig() {
+    try {
+        const response = await fetch('/api/config');
+        const config = await response.json();
+        window.backendConfig = config;
+        console.log('Backend config loaded:', config);
+        
+        // Update GPS and other display values
+        if (config.fees) {
+            if (config.fees.gps_installation) {
+                document.getElementById('gps-install-base').textContent = Math.round(config.fees.gps_installation);
+                document.getElementById('gps-install-total').textContent = Math.round(config.fees.gps_installation * 1.16);
+            }
+            if (config.fees.gps_monthly) {
+                document.getElementById('gps-monthly-base').textContent = Math.round(config.fees.gps_monthly);
+                document.getElementById('gps-monthly-total').textContent = Math.round(config.fees.gps_monthly * 1.16);
+            }
+            // Update Kavak Total display
+            const kavakDisplay = document.querySelector('#kavak-total-toggle + span');
+            if (kavakDisplay && config.fees.kavak_total_amount) {
+                kavakDisplay.textContent = `$${Math.round(config.fees.kavak_total_amount).toLocaleString()} MXN (One-time)`;
+            }
+        }
+    } catch (error) {
+        console.error('Failed to load backend config:', error);
+    }
+}
+
 // Initialize on page load
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', async function() {
     console.log('Page loaded, initializing...');
+    
+    // Load backend config first
+    await loadBackendConfig();
     
     // Ensure basic tab is visible
     const basicTab = document.getElementById('basic-tab');

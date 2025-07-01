@@ -199,6 +199,18 @@ class OfferService:
         from app.presenters.customer_presenter import customer_presenter
         formatted_customer = customer_presenter.format_for_display(customer)
         
+        # Add mapped interest rate based on risk profile for display purposes
+        try:
+            from config.facade import get as cfg_get
+            risk_profile = customer.get('risk_profile_name') or customer.get('risk_profile')
+            if risk_profile:
+                mapped_rate = cfg_get(f"rates.{risk_profile}")
+                if mapped_rate is not None:
+                    formatted_customer['mapped_interest_rate'] = float(mapped_rate)
+        except Exception:
+            # Fallback: leave field absent if lookup fails
+            pass
+        
         # Prepare response
         result = {"customer": formatted_customer}
         

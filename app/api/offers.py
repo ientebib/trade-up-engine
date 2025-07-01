@@ -67,8 +67,11 @@ async def generate_offers_basic(request: OfferRequest):
             logger.error(f"❌ Synchronous offer generation failed: {e}")
             raise HTTPException(status_code=500, detail=str(e))
     
+    # Get custom config if provided
+    custom_config = getattr(request, 'custom_config', None)
+    
     # Use async processing
-    task_id = async_offer_service.submit_offer_generation(clean_customer_id, None)
+    task_id = async_offer_service.submit_offer_generation(clean_customer_id, custom_config)
     
     return {
         "task_id": task_id,
@@ -197,21 +200,16 @@ async def generate_offers_custom(request: Dict):
     """Generate offers with custom configuration per customer"""
     from app.services.offer_service import offer_service
     
-    # Sanitize and validate request data
-    try:
-        # Sanitize request data (may raise ValidationError)
-        request = InputSanitizer.sanitize_dict(request)
-        
-        # Validate offer request
-        validated_request = Validators.validate_offer_request(request)
-    except ValidationError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    # Basic validation
+    customer_id = request.get('customer_id')
+    if not customer_id:
+        raise HTTPException(status_code=400, detail="customer_id is required")
     
     # Process custom configuration
-    custom_config = offer_service.process_custom_config(validated_request)
+    custom_config = offer_service.process_custom_config(request)
     
     # Use async processing
-    task_id = async_offer_service.submit_offer_generation(validated_request['customer_id'], custom_config)
+    task_id = async_offer_service.submit_offer_generation(customer_id, custom_config)
     
     return {
         "task_id": task_id,
@@ -242,6 +240,79 @@ async def amortization_api(offer: Dict = Body(...)):
 async def amortization_table_api(offer: Dict = Body(...)):
     """Alias for amortization API - frontend calls this endpoint"""
     return await amortization_api(offer)
+
+
+@router.post("/manual-simulation")
+@handle_api_errors("manual simulation")
+async def manual_simulation(request: Dict = Body(...)):
+    """
+    Calculate payment details for manual loan simulation.
+    
+    This endpoint allows users to simulate loan payments without requiring
+    a specific customer or vehicle from the database.
+    """
+    from engine.calculator import Calculator
+    from engine.payment_utils import calculate_monthly_payment
+    from config.facade import get
+    
+    try:
+        # Extract parameters
+        loan_amount = float(request.get('loan_amount', 0))
+        term = int(request.get('term', 48))
+        interest_rate = float(request.get('interest_rate', 0.25))
+        
+        # Get fees from request or defaults
+        service_fee_pct = float(request.get('service_fee_pct', get('fees.service.percentage', 0.04)))
+        insurance_monthly = float(request.get('insurance_monthly', get('fees.insurance.monthly', 450)))
+        gps_monthly = float(request.get('gps_monthly_fee', get('fees.gps.monthly', 350)))
+        gps_installation = float(request.get('gps_installation_fee', get('fees.gps.installation', 750)))
+        
+        # Calculate fees
+        service_fee_amount = loan_amount * service_fee_pct
+        total_insurance = insurance_monthly * term
+        
+        # Calculate payment
+        payment_info = calculate_monthly_payment(
+            loan_amount=loan_amount,
+            term=term,
+            interest_rate=interest_rate,
+            service_fee_amount=service_fee_amount,
+            kavak_total_amount=0,  # Not used in manual simulation
+            insurance_amount=total_insurance,
+            gps_monthly_fee=gps_monthly,
+            gps_installation_fee=gps_installation
+        )
+        
+        # Generate amortization table
+        calculator = Calculator()
+        amortization_table = calculator.generate_amortization_table(
+            loan_amount=loan_amount,
+            term=term,
+            interest_rate=interest_rate,
+            service_fee_amount=service_fee_amount,
+            kavak_total_amount=0,
+            insurance_amount=total_insurance,
+            gps_monthly_fee=gps_monthly,
+            gps_installation_fee=gps_installation
+        )
+        
+        return {
+            "success": True,
+            "payment_info": payment_info,
+            "amortization_table": amortization_table,
+            "summary": {
+                "loan_amount": loan_amount,
+                "term": term,
+                "interest_rate": interest_rate,
+                "monthly_payment": payment_info.get('monthly_payment', 0),
+                "total_interest": sum(row['interest'] + row['iva'] for row in amortization_table),
+                "total_paid": payment_info.get('total_paid', 0)
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Manual simulation error: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Simulation error: {str(e)}")
 
 
 @router.post("/calculate-payment")
@@ -299,7 +370,7 @@ async def calculate_real_time_payment(request: Dict = Body(...)):
         raise HTTPException(status_code=404, detail="Car not found")
     
     # Calculate offer
-    from engine.basic_matcher import basic_matcher
+    from engine.basic_matcher_sync import basic_matcher_sync as basic_matcher
     offers = basic_matcher.find_all_viable(customer, [car], custom_config)
     
     # Find the specific offer

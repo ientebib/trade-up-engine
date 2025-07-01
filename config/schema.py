@@ -34,9 +34,13 @@ class GPSFeesConfig(BaseSettings):
 
 class InsuranceConfig(BaseSettings):
     """Insurance configuration"""
-    amount: Decimal = Field(default=Decimal("10999.0"), ge=0, description="Annual insurance amount")
+    amount: Decimal = Field(default=Decimal("10999.0"), ge=0, description="Default annual insurance amount")
     term_months: int = Field(default=12, gt=0, description="Insurance term in months")
-    renewal_cycle: int = Field(default=12, gt=0, description="Insurance renewal cycle in months")
+    # Risk-based insurance amounts
+    amount_a: Decimal = Field(default=Decimal("10999.0"), ge=0, description="Insurance amount for risk profile A")
+    amount_b: Decimal = Field(default=Decimal("13799.0"), ge=0, description="Insurance amount for risk profile B")
+    amount_c: Decimal = Field(default=Decimal("15599.0"), ge=0, description="Insurance amount for risk profile C")
+    amount_default: Decimal = Field(default=Decimal("10999.0"), ge=0, description="Default insurance amount for other profiles")
 
     class Config:
         env_prefix = "INSURANCE_"
@@ -45,7 +49,7 @@ class InsuranceConfig(BaseSettings):
 class ServiceFeesConfig(BaseSettings):
     """Service and commission fees"""
     service_percentage: Decimal = Field(default=Decimal("0.04"), ge=0, le=1, description="Service fee percentage")
-    cxa_percentage: Decimal = Field(default=Decimal("0.04"), ge=0, le=1, description="CXA fee percentage")
+    cxa_percentage: Decimal = Field(default=Decimal("0.0399"), ge=0, le=1, description="CXA fee percentage")
     
     class Config:
         env_prefix = "FEES_"
@@ -53,7 +57,7 @@ class ServiceFeesConfig(BaseSettings):
 
 class KavakTotalConfig(BaseSettings):
     """Kavak Total program configuration"""
-    amount: Decimal = Field(default=Decimal("25000.0"), ge=0, description="Kavak Total amount")
+    amount: Decimal = Field(default=Decimal("17599.0"), ge=0, description="Kavak Total amount")
     cycle_months: int = Field(default=24, gt=0, description="Kavak Total cycle in months")
 
     class Config:

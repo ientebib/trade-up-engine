@@ -1,38 +1,13 @@
 {
-  "features": {
-    "enable_decimal_precision": false
-  },
   "fees": {
-    "service_fee_pct": 0.04,
-    "cxa_pct": 0.04,
-    "cac_min": 0,
-    "cac_max": 0
-  },
-  "payment_delta_tiers": {
-    "refresh": {
-      "min": -0.05,
-      "max": 0.05
+    "cxa": {
+      "percentage": 0.0399
     },
-    "upgrade": {
-      "min": 0.0501,
-      "max": 0.25
-    },
-    "max_upgrade": {
-      "min": 0.2501,
-      "max": 1
+    "kavak_total": {
+      "amount": 17599
     }
   },
-  "business_rules": {
-    "min_npv": 5000,
-    "kavak_total_enabled": true,
-    "kavak_total_amount": 25000,
-    "available_terms": [
-      24,
-      36,
-      48,
-      60,
-      72
-    ]
-  },
-  "timestamp": "2025-06-23T16:40:41.677173"
+  "features": {
+    "enable_decimal_precision": true
+  }
 }

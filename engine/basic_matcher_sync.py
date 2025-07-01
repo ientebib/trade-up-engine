@@ -107,6 +107,7 @@ class BasicMatcherSync:
             "kavak_total_amount": kavak_total_amount,
             "insurance_amount": insurance_amount,
             "gps_install_with_iva": gps_install_with_iva,
+            "gps_installation_fee": gps_installation_fee,
             "apply_iva": apply_iva,
             "iva_rate": iva_rate
         }
@@ -141,6 +142,17 @@ class BasicMatcherSync:
         logger.info(f"   Total calculations: {total_calculations}")
         logger.info(f"   Rate: {final_rate:.0f} calculations/second")
         logger.info(f"   Offers found: {len(all_offers)}")
+        
+        # Debug logging
+        if len(all_offers) == 0:
+            logger.warning(f"⚠️ No offers generated for customer {customer.get('customer_id', 'Unknown')}")
+            logger.warning(f"   Current payment: ${current_payment:,.0f}")
+            logger.warning(f"   Equity: ${customer.get('vehicle_equity', 0):,.0f}")
+            logger.warning(f"   Current car price: ${customer.get('current_car_price', 0):,.0f}")
+            logger.warning(f"   Service fee %: {fee_config.get('service_fee_pct', 0)}")
+            logger.warning(f"   CXA %: {fee_config.get('cxa_pct', 0)}")
+            logger.warning(f"   Kavak Total: ${fee_config.get('kavak_total_amount', 0):,.0f}")
+            logger.warning(f"   Cars evaluated: {len(inventory)}")
         
         return {
             "offers": categorized,
@@ -221,31 +233,38 @@ class BasicMatcherSync:
         if interest_rate is None:
             return None
             
-        # Calculate fees
+        # Step 1: Calculate preliminary base loan (car price - vehicle equity)
+        preliminary_base_loan = car_price - vehicle_equity
+        
+        # Step 2: Calculate CXA on base loan with IVA (not on car price)
+        cxa_pct = fee_config["cxa_pct"]
+        cxa_amount = preliminary_base_loan * cxa_pct * (1 + fee_config["iva_rate"])
+        
+        # Step 3: Calculate service fee (still based on car price)
         service_fee_amount = car_price * fee_config["service_fee_pct"]
-        cxa_amount = car_price * fee_config["cxa_pct"]
         
-        # Calculate effective equity
-        effective_equity = vehicle_equity + fee_config["cac_bonus"] - cxa_amount
+        # Step 4: Calculate effective equity (GPS install IS subtracted - we're financing it)
+        gps_install_with_iva = fee_config["gps_install_with_iva"]
+        effective_equity = vehicle_equity + fee_config["cac_bonus"] - cxa_amount - gps_install_with_iva
         
-        # Calculate base loan amount
+        # Step 5: Final base loan
         base_loan = car_price - effective_equity
         
         # Skip if equity covers the car
         if base_loan <= 0:
-            logger.debug(f"Skipping car {car_id} - equity covers car (base_loan=${base_loan})")
+            logger.debug(f"Skipping car {car_id} - equity covers car (base_loan=${base_loan:.0f}, car_price=${car_price:.0f}, effective_equity=${effective_equity:.0f})")
             return None
             
         # Calculate payment
         try:
             payment_components = calculate_monthly_payment(
-                loan_base=base_loan,
+                loan_base=base_loan + gps_install_with_iva,  # Include GPS install in base loan
                 service_fee_amount=service_fee_amount,
                 kavak_total_amount=fee_config["kavak_total_amount"],
                 insurance_amount=fee_config["insurance_amount"],
                 annual_rate_nominal=interest_rate,
                 term_months=term,
-                gps_install_fee=fee_config["gps_install_with_iva"],
+                gps_install_fee=0.0,  # Set to 0 since we're financing it, not charging in first month
             )
             
             total_payment = payment_components["payment_total"]
@@ -276,7 +295,7 @@ class BasicMatcherSync:
             "term": term,
             "loan_amount": round(base_loan + service_fee_amount + 
                                fee_config["kavak_total_amount"] + 
-                               fee_config["insurance_amount"], 2),
+                               fee_config["insurance_amount"] + gps_install_with_iva, 2),
             "effective_equity": round(effective_equity, 2),
             "interest_rate": interest_rate,
             "npv": round(npv, 2),
@@ -284,12 +303,15 @@ class BasicMatcherSync:
             "cxa_amount": round(cxa_amount, 2),
             "insurance_amount": round(fee_config["insurance_amount"], 2),
             "kavak_total_amount": round(fee_config["kavak_total_amount"], 2),
+            "gps_install_fee": 0.0,  # Financed, not charged separately
             "vehicle_equity": vehicle_equity,
             "fees_applied": {
                 "service_fee_pct": fee_config["service_fee_pct"],
                 "cxa_pct": fee_config["cxa_pct"],
                 "cac_bonus": fee_config["cac_bonus"]
-            }
+            },
+            "gps_install_with_iva": gps_install_with_iva,
+            "gps_installation_fee": fee_config["gps_installation_fee"]
         }
     
     def _get_interest_rate(self, risk_profile: str, term: int) -> Optional[float]:
