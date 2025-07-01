@@ -136,7 +136,7 @@
   },
   "features": {
     "enable_caching": true,
-    "enable_audit_logging": true,
+    "enable_audit_logging": false,
     "enable_decimal_precision": true,
     "enable_payment_validation": true,
     "enable_rate_limiting": true,

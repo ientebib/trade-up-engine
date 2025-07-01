@@ -46,6 +46,14 @@ config/         # Configuration system
 tests/          # Test suite
 ```
 
+## ⚡ Performance Update (June 2025)
+
+**Major performance fix implemented!** Offer generation now completes in seconds, not minutes:
+- **Before**: 60+ second timeouts
+- **After**: 1.6 seconds for 9,498 calculations (~6,000/second)
+- **Fix**: Created synchronous matcher, disabled problematic audit logging
+- **Details**: See [PERFORMANCE_FIX_SUMMARY.md](PERFORMANCE_FIX_SUMMARY.md)
+
 ## Core Features
 
 - **Offer Generation**: Calculates trade-up offers based on customer financial profile

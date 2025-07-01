@@ -372,17 +372,41 @@ class SearchService:
         """Calculate NPV for a batch of cars"""
         from engine.basic_matcher import BasicMatcher
 
-        matcher = BasicMatcher()
-
-        for car in cars:
-            try:
-                npv = matcher._calculate_npv_for_car(customer, car, configuration)
-                car["calculated_npv"] = npv
-                car["monthly_payment"] = matcher._estimate_payment(customer, car, configuration)
-            except Exception as e:
-                logger.error(f"NPV calculation error: {e}")
-                car["calculated_npv"] = 0
-                car["monthly_payment"] = 0
+        with BasicMatcher() as matcher:
+            # Process cars in small batches to avoid memory issues
+            batch_size = 10
+            for i in range(0, len(cars), batch_size):
+                batch = cars[i:i + batch_size]
+                
+                try:
+                    # Get offers for this batch of cars
+                    result = matcher.find_all_viable(customer, batch, configuration)
+                    all_offers = result.get("all_offers", [])
+                    
+                    # Map offers back to cars
+                    offer_map = {str(offer["car_id"]): offer for offer in all_offers}
+                    
+                    for car in batch:
+                        car_id = str(car.get("car_id", ""))
+                        if car_id in offer_map:
+                            offer = offer_map[car_id]
+                            car["calculated_npv"] = offer.get("npv", 0)
+                            car["monthly_payment"] = offer.get("monthly_payment", 0)
+                            car["payment_delta"] = offer.get("payment_delta", 0)
+                            car["term"] = offer.get("term", 48)
+                        else:
+                            # No viable offer for this car
+                            car["calculated_npv"] = 0
+                            car["monthly_payment"] = 0
+                            car["payment_delta"] = 0
+                            
+                except Exception as e:
+                    logger.error(f"NPV calculation error for batch: {e}")
+                    # Set defaults for failed batch
+                    for car in batch:
+                        car["calculated_npv"] = 0
+                        car["monthly_payment"] = 0
+                        car["payment_delta"] = 0
 
     def _quick_search(self, search_term: str, limit: int) -> List[Dict]:
         """Quick search without NPV calculation"""
@@ -551,36 +575,54 @@ class SearchService:
         return "Other"
 
     def _estimate_payment(self, customer: Dict, car: Dict) -> float:
-        """Quick payment estimation"""
+        """Quick payment estimation using proper payment calculation"""
+        from engine.payment_utils import calculate_monthly_payment
         from config.facade import get_decimal
+        from config.config import (
+            DEFAULT_FEES,
+            GPS_INSTALLATION_FEE,
+            GPS_MONTHLY_FEE,
+            INSURANCE_TABLE,
+            INTEREST_RATE_TABLE,
+        )
 
+        # Get customer's risk profile for interest rate
+        risk_profile = customer.get("risk_profile_index", customer.get("risk_profile_name", "A1"))
+        if isinstance(risk_profile, int):
+            # Convert numeric index to risk profile name
+            risk_profiles = ["A1", "A2", "B1", "B2", "C1", "C2", "C3", "C4"]
+            risk_profile = risk_profiles[min(risk_profile, len(risk_profiles) - 1)]
+        
+        # Get interest rate from table
+        base_rate = INTEREST_RATE_TABLE.get(risk_profile, 0.21)  # Default to A1 rate
+        
         # Get configuration values
-        gps_monthly = float(get_decimal("fees.gps.monthly"))
-        interest_rate = float(get_decimal("rates.A1"))
         service_fee_pct = float(get_decimal("fees.service.percentage"))
-
-        # Calculate
+        insurance_amount = INSURANCE_TABLE.get(risk_profile, {}).get(48, 10999)  # Default term 48
+        
+        # Calculate loan amount
         car_price = car["car_price"]
-        equity = customer["vehicle_equity"]
+        equity = customer.get("vehicle_equity", 0)
         service_fee = car_price * service_fee_pct
-        loan_amount = car_price - equity + service_fee
+        loan_base = car_price - equity
 
-        # Monthly payment
-        monthly_rate = interest_rate * 1.16 / 12
-        term = 48
-
-        if monthly_rate > 0:
-            payment = (
-                loan_amount
-                * (monthly_rate * (1 + monthly_rate) ** term)
-                / ((1 + monthly_rate) ** term - 1)
+        # Use proper payment calculation
+        try:
+            payment_info = calculate_monthly_payment(
+                loan_base=loan_base,
+                service_fee_amount=service_fee,
+                kavak_total_amount=0,  # Not included in quick estimate
+                insurance_amount=insurance_amount,
+                annual_rate_nominal=base_rate,
+                term_months=48,  # Default term for quick estimate
+                gps_install_fee=GPS_INSTALLATION_FEE,
+                use_decimal=False
             )
-        else:
-            payment = loan_amount / term
-
-        payment += gps_monthly * 1.16
-
-        return payment
+            return payment_info["total_monthly_payment"]
+        except Exception as e:
+            logger.error(f"Payment calculation error: {e}")
+            # Fallback to simple calculation
+            return (loan_base + service_fee) / 48 + GPS_MONTHLY_FEE * 1.16
 
     def close(self):
         """Clean up resources"""

@@ -4,13 +4,17 @@ Deal Pipeline View - Track deals through stages
 from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
+from app.core.template_utils import static_url
 import logging
+import os
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-# Initialize templates
-templates = Jinja2Templates(directory="app/templates")
+# Initialize templates with absolute path
+template_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "templates")
+templates = Jinja2Templates(directory=template_dir)
+templates.env.globals["static_url"] = static_url
 
 
 @router.get("/pipeline", response_class=HTMLResponse)

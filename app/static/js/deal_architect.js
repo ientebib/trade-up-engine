@@ -12,6 +12,9 @@ let comparisonSlots = [null, null, null];
 let updateTimer = null;
 let searchTimer = null;
 let currentCategory = 'all';
+let isSearching = false;
+let isLoading = false;
+let selectedVehicles = [];
 
 // Initialize
 document.addEventListener('DOMContentLoaded', function() {
@@ -53,8 +56,8 @@ function loadInitialData() {
     // Load initial calculations
     calculatePayments();
     
-    // Load saved scenarios
-    fetch('/api/scenarios')
+    // Load saved scenarios for this customer
+    fetch(`/api/scenarios/customer/${customerId}`)
         .then(res => res.json())
         .then(data => {
             if (data.scenarios) {
@@ -103,15 +106,27 @@ function calculatePayments() {
     const config = getCurrentConfig();
     
     // Show loading state
-    showLoadingState('calculations');
+    if (window.LoadingManager) {
+        LoadingManager.show('calculated-payment', 'Calculating payment...');
+    } else {
+        showLoadingState('calculations');
+    }
     
     // Make real-time calculation request
+    // For now, use a default car ID or the first selected vehicle
+    const carId = selectedVehicles.length > 0 ? selectedVehicles[0].car_id : (allVehicles.length > 0 ? allVehicles[0].car_id : null);
+    
+    if (!carId) {
+        hideLoadingState('calculations');
+        return; // No cars available yet
+    }
+    
     fetch('/api/calculate-payment', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
             customer_id: customerId,
-            car_id: 'sample', // This would be the selected car
+            car_id: String(carId), // Ensure it's a string
             term: parseInt(config.term),
             service_fee_pct: config.service_fee_pct,
             cxa_pct: config.cxa_pct,
@@ -128,9 +143,16 @@ function calculatePayments() {
     })
     .catch(err => {
         console.error('Calculation error:', err);
+        if (window.ErrorHandler) {
+            ErrorHandler.show('calculated-payment', 'Failed to calculate payment: ' + err.message);
+        }
     })
     .finally(() => {
-        hideLoadingState('calculations');
+        if (window.LoadingManager) {
+            LoadingManager.hide('calculated-payment');
+        } else {
+            hideLoadingState('calculations');
+        }
     });
 }
 
@@ -176,15 +198,6 @@ function toggleKavakTotal() {
     document.getElementById('kavak-total-toggle').classList.toggle('active');
 }
 
-function loadInitialData() {
-    // Don't search on load - show placeholder instead
-    document.getElementById('results-container').innerHTML = `
-        <div style="text-align: center; padding: 3rem; color: #999;">
-            <i class="fas fa-search" style="font-size: 2rem; margin-bottom: 1rem;"></i>
-            <p>Start typing to search inventory or use filters</p>
-        </div>
-    `;
-}
 
 function performSearch(searchTerm = '') {
     if (isSearching) return;  // Prevent concurrent searches
@@ -342,6 +355,11 @@ function createVehicleCard(vehicle) {
 }
 
 function selectVehicle(vehicle) {
+    // Add to selected vehicles list
+    if (!selectedVehicles.find(v => v.car_id === vehicle.car_id)) {
+        selectedVehicles.push(vehicle);
+    }
+    
     // Find first empty slot
     for (let i = 0; i < 3; i++) {
         if (!comparisonSlots[i]) {
@@ -356,8 +374,6 @@ function toggleAdvancedFilters() {
     const filtersDiv = document.getElementById('advanced-filters');
     filtersDiv.style.display = filtersDiv.style.display === 'none' ? 'block' : 'none';
 }
-
-let isSearching = false;
 
 function debounceSearch() {
     clearTimeout(searchTimer);

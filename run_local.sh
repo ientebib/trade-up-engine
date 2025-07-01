@@ -44,5 +44,5 @@ echo "🚀 Starting Trade-Up Engine (production mode) at http://localhost:8000..
 python -m uvicorn app.main:app \
   --host 0.0.0.0 \
   --port 8000 \
-  --workers 4 \
+  --workers 1 \
   --log-level info

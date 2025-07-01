@@ -12,6 +12,7 @@ from app.models import OfferRequest, BulkOfferRequest
 from app.middleware.sanitization import sanitize_customer_id, InputSanitizer
 from app.utils.error_handling import handle_api_errors
 from app.utils.validation import UnifiedValidator as Validators, ValidationError
+from app.services.async_offer_service import async_offer_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["offers"])
@@ -51,13 +52,93 @@ async def generate_offers_basic(request: OfferRequest):
     - 404: Customer not found
     - 503: Service unavailable (database issues)
     """
-    from app.services.offer_service import offer_service
+    import os
     
     # Sanitize customer ID
     clean_customer_id = sanitize_customer_id(request.customer_id)
     
-    # All business logic delegated to service layer
-    return offer_service.generate_offers_for_customer(clean_customer_id)
+    # Check if async is disabled (temporary workaround)
+    if os.getenv("DISABLE_ASYNC_OFFERS", "false").lower() == "true":
+        logger.warning("⚠️ Async offers disabled, using synchronous processing")
+        try:
+            result = async_offer_service.process_offer_generation_sync(clean_customer_id, None)
+            return result
+        except Exception as e:
+            logger.error(f"❌ Synchronous offer generation failed: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+    
+    # Use async processing
+    task_id = async_offer_service.submit_offer_generation(clean_customer_id, None)
+    
+    return {
+        "task_id": task_id,
+        "status": "pending",
+        "message": "Offer generation started",
+        "poll_url": f"/api/offers/status/{task_id}"
+    }
+
+
+@router.get("/offers/status/{task_id}")
+@handle_api_errors("check offer generation status")
+async def check_offer_status(task_id: str):
+    """
+    Check the status of an async offer generation task.
+    
+    ## Path Parameters
+    - **task_id**: The task ID returned from generate-offers-basic
+    
+    ## Response
+    Returns task status including:
+    - **status**: pending/processing/completed/failed
+    - **progress**: Progress percentage (0-100)
+    - **summary**: Summary of results when completed
+    """
+    status = async_offer_service.get_task_status(task_id)
+    if not status:
+        raise HTTPException(status_code=404, detail="Task not found")
+    
+    return status
+
+
+@router.get("/offers/health")
+@handle_api_errors("check async service health")
+async def check_async_health():
+    """
+    Check health of the async offer service.
+    
+    ## Response
+    Returns service health status including:
+    - **status**: Service status
+    - **total_tasks**: Total tasks in memory
+    - **active_tasks**: Currently running tasks
+    - **completed_tasks**: Successfully completed tasks
+    - **failed_tasks**: Failed tasks
+    """
+    return async_offer_service.get_health_status()
+
+
+@router.get("/offers/result/{task_id}")
+@handle_api_errors("get offer generation result")
+async def get_offer_result(task_id: str):
+    """
+    Get the full result of a completed offer generation task.
+    
+    ## Path Parameters
+    - **task_id**: The task ID returned from generate-offers-basic
+    
+    ## Response
+    Returns the full offer data if task is completed
+    """
+    result = async_offer_service.get_task_result(task_id)
+    if not result:
+        # Check if task exists
+        status = async_offer_service.get_task_status(task_id)
+        if not status:
+            raise HTTPException(status_code=404, detail="Task not found")
+        elif status["status"] != "completed":
+            raise HTTPException(status_code=425, detail=f"Task is {status['status']}")
+    
+    return result
 
 
 @router.post("/generate-offers-bulk")
@@ -129,13 +210,16 @@ async def generate_offers_custom(request: Dict):
     # Process custom configuration
     custom_config = offer_service.process_custom_config(validated_request)
     
-    # Generate offers with custom config - all business logic in service
-    result = offer_service.generate_offers_for_customer(validated_request['customer_id'], custom_config)
+    # Use async processing
+    task_id = async_offer_service.submit_offer_generation(validated_request['customer_id'], custom_config)
     
-    # Add configuration to response
-    result['configuration'] = custom_config
-    
-    return result
+    return {
+        "task_id": task_id,
+        "status": "pending",
+        "message": "Offer generation started with custom configuration",
+        "poll_url": f"/api/offers/status/{task_id}",
+        "configuration": custom_config
+    }
 
 
 @router.post("/amortization")

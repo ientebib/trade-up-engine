@@ -803,36 +803,6 @@ const customerId = '{{ customer.customer_id }}';
 const currentPayment = {{ customer.current_monthly_payment or 0 }};
 const vehicleEquity = {{ customer.vehicle_equity or 0 }};
 
-// Test function
-function testButton() {
-    try {
-        alert('Step 1: Button click works!');
-        
-        const container = document.getElementById('offers-container');
-        alert('Step 2: Looking for container... found = ' + (container !== null));
-        
-        if (container) {
-            const testHTML = '<div style="padding: 2rem; text-align: center; background: yellow; border: 2px solid red;">Test button clicked! Container found at ' + new Date().toLocaleTimeString() + '</div>';
-            container.innerHTML = testHTML;
-            alert('Step 3: HTML updated. Check if you see yellow box.');
-            
-            // Double check
-            setTimeout(() => {
-                const check = document.getElementById('offers-container');
-                alert('Step 4: Container still exists = ' + (check !== null) + ', has content = ' + (check && check.innerHTML.length > 0));
-            }, 100);
-        } else {
-            alert('ERROR: offers-container not found!');
-            
-            // Try to find what elements DO exist
-            const allDivs = document.querySelectorAll('div[id]');
-            const ids = Array.from(allDivs).map(d => d.id).filter(id => id.includes('offer') || id.includes('tab'));
-            alert('Found these IDs: ' + ids.join(', '));
-        }
-    } catch (error) {
-        alert('JavaScript Error: ' + error.message);
-    }
-}
 
 // Update range input displays - wrapped in DOMContentLoaded to ensure elements exist
 document.addEventListener('DOMContentLoaded', function() {
@@ -957,7 +927,7 @@ function generateWithGlobalConfig() {
         </div>
     `;
     
-    // Call basic API (uses standard fees)
+    // Call basic API (uses standard fees) - now async
     fetch('/api/generate-offers-basic', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
@@ -973,51 +943,95 @@ function generateWithGlobalConfig() {
         return res.json();
     })
     .then(data => {
-        console.log('Offers received:', data);
+        console.log('Task started:', data);
         
-        // Simple display for testing
-        const container = document.getElementById('offers-container');
-        if (container && data.offers) {
-            let html = `<div style="padding: 20px; background: #e8f5e9; border-radius: 10px;">`;
-            html += `<h3>✅ Offers Generated Successfully!</h3>`;
-            html += `<p>Total offers: ${data.total_offers}</p>`;
-            html += `<p>Processing time: ${data.processing_time}s</p>`;
-            html += `<ul>`;
-            
-            Object.entries(data.offers).forEach(([tier, offers]) => {
-                html += `<li><strong>${tier}:</strong> ${offers.length} offers</li>`;
-            });
-            
-            html += `</ul>`;
-            html += `<hr style="margin: 20px 0;">`;
-            html += `<p><strong>Now calling displayOffers function...</strong></p>`;
-            html += `</div>`;
-            
-            container.innerHTML = html;
-            
-            // Try the full display after a delay
-            setTimeout(() => {
-                try {
-                    displayOffers(data, 'global');
-                } catch (e) {
-                    console.error('Error in displayOffers:', e);
-                    container.innerHTML += `<div style="color: red; margin-top: 20px;">Error in displayOffers: ${e.message}</div>`;
-                }
-            }, 1000);
+        if (data.task_id) {
+            // Async mode - poll for results
+            pollForResults(data.task_id, 'global');
+        } else {
+            // Legacy sync mode
+            displayOffers(data, 'global');
         }
     })
     .catch(err => {
         console.error('Error:', err);
-        const container = document.getElementById('offers-container');
+        if (window.ErrorHandler) {
+            ErrorHandler.show('offers-container', 
+                ErrorHandler.handleApiError(err, 'Failed to start offer generation'), 
+                generateGlobalOffers);
+        } else {
+            const container = document.getElementById('offers-container');
+            if (container) {
+                container.innerHTML = `
+                    <div style="color: red; text-align: center; padding: 2rem; background: #ffe0e0; border-radius: 10px;">
+                        <i class="fas fa-exclamation-circle" style="font-size: 2rem;"></i>
+                        <p style="margin-top: 1rem;">Failed to start offer generation: ${err.message}</p>
+                    </div>
+                `;
+            }
+        }
+    });
+}
+
+function pollForResults(taskId, configType) {
+    const container = document.getElementById('offers-container');
+    let pollCount = 0;
+    const maxPolls = 60; // 60 seconds max
+    
+    const updateProgress = (progress) => {
         if (container) {
             container.innerHTML = `
-                <div style="color: red; text-align: center; padding: 2rem; background: #ffe0e0; border-radius: 10px;">
-                    <i class="fas fa-exclamation-circle" style="font-size: 2rem;"></i>
-                    <p style="margin-top: 1rem;">Failed to generate offers: ${err.message}</p>
+                <div style="text-align: center; padding: 3rem;">
+                    <i class="fas fa-spinner fa-spin" style="font-size: 3rem; color: #1451EC;"></i>
+                    <p style="margin-top: 1rem; font-size: 1.2rem;">Processing offers...</p>
+                    <div style="width: 80%; margin: 1rem auto; background: #e0e0e0; border-radius: 10px; overflow: hidden;">
+                        <div style="width: ${progress}%; background: #1451EC; height: 10px; transition: width 0.3s;"></div>
+                    </div>
+                    <p style="font-size: 0.9rem; color: #666;">${progress}% complete</p>
                 </div>
             `;
         }
-    });
+    };
+    
+    const pollInterval = setInterval(() => {
+        pollCount++;
+        
+        fetch(`/api/offers/status/${taskId}`)
+            .then(res => res.json())
+            .then(status => {
+                console.log('Task status:', status);
+                
+                if (status.progress) {
+                    updateProgress(status.progress);
+                }
+                
+                if (status.status === 'completed') {
+                    clearInterval(pollInterval);
+                    // Fetch the full result
+                    fetch(`/api/offers/result/${taskId}`)
+                        .then(res => res.json())
+                        .then(data => {
+                            console.log('Offers received:', data);
+                            displayOffers(data, configType);
+                        })
+                        .catch(err => {
+                            container.innerHTML = `<div style="color: red;">Failed to get results: ${err.message}</div>`;
+                        });
+                } else if (status.status === 'failed' || pollCount >= maxPolls) {
+                    clearInterval(pollInterval);
+                    container.innerHTML = `
+                        <div style="color: red; text-align: center; padding: 2rem; background: #ffe0e0; border-radius: 10px;">
+                            <i class="fas fa-exclamation-circle" style="font-size: 2rem;"></i>
+                            <p style="margin-top: 1rem;">${status.error || 'Offer generation timed out'}</p>
+                        </div>
+                    `;
+                }
+            })
+            .catch(err => {
+                clearInterval(pollInterval);
+                container.innerHTML = `<div style="color: red;">Error checking status: ${err.message}</div>`;
+            });
+    }, 1000); // Poll every second
 }
 
 function generateCustomOffers() {
@@ -1055,7 +1069,7 @@ function generateCustomOffers() {
         </div>
     `;
     
-    // Call API with custom config
+    // Call API with custom config - now async
     fetch('/api/generate-offers-custom', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
@@ -1068,8 +1082,15 @@ function generateCustomOffers() {
         return res.json();
     })
     .then(data => {
-        console.log('Custom offers received:', data);
-        displayOffers(data, 'custom');
+        console.log('Custom task started:', data);
+        
+        if (data.task_id) {
+            // Async mode - poll for results
+            pollForResults(data.task_id, 'custom');
+        } else {
+            // Legacy sync mode
+            displayOffers(data, 'custom');
+        }
     })
     .catch(err => {
         console.error('Error:', err);
@@ -1077,7 +1098,7 @@ function generateCustomOffers() {
         if (container) {
             container.innerHTML = `
                 <div style="color: var(--error); text-align: center; padding: 2rem;">
-                    <i class="fas fa-exclamation-circle"></i> Failed to generate offers: ${err.message}
+                    <i class="fas fa-exclamation-circle"></i> Failed to start offer generation: ${err.message}
                 </div>
             `;
         }
@@ -1096,7 +1117,7 @@ function displayOffers(data, mode) {
     let html = `
         <div class="subsidy-info">
             <strong>Results:</strong> 
-            ${data.total_offers} viable offers from ${data.cars_tested} cars tested in ${data.processing_time}s
+            ${data.total_offers} viable offers from ${data.cars_tested} cars tested in ${data.processing_time || '0'}s
             <br>
             <strong>Breakdown:</strong>
             Refresh: ${data.offers.refresh?.length || 0}, 

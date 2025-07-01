@@ -160,14 +160,101 @@ async function generateOffersForCustomer(customerId) {
         const result = await response.json();
         if (!response.ok) throw new Error(result.detail || 'Failed to generate offers');
         
-        
-        displayOffers(result.offers, customer);
+        // Check if we got a task response (async processing)
+        if (result.task_id) {
+            console.log('Offer generation started, task ID:', result.task_id);
+            // Poll for task completion
+            const offers = await pollTaskStatus(result.task_id);
+            displayOffers(offers.offers, customer);
+        } else {
+            // Direct response (backward compatibility)
+            displayOffers(result.offers, customer);
+        }
     } catch (error) {
         console.error('Error generating offers:', error);
         // Pass the entire error object to showError, which will handle it properly
         showError(error);
     } finally {
         hideLoading();
+    }
+}
+
+async function pollTaskStatus(taskId, maxAttempts = 60, delayMs = 1000) {
+    showLoadingWithProgress(0);
+    
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        try {
+            const response = await fetch(`/api/offers/status/${taskId}`);
+            const status = await response.json();
+            
+            if (!response.ok) {
+                // If task not found (404), it might have been cleaned up
+                if (response.status === 404) {
+                    throw new Error('Task expired or not found. Please try generating offers again.');
+                }
+                throw new Error(status.detail || 'Failed to check task status');
+            }
+            
+            // Update progress indicator
+            if (status.progress !== undefined) {
+                showLoadingWithProgress(status.progress);
+            }
+            
+            if (status.status === 'completed') {
+                // Task completed, fetch the full result
+                const resultResponse = await fetch(`/api/offers/result/${taskId}`);
+                const result = await resultResponse.json();
+                
+                if (!resultResponse.ok) {
+                    throw new Error(result.detail || 'Failed to get task result');
+                }
+                
+                return result;
+            } else if (status.status === 'failed') {
+                throw new Error(status.error || 'Task failed');
+            }
+            
+            // Still processing, wait before next poll
+            await new Promise(resolve => setTimeout(resolve, delayMs));
+            
+            // Increase delay for longer-running tasks
+            if (attempt > 10) {
+                delayMs = 2000; // 2 seconds after 10 attempts
+            }
+            if (attempt > 30) {
+                delayMs = 3000; // 3 seconds after 30 attempts
+            }
+        } catch (error) {
+            console.error('Error polling task status:', error);
+            throw error;
+        }
+    }
+    
+    throw new Error('Task timed out after ' + maxAttempts + ' attempts');
+}
+
+function showLoadingWithProgress(progress) {
+    const loadingState = document.getElementById('loading-state');
+    if (loadingState) {
+        const existingProgress = loadingState.querySelector('.progress-indicator');
+        if (!existingProgress) {
+            // Add progress indicator if it doesn't exist
+            const progressHtml = `
+                <div class="progress-indicator">
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width: ${progress}%"></div>
+                    </div>
+                    <div class="progress-text">${progress}% Complete</div>
+                </div>
+            `;
+            loadingState.insertAdjacentHTML('beforeend', progressHtml);
+        } else {
+            // Update existing progress
+            const progressFill = existingProgress.querySelector('.progress-fill');
+            const progressText = existingProgress.querySelector('.progress-text');
+            if (progressFill) progressFill.style.width = `${progress}%`;
+            if (progressText) progressText.textContent = `${progress}% Complete`;
+        }
     }
 }
 
@@ -486,47 +573,9 @@ async function loadDashboardScenarioSummary() {
     const container = document.getElementById('dashboard-scenario-summary');
     if (!container) return;
     
-    // DISABLED: /api/scenario-summary endpoint doesn't exist
-    return;
-    
-    try {
-        const response = await fetch('/api/scenario-summary');
-        const data = await response.json();
-
-        if (data && Object.keys(data).length > 0 && data.status !== 'not_found') {
-            container.innerHTML = `
-                <div class="kpi-grid">
-                    <div class="kpi-card">
-                        <div class="kpi-value">${data.total_scenarios_run?.toLocaleString() || 'N/A'}</div>
-                        <div class="kpi-label">Scenarios Run</div>
-                    </div>
-                    <div class="kpi-card">
-                        <div class="kpi-value">${data.total_offers_generated?.toLocaleString() || 'N/A'}</div>
-                        <div class="kpi-label">Offers Generated</div>
-                    </div>
-                    <div class="kpi-card">
-                        <div class="kpi-value">$${data.average_npv?.toLocaleString(undefined, { maximumFractionDigits: 0 }) || 'N/A'}</div>
-                        <div class="kpi-label">Average NPV</div>
-                    </div>
-                    <div class="kpi-card">
-                        <div class="kpi-value">${data.approval_rate?.toLocaleString(undefined, { style: 'percent', maximumFractionDigits: 1 }) || 'N/A'}</div>
-                        <div class="kpi-label">Approval Rate</div>
-                    </div>
-                </div>
-                <div class="summary-footer">
-                    Last analysis run: <span class="last-run-time">${new Date(data.timestamp).toLocaleString()}</span>
-                </div>
-            `;
-            container.style.display = 'grid';
-        } else {
-            container.innerHTML = `<p class="no-data-message">No scenario analysis has been run yet. Go to the <a href="/config">Settings</a> page to run one.</p>`;
-            container.style.display = 'block';
-        }
-    } catch (error) {
-        console.error('Error loading scenario summary:', error);
-        container.innerHTML = `<p class="error-message">Could not load scenario summary. Please try again later.</p>`;
-        container.style.display = 'block';
-    }
+    // Show a placeholder since scenario summary is not implemented
+    container.innerHTML = `<p class="no-data-message">Scenario analysis is currently being developed.</p>`;
+    container.style.display = 'block';
 }
 
 /**
@@ -624,23 +673,8 @@ function initializeConfigPage() {
     };
 
     const runAnalysis = async () => {
-        // DISABLED: /api/scenario-analysis endpoint doesn't exist
-        alert('Scenario analysis is currently disabled');
-        return;
-        
-        if (!confirm('This will save the current configuration and run a full analysis, which may take time. Are you sure you want to proceed?')) return;
-        showLoadingModal('Running Full Analysis...', 'This might take a moment. The page will redirect to the dashboard when complete.');
-        try {
-            await fetch('/api/scenario-analysis', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(getFormData())
-            });
-            window.location.href = '/'; 
-        } catch (error) {
-            hideLoadingModal();
-            alert(`Error running analysis: ${error.message || error}`);
-        }
+        // Scenario analysis is currently disabled
+        alert('Scenario analysis is currently being developed. For now, you can save your configuration and it will be applied to all offer generations.');
     };
     
     const resetToDefaults = () => {

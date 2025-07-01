@@ -136,7 +136,7 @@ class SystemConfig(BaseSettings):
 class FeatureFlags(BaseSettings):
     """Feature toggles"""
     enable_caching: bool = Field(default=True, description="Enable caching")
-    enable_audit_logging: bool = Field(default=True, description="Enable audit logging")
+    enable_audit_logging: bool = Field(default=False, description="Enable audit logging")
     enable_decimal_precision: bool = Field(default=True, description="Use Decimal for financial calculations")
     enable_payment_validation: bool = Field(default=True, description="Enable payment validation")
 

@@ -5,9 +5,13 @@ from fastapi import Request, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from app.middleware.request_id import get_request_id
+from app.core.template_utils import static_url
 import logging
+import os
 
-templates = Jinja2Templates(directory="app/templates")
+template_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "templates")
+templates = Jinja2Templates(directory=template_dir)
+templates.env.globals["static_url"] = static_url
 logger = logging.getLogger(__name__)
 
 

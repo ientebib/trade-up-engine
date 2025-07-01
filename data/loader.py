@@ -745,70 +745,27 @@ class DataLoader:
     def load_filtered_inventory_from_redshift(self, year: int, price: float, kilometers: float):
         """Load pre-filtered inventory from Redshift for trade-up candidates.
 
-        If an optimized SQL file (data/filtered_inventory_query.sql) is present, it
-        will be executed server-side for efficiency. If the file is missing, we
-        transparently fall back to loading the full inventory and applying the
-        filter in memory so the feature continues to work without the extra
-        query file.
+        Loads the full inventory and applies filtering in memory for flexibility.
         """
         logger.info(
             f"🔍 Loading filtered inventory: year>={year}, price>${price:,.0f}, km<{kilometers:,.0f}"
         )
 
-        sql_available = False
-        try:
-            with open("data/filtered_inventory_query.sql", "r") as file:
-                query = file.read()
-                sql_available = True
-        except FileNotFoundError:
-            logger.warning(
-                "⚠️ filtered_inventory_query.sql not found – falling back to in-memory filtering"
-            )
+        # Load full inventory then filter locally
+        full_df = self.load_inventory_from_redshift()
+        if full_df.empty:
+            logger.warning("⚠️ Full inventory load returned 0 rows – cannot apply filter")
+            return pd.DataFrame()
 
-        if sql_available:
-            try:
-                pool = get_connection_pool()
-                with pool.get_connection() as conn:
-                    logger.info("✅ Got connection from pool for filtered query")
-                    with conn.cursor() as cursor:
-                        cursor.execute(query, (year, price, kilometers))
-                        df = cursor.fetch_dataframe()
-
-                if df.empty:
-                    logger.info("📊 No inventory matches the filter criteria (SQL)")
-                    return pd.DataFrame()
-
-                inventory_df = self.transform_inventory_data(df)
-                logger.info(
-                    f"✅ Loaded {len(inventory_df)} pre-filtered items from Redshift"
-                )
-                return inventory_df
-
-            except Exception as e:
-                from app.utils.exceptions import DataLoadError
-                logger.error(
-                    f"❌ Failed SQL-based filtered inventory load: {type(e).__name__}: {e}"
-                )
-                raise DataLoadError(
-                    source="Redshift (filtered)",
-                    reason=f"{type(e).__name__}: {str(e)}",
-                )
-        else:
-            # Fallback: load full inventory then filter locally
-            full_df = self.load_inventory_from_redshift()
-            if full_df.empty:
-                logger.warning("⚠️ Full inventory load returned 0 rows – cannot apply filter")
-                return pd.DataFrame()
-
-            filtered_df = full_df[
-                (full_df["year"] >= year)
-                & (full_df["car_price"] > price)
-                & (full_df["kilometers"] < kilometers)
-            ]
-            logger.info(
-                f"✅ In-memory fallback filter produced {len(filtered_df)} candidate cars"
-            )
-            return filtered_df
+        filtered_df = full_df[
+            (full_df["year"] >= year)
+            & (full_df["car_price"] > price)
+            & (full_df["kilometers"] < kilometers)
+        ]
+        logger.info(
+            f"✅ In-memory filter produced {len(filtered_df)} candidate cars"
+        )
+        return filtered_df
 
     def load_single_car_from_redshift(self, car_id: str):
         """Load a single car from Redshift using WHERE clause - TRUE optimization."""

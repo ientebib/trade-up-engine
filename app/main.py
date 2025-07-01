@@ -2,6 +2,7 @@
 Main FastAPI application entry point
 """
 import logging
+import os
 
 import uvicorn
 from fastapi import FastAPI, HTTPException
@@ -14,6 +15,7 @@ from app.utils.logging import setup_logging
 from .api import cache, circuit_breaker, config, customers, health, metrics, offers, search
 from .core.error_handlers import internal_error_handler, not_found_handler
 from .core.startup import startup_event
+from .core.static_handler import setup_static_files, verify_static_route
 from .middleware.request_id import RequestIDMiddleware
 from .middleware.sanitization import SanitizationMiddleware
 from .middleware.timeout import TimeoutMiddleware
@@ -98,9 +100,6 @@ app.add_middleware(TimeoutMiddleware, timeout_seconds=30)
 app.add_middleware(SanitizationMiddleware)
 app.add_middleware(RequestIDMiddleware)
 
-# Mount static files
-app.mount("/static", StaticFiles(directory="app/static"), name="static")
-
 # Include API v1 routers with versioned prefix (strip existing /api prefix)
 app.include_router(customers.router, prefix="/v1")
 app.include_router(offers.router, prefix="/v1")
@@ -121,7 +120,16 @@ app.include_router(cache.router)
 app.include_router(metrics.router)
 app.include_router(circuit_breaker.router)
 
-# Pages don't need versioning
+# Setup static files with robust handler
+static_path = setup_static_files(app)
+if not static_path:
+    logger.critical("❌ CRITICAL: Failed to setup static files - app may not work correctly!")
+    
+# Verify static route is working
+if not verify_static_route(app):
+    logger.critical("❌ CRITICAL: Static route verification failed!")
+
+# Pages need to be added AFTER static mount
 app.include_router(pages.router)
 app.include_router(deal_architect.router)
 app.include_router(scenarios.router)
@@ -137,6 +145,14 @@ async def on_startup():
 async def on_shutdown():
     """Clean up resources on shutdown"""
     logger.info("🛑 Shutting down Trade-Up Engine...")
+    
+    # Stop async offer service
+    from app.services.async_offer_service import async_offer_service
+    try:
+        async_offer_service._shutdown()
+    except Exception as e:
+        logger.error(f"Error stopping async offer service: {e}")
+        # Don't re-raise during shutdown to allow graceful exit
     
     # Stop bulk queue
     from app.services.bulk_queue import get_bulk_queue

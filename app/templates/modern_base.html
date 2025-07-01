@@ -14,7 +14,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <!-- Kavak Modern CSS -->
-    <link rel="stylesheet" href="{{ url_for('static', path='css/modern.css') }}">
+    <link rel="stylesheet" href="{{ static_url('css/modern.css') }}">
     
     <!-- Favicon -->
     <link rel="icon" type="image/png" href="https://www.kavak.com/favicon-32x32.png">
@@ -211,6 +211,9 @@
         `;
         document.head.appendChild(style);
     </script>
+    
+    <!-- Global Error Handler -->
+    <script src="/static/js/error-handler.js"></script>
     
     {% block extra_js %}{% endblock %}
 </body>

@@ -522,6 +522,51 @@ h6 { font-size: 1rem; }
   justify-content: flex-end;
 }
 
+/* Progress Indicator Styles */
+.progress-indicator {
+  margin-top: 1.5rem;
+  text-align: center;
+}
+
+.progress-bar {
+  width: 100%;
+  max-width: 300px;
+  height: 8px;
+  background-color: var(--gray-200);
+  border-radius: 4px;
+  overflow: hidden;
+  margin: 0 auto 0.75rem;
+}
+
+.progress-fill {
+  height: 100%;
+  background-color: var(--kavak-blue);
+  transition: width 0.3s ease;
+  border-radius: 4px;
+}
+
+.progress-text {
+  font-size: 0.875rem;
+  color: var(--gray-600);
+  font-weight: 500;
+}
+
+/* Loading state with progress */
+#loading-state .progress-indicator {
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .container {

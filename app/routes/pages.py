@@ -7,12 +7,19 @@ from fastapi.templating import Jinja2Templates
 from typing import Optional
 import pandas as pd
 import logging
+import os
+
+from app.core.template_utils import get_template_context, static_url
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["pages"])
 
-# Templates are initialized in main app
-templates = Jinja2Templates(directory="app/templates")
+# Templates with absolute path
+template_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "templates")
+templates = Jinja2Templates(directory=template_dir)
+
+# Add static_url to template globals
+templates.env.globals["static_url"] = static_url
 
 
 @router.get("/", response_class=HTMLResponse)

@@ -7,13 +7,17 @@ from fastapi.templating import Jinja2Templates
 from app.services.customer_service import customer_service
 from app.services.scenario_service import scenario_service
 from app.exceptions import CustomerNotFoundError, DatabaseError
+from app.core.template_utils import static_url
 import logging
+import os
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-# Initialize templates
-templates = Jinja2Templates(directory="app/templates")
+# Initialize templates with absolute path
+template_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "templates")
+templates = Jinja2Templates(directory=template_dir)
+templates.env.globals["static_url"] = static_url
 
 
 @router.get("/deal-architect/{customer_id}", response_class=HTMLResponse)
