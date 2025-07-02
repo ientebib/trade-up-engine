@@ -295,10 +295,15 @@ def calculate_monthly_payment(
     )
     
     # Get fee configuration
-    gps_fees = config.get_by_prefix("fees.gps")
-    gps_monthly_base = float(config.get_decimal("fees.gps.monthly"))
+    # Guard against mis-configured 0.0 value – default to industry standard 350 MXN
+    try:
+        gps_monthly_base = float(config.get_decimal("gps_fees.monthly"))
+    except Exception:
+        gps_monthly_base = 350.0
+    if gps_monthly_base == 0:
+        gps_monthly_base = 350.0
     iva_rate = float(config.get_decimal("financial.iva_rate"))
-    apply_iva = config.get_bool("fees.gps.apply_iva", True)
+    apply_iva = config.get_bool("gps_fees.apply_iva", True)
     
     # Calculate GPS monthly fee with IVA
     gps_monthly_fee = gps_monthly_base * (1 + iva_rate) if apply_iva else gps_monthly_base

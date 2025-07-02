@@ -251,63 +251,251 @@ async def manual_simulation(request: Dict = Body(...)):
     This endpoint allows users to simulate loan payments without requiring
     a specific customer or vehicle from the database.
     """
-    from engine.calculator import Calculator
-    from engine.payment_utils import calculate_monthly_payment
+    # Use YOUR existing math modules and offer generation logic
+    from engine.basic_matcher_sync import basic_matcher_sync as matcher
     from config.facade import get
     
     try:
-        # Extract parameters
-        loan_amount = float(request.get('loan_amount', 0))
-        term = int(request.get('term', 48))
-        interest_rate = float(request.get('interest_rate', 0.25))
+        # Extract parameters from frontend format
+        current_payment = float(request.get('current_monthly_payment', 0))
+        vehicle_equity = float(request.get('vehicle_equity', 0))
+        car_price = float(request.get('car_price', 0))
+        car_model = request.get('car_model', 'Manual Simulation')
+        risk_profile = request.get('risk_profile', 'A')
         
-        # Get fees from request or defaults
-        service_fee_pct = float(request.get('service_fee_pct', get('fees.service.percentage', 0.04)))
-        insurance_monthly = float(request.get('insurance_monthly', get('fees.insurance.monthly', 450)))
-        gps_monthly = float(request.get('gps_monthly_fee', get('fees.gps.monthly', 350)))
-        gps_installation = float(request.get('gps_installation_fee', get('fees.gps.installation', 750)))
+        # Get fees from request (convert percentages)
+        service_fee_pct = float(request.get('service_fee_pct', get('service_fees.service_percentage', 0.04)))
+        cxa_pct = float(request.get('cxa_pct', get('service_fees.cxa_percentage', 0.0399)))
+        cac_bonus = float(request.get('cac_bonus', 0))
+        kavak_total_amount = float(request.get('kavak_total_amount', get('kavak_total.amount', 17599)))
+        insurance_amount = float(request.get('insurance_amount', get('insurance.amount', 10999)))
+        gps_installation_fee = float(request.get('gps_installation_fee', get('gps_fees.installation', 750)))
+        gps_monthly_fee = float(request.get('gps_monthly_fee', get('gps_fees.monthly', 350)))
         
-        # Calculate fees
-        service_fee_amount = loan_amount * service_fee_pct
-        total_insurance = insurance_monthly * term
+        # Match risk profile string to the numeric index required by the down payment table
+        # This mapping should ideally live in a central data loader/service
+        RISK_PROFILE_TO_INDEX = {
+            'AAA': 0, 'AA': 1, 'A': 2, 'A1': 3, 'A2': 4, 'B': 5, 'C1': 6, 
+            'C2': 7, 'C3': 8, 'D1': 9, 'D2': 10, 'D3': 11, 'E1': 12, 'E2': 13, 
+            'E3': 14, 'E4': 15, 'E5': 16, 'F1': 17, 'F2': 18, 'F3': 19, 'F4': 20, 
+            'B_SB': 21, 'C1_SB': 22, 'C2_SB': 23, 'E5_SB': 24, 'Z': 25
+        }
+        risk_profile_index = RISK_PROFILE_TO_INDEX.get(risk_profile, 2) # Default to 'A'
         
-        # Calculate payment
-        payment_info = calculate_monthly_payment(
-            loan_amount=loan_amount,
-            term=term,
-            interest_rate=interest_rate,
-            service_fee_amount=service_fee_amount,
-            kavak_total_amount=0,  # Not used in manual simulation
-            insurance_amount=total_insurance,
-            gps_monthly_fee=gps_monthly,
-            gps_installation_fee=gps_installation
-        )
+        # Create a fake customer dict that matches what your matcher expects
+        fake_customer = {
+            'customer_id': 'MANUAL_SIM',
+            'current_monthly_payment': current_payment,
+            'vehicle_equity': vehicle_equity,
+            'current_car_price': float(request.get('current_car_price', 0)),
+            'risk_profile': risk_profile,
+            'risk_profile_name': risk_profile,
+            'risk_profile_index': risk_profile_index
+        }
         
-        # Generate amortization table
-        calculator = Calculator()
-        amortization_table = calculator.generate_amortization_table(
-            loan_amount=loan_amount,
-            term=term,
-            interest_rate=interest_rate,
-            service_fee_amount=service_fee_amount,
-            kavak_total_amount=0,
-            insurance_amount=total_insurance,
-            gps_monthly_fee=gps_monthly,
-            gps_installation_fee=gps_installation
-        )
+        # Create a fake car dict
+        fake_car = {
+            'car_id': 'MANUAL_CAR',
+            'car_price': car_price,
+            'model': car_model,
+            'year': 2024,
+            'sales_price': car_price  # Your system uses sales_price
+        }
         
+        # Pass the exact values from the request to YOUR matcher
+        # Don't use any hardcoded logic - let YOUR engine handle everything
+        custom_config = {
+            'service_fee_pct': service_fee_pct,
+            'cxa_pct': cxa_pct,
+            'cac_bonus': cac_bonus,
+            'kavak_total': kavak_total_amount,
+            'insurance_amount': insurance_amount,
+            'gps_installation_fee': gps_installation_fee,
+            'gps_monthly_fee': gps_monthly_fee,
+            'skip_delta_filter': True  # Allow high payment deltas for simulation
+        }
+        
+        # Calculate for all standard terms using YOUR matcher logic
+        terms = [24, 36, 48, 60, 72]
+        calculations = {}
+        
+        for term in terms:
+            # Use YOUR existing matcher to generate offers
+            result = matcher.find_all_viable(
+                customer=fake_customer,
+                inventory=[fake_car],
+                custom_config=custom_config,
+                terms_to_evaluate=[term]
+            )
+            
+            # Extract the offer for this term
+            offer = None
+            for tier_offers in result.get('offers', {}).values():
+                if tier_offers:
+                    offer = tier_offers[0]  # First (only) offer
+                    break
+            
+            if offer:
+                # Use YOUR existing amortization logic
+                from engine.calculator import generate_amortization_table
+                
+                # Debug logging
+                logger.info(f"Offer GPS monthly fee: {offer.get('gps_monthly_fee', 'MISSING')}")
+                
+                # Create offer_details dict that YOUR function expects
+                offer_details = {
+                    'loan_amount': offer['loan_amount'],
+                    'term': term,
+                    'interest_rate': offer['interest_rate'],
+                    'service_fee_amount': offer['service_fee_amount'],
+                    'kavak_total_amount': kavak_total_amount,
+                    'insurance_amount': insurance_amount,
+                    'gps_install_fee': 0,  # Already included in loan
+                    'gps_monthly_fee': offer.get('gps_monthly_fee', 0)  # Pass the GPS monthly fee
+                }
+                
+                amortization = generate_amortization_table(offer_details)
+                
+                # Get ALL waterfall data from YOUR offer - no recalculation!
+                # YOUR engine already calculated everything correctly
+                pre_fee_base_loan = car_price - vehicle_equity
+                
+                # Use the values YOUR engine calculated
+                cxa_amount = offer['cxa_amount']
+                gps_install_with_iva = offer['gps_install_with_iva']
+                effective_equity = offer['effective_equity']
+                
+                # The base loan YOUR engine used
+                base_loan = car_price - effective_equity
+                
+                # Get payment breakdown using YOUR calculation
+                from engine.payment_utils import calculate_payment_components
+                
+                # YOUR engine already included GPS install in the loan amount
+                # So we need to extract the actual loan base for the payment calculation
+                loan_base_for_payment = offer['loan_amount'] - offer['service_fee_amount'] - kavak_total_amount - insurance_amount
+                
+                # Get the detailed payment components for period 1
+                components = calculate_payment_components(
+                    loan_base=loan_base_for_payment,
+                    service_fee_amount=offer['service_fee_amount'],
+                    kavak_total_amount=kavak_total_amount,
+                    insurance_amount=insurance_amount,
+                    annual_rate_nominal=offer['interest_rate'],
+                    term_months=term,
+                    period=1,  # First month
+                    insurance_term=12  # Insurance is always 12 months
+                )
+                
+                # Base payment: principal + interest for **main loan only** (exclude service fee & KT)
+                base_payment = components['principal_main'] + components['interest_main']
+                
+                # Monthly portions for additional financed fees
+                service_fee_monthly = components['principal_sf'] + components['interest_sf']
+                kavak_total_monthly = components['principal_kt'] + components['interest_kt']
+                
+                # GPS monthly with IVA from YOUR offer
+                gps_monthly = offer.get('gps_monthly_fee', gps_monthly_fee)  # Use offer value or fallback to request
+                iva_rate = float(get('financial.iva_rate', 0.16))
+                apply_iva = get('gps_fees.apply_iva', True)
+                gps_monthly_with_iva = gps_monthly * (1 + iva_rate) if apply_iva else gps_monthly
+                
+                # Insurance monthly (principal + interest)
+                insurance_monthly = components['principal_ins'] + components['interest_ins']
+                
+                # Calculate total interest and total paid using YOUR offer's NPV
+                # The NPV is the total interest income
+                total_interest = offer.get('npv', 0)
+                total_paid = offer['monthly_payment'] * term
+                
+                calculations[term] = {
+                    'term': term,
+                    'total_monthly': offer['monthly_payment'],
+                    'loan_amount': offer['loan_amount'],
+                    'effective_equity': offer['effective_equity'],
+                    'interest_rate': offer['interest_rate'],
+                    'service_fee': offer['service_fee_amount'],
+                    'service_fee_amount': offer['service_fee_amount'],  # Frontend expects this name
+                    'cxa_fee': offer['cxa_amount'],
+                    'payment_delta': offer['payment_delta'],
+                    # Payment breakdown for frontend
+                    'base_payment': base_payment,
+                    'gps_monthly': gps_monthly_with_iva,
+                    'insurance_monthly': insurance_monthly,
+                    'service_fee_monthly': service_fee_monthly,
+                    'kavak_total_monthly': kavak_total_monthly,
+                    # Monthly payment excluding GPS (already separated)
+                    'monthly_with_fees': offer['monthly_payment'] - gps_monthly_with_iva,
+                    # Waterfall data for loan construction display
+                    'car_price': car_price,
+                    'vehicle_equity': vehicle_equity,
+                    'pre_fee_base_loan': pre_fee_base_loan,
+                    'cxa_amount': cxa_amount,
+                    'gps_install_with_iva': gps_install_with_iva,
+                    'cac_bonus': cac_bonus,
+                    'effective_equity_down': effective_equity,  # What's available as down payment
+                    'base_loan': base_loan,
+                    'kavak_total_amount': kavak_total_amount,
+                    'insurance_amount': insurance_amount,
+                    'total_financed': offer['loan_amount'],
+                    'npv': offer.get('npv', 0),
+                    # Summary data
+                    'total_interest': total_interest,
+                    'total_paid': total_paid,
+                    'amortization_preview': amortization[:12] if amortization else []  # First year
+                }
+            else:
+                # No viable offer for this term
+                calculations[term] = {
+                    'term': term,
+                    'total_monthly': 0,
+                    'loan_amount': 0,
+                    'effective_equity': -1,  # Signal non-viable
+                    'interest_rate': 0,
+                    'service_fee': 0,
+                    'service_fee_amount': 0,
+                    'cxa_fee': 0,
+                    'payment_delta': 0,
+                    # Payment breakdown for frontend
+                    'base_payment': 0,
+                    'gps_monthly': 0,
+                    'insurance_monthly': 0,
+                    'service_fee_monthly': 0,
+                    'kavak_total_monthly': 0,
+                    # Monthly payment excluding GPS (already separated)
+                    'monthly_with_fees': 0,
+                    # Waterfall data for loan construction display
+                    'car_price': car_price,
+                    'vehicle_equity': vehicle_equity,
+                    'pre_fee_base_loan': car_price - vehicle_equity,
+                    'cxa_amount': 0,
+                    'gps_install_with_iva': 0,
+                    'cac_bonus': cac_bonus,
+                    'effective_equity_down': -1,
+                    'base_loan': 0,
+                    'kavak_total_amount': kavak_total_amount,
+                    'insurance_amount': insurance_amount,
+                    'total_financed': 0,
+                    'npv': 0,
+                    # Summary data
+                    'total_interest': 0,
+                    'total_paid': 0,
+                    'amortization_preview': []
+                }
+        
+        # Pass all the request data back for display
         return {
-            "success": True,
-            "payment_info": payment_info,
-            "amortization_table": amortization_table,
-            "summary": {
-                "loan_amount": loan_amount,
-                "term": term,
-                "interest_rate": interest_rate,
-                "monthly_payment": payment_info.get('monthly_payment', 0),
-                "total_interest": sum(row['interest'] + row['iva'] for row in amortization_table),
-                "total_paid": payment_info.get('total_paid', 0)
-            }
+            'success': True,
+            'car_model': car_model,
+            'car_price': car_price,
+            'current_payment': current_payment,
+            'vehicle_equity': vehicle_equity,
+            'current_car_price': float(request.get('current_car_price', 0)),
+            'service_fee_pct': service_fee_pct,
+            'cxa_pct': cxa_pct,
+            'cac_bonus': cac_bonus,
+            'risk_profile': risk_profile,
+            'calculations': calculations
         }
         
     except Exception as e:

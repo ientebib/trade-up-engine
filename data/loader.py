@@ -78,7 +78,7 @@ class DataLoader:
 
 
     @retry(
-        wait=wait_exponential(multiplier=1, min=1, max=8), stop=stop_after_attempt(3)
+        wait=wait_exponential(multiplier=1, min=1, max=30), stop=stop_after_attempt(5)
     )
     def load_inventory_from_redshift(self):
         """Load inventory data from Redshift using connection pool."""

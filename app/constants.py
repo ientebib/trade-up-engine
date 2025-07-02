@@ -165,8 +165,8 @@ class LogLevels:
 # Connection pool settings for Redshift
 MIN_CONNECTIONS = int(get('database.pool.min_connections', 2))
 MAX_CONNECTIONS = int(get('database.pool.max_connections', 10))
-CONNECTION_TIMEOUT = int(get('database.pool.connection_timeout', 30))
-DATABASE_QUERY_TIMEOUT = int(get('database.pool.query_timeout', 60))
+CONNECTION_TIMEOUT = int(get('database.pool.connection_timeout', 120))
+DATABASE_QUERY_TIMEOUT = int(get('database.pool.query_timeout', 300))
 POOL_RECYCLE_TIME = int(get('database.pool.recycle_time', 3600))
 
 # =============================================================================

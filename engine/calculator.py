@@ -44,7 +44,11 @@ def generate_amortization_table(offer_details: dict) -> list[dict]:
     kavak_total = float(offer_details.get("kavak_total_amount", 0.0) or offer_details.get(5, 0.0))
     insurance_amt = float(offer_details.get("insurance_amount", 0.0) or offer_details.get(6, 0.0))
     
-    gps_monthly_fee = float(config.get_decimal("fees.gps.monthly")) * (1 + IVA_RATE)
+    # Get GPS monthly fee from offer_details if provided, otherwise from config
+    if "gps_monthly_fee" in offer_details:
+        gps_monthly_fee = float(offer_details.get("gps_monthly_fee", 0.0))
+    else:
+        gps_monthly_fee = float(config.get_decimal("gps_fees.monthly")) * (1 + IVA_RATE)
     gps_install_fee = float(offer_details.get("gps_install_fee", 0.0) or 0.0)
 
     # CRITICAL: Apply IVA to the rate once (as per audited logic)

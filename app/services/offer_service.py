@@ -195,9 +195,8 @@ class OfferService:
         if not customer:
             raise ValueError(f"Customer {customer_id} not found")
         
-        # Use presenter for formatting
-        from app.presenters.customer_presenter import customer_presenter
-        formatted_customer = customer_presenter.format_for_display(customer)
+        # Format customer data directly (presenter was removed)
+        formatted_customer = customer.copy()
         
         # Add mapped interest rate based on risk profile for display purposes
         try:

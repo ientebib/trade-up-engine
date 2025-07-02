@@ -59,44 +59,50 @@ class BasicMatcherSync:
         
         service_fee_pct = custom_config.get("service_fee_pct") if custom_config else None
         if service_fee_pct is None:
-            service_fee_pct = float(get("fees.service.percentage"))
+            service_fee_pct = float(get("service_fees.service_percentage", 0.04))  # Use correct path
         else:
             service_fee_pct = float(service_fee_pct)
             
         cxa_pct = custom_config.get("cxa_pct") if custom_config else None
         if cxa_pct is None:
-            cxa_pct = float(get("fees.cxa.percentage"))
+            cxa_pct = float(get("service_fees.cxa_percentage", 0.0399))  # Use correct path
         else:
             cxa_pct = float(cxa_pct)
             
         # More config loading...
         cac_bonus = custom_config.get("cac_bonus") if custom_config else None
         if cac_bonus is None:
-            cac_bonus = float(get("fees.cac_bonus.default", 0))
+            cac_bonus = float(get("cac_bonus.default", 0))  # Use correct path
         else:
             cac_bonus = float(cac_bonus)
             
         kavak_total_amount = custom_config.get("kavak_total") if custom_config else None
         if kavak_total_amount is None:
-            kavak_total_amount = float(get("fees.kavak_total.amount", 25000))  # Use default if not found
+            kavak_total_amount = float(get("kavak_total.amount", 17599))  # Use correct path from config
         else:
             kavak_total_amount = float(kavak_total_amount)
             
         insurance_amount = custom_config.get("insurance_amount") if custom_config else None
         if insurance_amount is None:
-            insurance_amount = float(get("fees.insurance.amount", 10999))  # Use default if not found
+            insurance_amount = float(get("insurance.amount", 10999))  # Use correct path
         else:
             insurance_amount = float(insurance_amount)
             
         gps_installation_fee = custom_config.get("gps_installation_fee") if custom_config else None
         if gps_installation_fee is None:
-            gps_installation_fee = float(get("fees.gps.installation"))
+            gps_installation_fee = float(get("gps_fees.installation", 750))  # Use correct path with default
         else:
             gps_installation_fee = float(gps_installation_fee)
             
+        gps_monthly_fee = custom_config.get("gps_monthly_fee") if custom_config else None
+        if gps_monthly_fee is None:
+            gps_monthly_fee = float(get("gps_fees.monthly", 350))  # Use correct path with default
+        else:
+            gps_monthly_fee = float(gps_monthly_fee)
+            
         # IVA configuration
-        iva_rate = float(get("financial.iva_rate"))
-        apply_iva = get("fees.gps.apply_iva")
+        iva_rate = float(get("financial.iva_rate", 0.16))  # Default 16% IVA
+        apply_iva = get("gps_fees.apply_iva", True)  # Use correct path with default
         gps_install_with_iva = gps_installation_fee * (1 + iva_rate) if apply_iva else gps_installation_fee
         
         # Create fee config for passing to offer generation
@@ -108,6 +114,7 @@ class BasicMatcherSync:
             "insurance_amount": insurance_amount,
             "gps_install_with_iva": gps_install_with_iva,
             "gps_installation_fee": gps_installation_fee,
+            "gps_monthly_fee": gps_monthly_fee,
             "apply_iva": apply_iva,
             "iva_rate": iva_rate
         }
@@ -213,6 +220,10 @@ class BasicMatcherSync:
         """
         Generate a single offer. This is the exact same logic as BasicMatcher.
         """
+        # Extract frequently used fee flags so they are locally scoped
+        apply_iva: bool = fee_config.get("apply_iva", True)
+        iva_rate: float = fee_config.get("iva_rate", 0.16)
+
         # Extract customer data
         current_payment = float(customer.get("current_monthly_payment", 0))
         vehicle_equity = float(customer.get("vehicle_equity", 0))
@@ -231,14 +242,26 @@ class BasicMatcherSync:
         # Get interest rate
         interest_rate = self._get_interest_rate(risk_profile, term)
         if interest_rate is None:
-            return None
+            return None # No rate for this profile
             
+        # Down payment check (unifies logic with async matcher)
+        risk_index = customer.get("risk_profile_index")
+        if risk_index is None:
+            logger.warning(f"risk_profile_index not found for manual sim, skipping down payment check.")
+            down_payment_required = 0 # No check if index is missing
+        elif term not in DOWN_PAYMENT_TABLE.columns or risk_index not in DOWN_PAYMENT_TABLE.index:
+            logger.warning(f"Term {term} or risk index {risk_index} not in down payment table. Skipping check.")
+            down_payment_required = 0
+        else:
+            down_payment_pct = DOWN_PAYMENT_TABLE.loc[risk_index, term]
+            down_payment_required = car_price * down_payment_pct
+
         # Step 1: Calculate preliminary base loan (car price - vehicle equity)
         preliminary_base_loan = car_price - vehicle_equity
         
         # Step 2: Calculate CXA on base loan with IVA (not on car price)
         cxa_pct = fee_config["cxa_pct"]
-        cxa_amount = preliminary_base_loan * cxa_pct * (1 + fee_config["iva_rate"])
+        cxa_amount = preliminary_base_loan * cxa_pct * (1 + iva_rate)
         
         # Step 3: Calculate service fee (still based on car price)
         service_fee_amount = car_price * fee_config["service_fee_pct"]
@@ -247,6 +270,11 @@ class BasicMatcherSync:
         gps_install_with_iva = fee_config["gps_install_with_iva"]
         effective_equity = vehicle_equity + fee_config["cac_bonus"] - cxa_amount - gps_install_with_iva
         
+        # Check if customer's effective equity meets the requirement for this term
+        if effective_equity < down_payment_required:
+            logger.debug(f"Skipping term {term}: effective equity ${effective_equity:,.0f} is less than required down payment ${down_payment_required:,.0f}")
+            return None
+
         # Step 5: Final base loan
         base_loan = car_price - effective_equity
         
@@ -255,6 +283,9 @@ class BasicMatcherSync:
             logger.debug(f"Skipping car {car_id} - equity covers car (base_loan=${base_loan:.0f}, car_price=${car_price:.0f}, effective_equity=${effective_equity:.0f})")
             return None
             
+        # Calculate GPS monthly fee with IVA (matching basic_matcher.py)
+        gps_monthly_with_iva = fee_config["gps_monthly_fee"] * (1 + iva_rate) if apply_iva else fee_config["gps_monthly_fee"]
+        
         # Calculate payment
         try:
             payment_components = calculate_monthly_payment(
@@ -268,6 +299,7 @@ class BasicMatcherSync:
             )
             
             total_payment = payment_components["payment_total"]
+            gps_monthly_fee_calculated = payment_components.get("gps_fee", 0.0)
             
         except Exception as e:
             logger.warning(f"Payment calculation error for car {car_id}: {e}")
@@ -276,8 +308,8 @@ class BasicMatcherSync:
         # Calculate payment delta
         payment_delta = (total_payment - current_payment) / current_payment if current_payment > 0 else 0
         
-        # Skip if payment increase is too high (>100%)
-        if payment_delta > 1.0:
+        # Optionally skip the >100% payment delta filter (manual simulation needs all terms)
+        if payment_delta > 1.0 and not fee_config.get("skip_delta_filter", False):
             logger.debug(f"Skipping car {car_id} - payment delta too high: {payment_delta:.2%}")
             return None
             
@@ -304,6 +336,8 @@ class BasicMatcherSync:
             "insurance_amount": round(fee_config["insurance_amount"], 2),
             "kavak_total_amount": round(fee_config["kavak_total_amount"], 2),
             "gps_install_fee": 0.0,  # Financed, not charged separately
+            "gps_monthly_fee": gps_monthly_fee_calculated,  # Use the calculated value with IVA
+            "gps_monthly_fee_no_iva": gps_monthly_fee_calculated / (1 + iva_rate) if apply_iva else gps_monthly_fee_calculated,  # Base amount for display
             "vehicle_equity": vehicle_equity,
             "fees_applied": {
                 "service_fee_pct": fee_config["service_fee_pct"],

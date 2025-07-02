@@ -97,6 +97,24 @@ def get_all_inventory() -> List[Dict]:
 def get_inventory_stats() -> Dict:
     """Get inventory statistics - with smart caching"""
     
+    # ------------------------------------------------------------------
+    # Safety override: allow disabling heavy inventory stats calculation.
+    # When the environment variable DISABLE_INVENTORY_STATS is set to "1"
+    # (or any truthy value), the function will skip the Redshift query and
+    # return safe default values. This is useful for local development or
+    # when Redshift performance is degraded and we still want the app to
+    # start and serve other endpoints.
+    # ------------------------------------------------------------------
+    if os.getenv("DISABLE_INVENTORY_STATS", "0") not in ("0", "", "false", "False", "FALSE"):
+        logger.warning("⚠️  Inventory stats disabled via DISABLE_INVENTORY_STATS env var – returning defaults")
+        return {
+            "total_cars": 0,
+            "average_price": 0,
+            "min_price": 0,
+            "max_price": 0,
+            "brands": 0,
+        }
+    
     def calculate_stats():
         logger.info("📊 Calculating inventory stats from Redshift...")
         _, inventory_df = data_loader.load_all_data()
@@ -456,7 +474,7 @@ def test_database_connection() -> Dict:
     
     try:
         # Test customer data (CSV) - just check if file exists and is readable
-        csv_path = "customers_data_tradeup.csv"
+        csv_path = "data/customers_data_tradeup.csv"
         if os.path.exists(csv_path):
             # Read just the first row to verify format
             test_df = pd.read_csv(csv_path, nrows=1)

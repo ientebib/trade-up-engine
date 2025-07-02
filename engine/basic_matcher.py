@@ -341,6 +341,10 @@ class BasicMatcher:
             - Risk profile or term not found in lookup tables
         """
 
+        # Localize IVA configuration so we can reuse consistently
+        apply_iva: bool = fees_config.get("apply_iva", True)
+        iva_rate: float = fees_config.get("iva_rate", IVA_RATE)
+        
         if term == 60:
             interest_rate = base_interest_rate + TERM_60_RATE_ADJUSTMENT
         elif term == 72:
@@ -378,7 +382,7 @@ class BasicMatcher:
         gps_install_fee = fees_config.get("gps_installation_fee", GPS_INSTALLATION_FEE)
         gps_monthly_fee = fees_config.get("gps_monthly_fee", GPS_MONTHLY_FEE)
         gps_install_with_iva = gps_install_fee * (1 + IVA_RATE)
-        gps_monthly_with_iva = gps_monthly_fee * (1 + IVA_RATE)
+        gps_monthly_with_iva = gps_monthly_fee * (1 + iva_rate) if apply_iva else gps_monthly_fee
 
         effective_equity = (
             customer["vehicle_equity"] + cac_bonus - cxa_amount - gps_install_with_iva
@@ -409,7 +413,14 @@ class BasicMatcher:
 
         total_monthly = payment_components["payment_total"]
 
+        # Use the calculated GPS fee to keep consistency with amortization builder
+        gps_monthly_fee_calculated = payment_components.get("gps_fee", gps_monthly_with_iva)
+
         payment_delta = (total_monthly / customer["current_monthly_payment"]) - 1
+
+        # Allow manual simulation to bypass >100% payment increase filter
+        if payment_delta > 1.0 and not fees_config.get("skip_delta_filter", False):
+            return None
 
         margin = service_fee_amount + cxa_amount
         npv = margin - NPV_BASE_MARGIN_DEDUCTION
@@ -430,12 +441,13 @@ class BasicMatcher:
             "kavak_total_amount": kavak_total_amount,
             "insurance_amount": insurance_amount,
             "gps_install_fee": 0.0,  # Financed, not charged separately
-            "gps_monthly_fee": gps_monthly_with_iva,
-            "gps_monthly_fee_base": gps_monthly_fee,
-            "gps_monthly_fee_iva": gps_monthly_fee * IVA_RATE,
+            "gps_monthly_fee": gps_monthly_fee_calculated,
+            "gps_monthly_fee_base": gps_monthly_fee_calculated / (1 + iva_rate) if apply_iva else gps_monthly_fee_calculated,
+            "gps_monthly_fee_iva": gps_monthly_fee_calculated - (gps_monthly_fee_calculated / (1 + iva_rate)) if apply_iva else 0.0,
             "iva_on_interest": payment_components["iva_on_interest"],
             "npv": npv,
             "interest_rate": interest_rate,
+            "service_fee_pct": fees_config.get("service_fee_pct", DEFAULT_SERVICE_FEE_PCT),
         }
 
 
